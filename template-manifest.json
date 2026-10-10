@@ -425,7 +425,7 @@
     },
     "engine/manifest.ts": {
       "mode": "100644",
-      "blob": "be8ac846b61bb59e87e0edcbfda76cd56ede6926"
+      "blob": "52227fb52deaf0dafd65df8902a0a52fbf18eb9e"
     },
     "engine/methods.ts": {
       "mode": "100644",
@@ -1149,7 +1149,7 @@
     },
     "tests/public-tree.test.ts": {
       "mode": "100644",
-      "blob": "9fe3da1c009d368f51e8d100c0611e5b3005839b"
+      "blob": "900e935652aa7ab4801485378732e45913e154ad"
     },
     "tests/safety-agent.test.ts": {
       "mode": "100644",

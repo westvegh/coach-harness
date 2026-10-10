@@ -27,9 +27,13 @@ export function isGithubSource(url: unknown): url is string {
   return typeof url === "string" && /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+?(\.git)?$/.test(url) && !url.includes("..");
 }
 
+/** Folders a template never ships, skipped at the export root (a clone of the template has .git; a tested export has node_modules). */
+const NOT_SHIPPED_AT_ROOT = [".git", "node_modules"];
+
 function walk(dir: string, root: string): string[] {
   const out: string[] = [];
   for (const name of readdirSync(dir)) {
+    if (dir === root && NOT_SHIPPED_AT_ROOT.includes(name)) continue;
     const full = join(dir, name);
     if (lstatSync(full).isDirectory()) out.push(...walk(full, root));
     else out.push(relative(root, full).split(sep).join("/"));

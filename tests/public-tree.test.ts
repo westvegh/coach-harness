@@ -100,6 +100,8 @@ describe("the public export", { skip }, () => {
       if (path === "template-manifest.json") continue;
       assert.deepEqual(m.files[path], { mode, blob }, path);
     }
+    // A clone of the template has .git: --verify skips it.
+    assert.equal(spawnSync(process.execPath, [join(REPO, "scripts/template-manifest.ts"), "--verify", dest]).status, 0, "verify with .git present");
     execFileSync("rm", ["-rf", join(dest, ".git")]);
     assert.equal(spawnSync(process.execPath, [join(REPO, "scripts/template-manifest.ts"), "--verify", dest]).status, 0);
   });
