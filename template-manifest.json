@@ -1189,7 +1189,7 @@
     },
     "tests/signals/oura-hardening.test.ts": {
       "mode": "100644",
-      "blob": "d0f1e06710b63e5d934c4b54e1ef8a22fbee871d"
+      "blob": "a694ba6e8f39cf54f9d9264882658b7add9b1b63"
     },
     "tests/signals/oura.test.ts": {
       "mode": "100644",

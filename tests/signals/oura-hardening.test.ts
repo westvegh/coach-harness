@@ -301,9 +301,16 @@ test("callback: an error parameter is reported by allowlisted code only", async 
 
 // ---------- P2: explicit timeouts ----------
 
+// AbortSignal.timeout uses an unref'd timer. A real request holds a socket open; this fake
+// holds nothing, so it keeps the event loop alive itself until the abort (Linux CI ended
+// the test file early without it).
 const hang: FetchFn = (_u, init) =>
   new Promise((_res, rej) => {
-    init?.signal?.addEventListener("abort", () => rej(init.signal!.reason));
+    const keepAlive = setInterval(() => {}, 1000);
+    init?.signal?.addEventListener("abort", () => {
+      clearInterval(keepAlive);
+      rej(init.signal!.reason);
+    });
   });
 
 test("timeout: the token request is aborted after timeoutMs", { timeout: 3000 }, async () => {
