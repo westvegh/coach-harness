@@ -1,0 +1,49 @@
+{
+  "data": [
+    {
+      "id": "8f9a5221-639e-4a85-81cb-4065ef23f979",
+      "average_breath": 14.875,
+      "average_heart_rate": 56.25,
+      "average_hrv": 48,
+      "awake_time": 2310,
+      "bedtime_end": "2026-10-09T06:52:31-07:00",
+      "bedtime_start": "2026-10-08T22:41:01-07:00",
+      "day": "2026-10-09",
+      "deep_sleep_duration": 4890,
+      "efficiency": 89,
+      "heart_rate": { "interval": 300.0, "items": [58.0, 56.0, null, 55.0], "timestamp": "2026-10-08T22:41:01.000-07:00" },
+      "hrv": { "interval": 300.0, "items": [44.0, 51.0, null, 49.0], "timestamp": "2026-10-08T22:41:01.000-07:00" },
+      "latency": 540,
+      "light_sleep_duration": 12570,
+      "low_battery_alert": false,
+      "lowest_heart_rate": 51,
+      "movement_30_sec": "1111211",
+      "period": 1,
+      "readiness": { "contributors": { "activity_balance": 81, "body_temperature": 98, "hrv_balance": 74, "previous_day_activity": 88, "previous_night": 80, "recovery_index": 93, "resting_heart_rate": 90, "sleep_balance": 79 }, "score": 82, "temperature_deviation": -0.11, "temperature_trend_deviation": 0.04 },
+      "readiness_score_delta": 0,
+      "rem_sleep_duration": 6000,
+      "restless_periods": 210,
+      "sleep_phase_5_min": "4422212233",
+      "sleep_score_delta": 0,
+      "sleep_algorithm_version": "v2",
+      "time_in_bed": 29490,
+      "total_sleep_duration": 23460,
+      "type": "long_sleep"
+    },
+    {
+      "id": "0c1d0c43-4bd2-4f35-9a4e-2f5f6f0f6c11",
+      "average_hrv": 61,
+      "bedtime_end": "2026-10-09T15:40:00-07:00",
+      "bedtime_start": "2026-10-09T15:05:00-07:00",
+      "day": "2026-10-09",
+      "efficiency": 80,
+      "low_battery_alert": false,
+      "lowest_heart_rate": 57,
+      "period": 2,
+      "time_in_bed": 2100,
+      "total_sleep_duration": 1680,
+      "type": "sleep"
+    }
+  ],
+  "next_token": "page-2"
+}

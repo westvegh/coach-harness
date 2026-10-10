@@ -1,0 +1,86 @@
+{
+  "name": "upd-convert-op-weight-only",
+  "description": "A kg modify for a lbs user converts only the op's weight; untouched weights keep their stored value.",
+  "source": [
+    "workout-api/lib/mcp/tools/updatePlannedWorkout.ts:235",
+    "workout-api/lib/mcp/tools/updatePlannedWorkout.test.ts:359"
+  ],
+  "unit": {
+    "weightUnit": "lbs",
+    "weightUnitSource": "settings"
+  },
+  "before": {
+    "2026-10-13": {
+      "id": "row-2026-10-13",
+      "day_type": "strength",
+      "day_name": "Lower A",
+      "exercises": [
+        {
+          "exerciseId": "Goblet_Squat",
+          "name": "Goblet Squat",
+          "suggestedSets": 3,
+          "suggestedReps": 10,
+          "suggestedWeight": 50
+        },
+        {
+          "exerciseId": "Romanian_Deadlift",
+          "name": "Romanian Deadlift",
+          "suggestedSets": 4,
+          "suggestedReps": 8,
+          "suggestedWeight": 135
+        }
+      ],
+      "notes": null,
+      "source": "mcp",
+      "user_modified": false,
+      "status": "planned",
+      "updated_at": "2026-10-10T08:00:00.000Z"
+    }
+  },
+  "call": {
+    "tool": "update_planned_workout",
+    "args": {
+      "date": "2026-10-13",
+      "timezone": "America/Los_Angeles",
+      "operations": [
+        {
+          "op": "modify",
+          "target": {
+            "exerciseId": "Romanian_Deadlift"
+          },
+          "fields": {
+            "suggestedWeight": 60
+          }
+        }
+      ],
+      "weightUnit": "kg"
+    }
+  },
+  "expect": {
+    "days": {
+      "2026-10-13": {
+        "dayType": "strength",
+        "dayName": "Lower A",
+        "source": "mcp",
+        "userModified": false,
+        "skipped": false,
+        "exercises": [
+          {
+            "exerciseId": "Goblet_Squat",
+            "name": "Goblet Squat",
+            "suggestedSets": 3,
+            "suggestedReps": 10,
+            "suggestedWeight": 50
+          },
+          {
+            "exerciseId": "Romanian_Deadlift",
+            "name": "Romanian Deadlift",
+            "suggestedSets": 4,
+            "suggestedReps": 8,
+            "suggestedWeight": 132
+          }
+        ]
+      }
+    }
+  }
+}

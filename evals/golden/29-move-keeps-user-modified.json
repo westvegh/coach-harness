@@ -1,0 +1,73 @@
+{
+  "name": "move-keeps-user-modified",
+  "description": "A move keeps content, notes, source and user_modified (here with override).",
+  "source": [
+    "migrations/013_move_planned_workout_fn.sql:76",
+    "workout-api/lib/mcp/tools/movePlannedWorkout.test.ts:86"
+  ],
+  "unit": {
+    "weightUnit": "lbs",
+    "weightUnitSource": "settings"
+  },
+  "before": {
+    "2026-10-14": {
+      "id": "row-2026-10-14",
+      "day_type": "strength",
+      "day_name": "Upper A",
+      "exercises": [
+        {
+          "exerciseId": "Bench_Press",
+          "name": "Bench Press",
+          "suggestedSets": 4,
+          "suggestedReps": 5,
+          "repsMax": 8,
+          "suggestedWeight": 185,
+          "rpe": 8,
+          "muscle": "chest",
+          "equipment": "Barbell",
+          "trackingType": "weight_reps"
+        }
+      ],
+      "notes": null,
+      "source": "mcp",
+      "user_modified": true,
+      "status": "planned",
+      "updated_at": "2026-10-10T08:00:00.000Z"
+    }
+  },
+  "call": {
+    "tool": "move_planned_workout",
+    "args": {
+      "fromDate": "2026-10-14",
+      "toDate": "2026-10-16",
+      "timezone": "America/Los_Angeles",
+      "overrideUserModified": true
+    }
+  },
+  "expect": {
+    "days": {
+      "2026-10-14": null,
+      "2026-10-16": {
+        "dayType": "strength",
+        "dayName": "Upper A",
+        "source": "mcp",
+        "userModified": true,
+        "skipped": false,
+        "exercises": [
+          {
+            "exerciseId": "Bench_Press",
+            "name": "Bench Press",
+            "suggestedSets": 4,
+            "suggestedReps": 5,
+            "repsMax": 8,
+            "suggestedWeight": 185,
+            "rpe": 8,
+            "muscle": "chest",
+            "equipment": "Barbell",
+            "trackingType": "weight_reps"
+          }
+        ]
+      }
+    }
+  }
+}

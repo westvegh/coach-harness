@@ -1,0 +1,222 @@
+# Safety terms (contracts §10). PROTECTED. Read by engine/safety.ts `detect`.
+#
+# Bias: catch too much. A false hold costs one tap to clear; a missed injury costs far more.
+#
+# Matching works on normalized text: lowercase, apostrophes removed ("doesn't" → "doesnt"),
+# hyphens and slashes read as spaces ("pain-free" → "pain free"). Sentence ends (. ! ? ; and
+# new lines) and the words "but", "though", "although", "however", "except" split the text into
+# clauses. Commas, colons, brackets and dashes do not ("My knee: sore" is one clause). A phrase
+# never matches across two clauses.
+#
+# Phrase syntax (space-separated tokens):
+#   word        the exact word
+#   word*       any word that starts with "word"
+#   a|b|c       any of the alternatives (each may end with *)
+#   ~           0 to 2 other words in the same clause (never the first token)
+# An entry is a phrase, or {term, all: [...]}.
+#   - A phrase's term name is the first alternative of each token, without gaps:
+#     "cant|cannot ~ put|bear weight" is named "cant put weight".
+#   - {term, all}: every element of `all` must match in the same clause. "@region" means any
+#     region word, and "@joint" a region word for a joint (`joints` below).
+#
+# Only the term names are ever stored, never the user's text.
+version: 1
+
+# Regions with left-/right- variants in engine/movements.yaml. "left knee" → left-knee.
+sides: [shoulder, elbow, wrist, hip, knee, ankle]
+
+# Regions where plain "sore", "stiff" or "tight" counts as pain (a sore joint, not muscle soreness).
+joints: [neck, upper-back, low-back, shoulder, elbow, wrist, hand, hip, knee, ankle, foot]
+
+# Region words → region ids from engine/movements.yaml.
+regions:
+  neck: ["neck|necks", "cervical", "whiplash"]
+  upper-back: ["upper|mid|middle back", "thoracic", "shoulder blade|blades", "scapula*", "rhomboid*"]
+  # Bare "back" is too common in training talk ("back squat", "back off sets"), so it needs
+  # "my"/"the" before it or a verb after it.
+  low-back: ["low|lower back", "lumbar", "my|the back", "back went|goes|is|feels|felt|gave|gives|hurts|aches|locked|seized", "sacrum", "tailbone", "si joint", "disc|discs|disk|disks"]
+  chest: ["chest", "pec|pecs|pectoral*", "sternum", "rib|ribs", "breastbone"]
+  abdomen: ["abs", "abdomen", "abdominal*", "stomach", "belly", "oblique|obliques", "hernia"]
+  shoulder: ["shoulder|shoulders", "rotator cuff", "delt|delts", "ac joint", "collarbone|collar bone", "clavicle", "labrum"]
+  elbow: ["elbow|elbows", "tennis|golfers elbow"]
+  wrist: ["wrist|wrists", "carpal"]
+  hand: ["hand|hands", "finger|fingers", "thumb|thumbs", "knuckle*", "palm|palms"]
+  hip: ["hip|hips", "hip flexor|flexors", "glute|glutes", "piriformis"]
+  groin: ["groin", "adductor|adductors", "inner thigh|thighs"]
+  knee: ["knee|knees", "kneecap*", "patella*", "acl", "mcl", "pcl", "lcl", "meniscus"]
+  ankle: ["ankle|ankles", "achilles"]
+  foot: ["foot|feet", "heel|heels", "toe|toes", "plantar", "arch|arches"]
+
+# Urgent: stop programming, give urgent-care text. Never reduced by negations.
+urgent:
+  - term: chest pain
+    all: ["chest", "pain|pains|painful|hurt*|pressure|tight|tightness|tightening|squeez*|crush*|heavy|heaviness|ache|aches|aching|burning|discomfort"]
+  - heart attack|attacks
+  - term: fainting
+    all: ["faint|fainted|fainting|fainter|swoon*"]
+  - term: passing out
+    all: ["pass|passed|passing|passes ~ out"]
+  - term: passing out
+    all: ["black|blacked|blacking out"]
+  - term: passing out
+    all: ["lost|losing|lose consciousness"]
+  - term: passing out
+    all: ["unconscious"]
+  - term: passing out
+    all: ["i collapsed"]
+  - term: severe shortness of breath
+    all: ["short|shortness of breath"]
+  - term: severe shortness of breath
+    all: ["cant|cannot|couldnt breathe"]
+  - term: severe shortness of breath
+    all: ["unable|struggling|hard to breathe"]
+  - term: severe shortness of breath
+    all: ["trouble|difficulty breathing"]
+  - term: sudden severe headache
+    all: ["worst|sudden|severe|thunderclap|explosive", "headache|headaches"]
+  - term: new numbness
+    all: ["numb|numbness"]
+  - term: new weakness
+    all: ["sudden|suddenly|new|newly", "weak|weakness"]
+  - term: new weakness
+    all: ["one side|sided", "weak|weakness|numb|droop*"]
+  - term: face drooping
+    all: ["face|mouth|smile", "droop*|crooked|numb"]
+  - term: slurred speech
+    all: ["slurred|slurring"]
+  - term: slurred speech
+    all: ["speech|speaking|words", "slurr*|garbled|jumbled|trouble"]
+  - term: stroke signs
+    all: ["having|had|have|signs|symptoms ~ stroke"]
+  - term: irregular heartbeat
+    all: ["heart|heartbeat|heartbeats|pulse", "skipping|skipped|skips|flutter*|irregular|erratic|weird|funny"]
+  - term: irregular heartbeat
+    all: ["heart|heartbeat|heartbeats|pulse", "racing|pounding", "dizzy|dizziness|lightheaded|woozy|faint*"]
+  - term: irregular heartbeat
+    all: ["palpitation*|arrhythmia|afib"]
+  - term: seizure
+    all: ["seizure*|convuls*"]
+  - term: vision loss
+    all: ["vision|eyesight", "lost|loss|losing|blurry|blurred|double|dark|black|gone"]
+  - term: sudden confusion
+    all: ["sudden|suddenly", "confused|confusion|disoriented"]
+  - term: pain spreading to the arm or jaw
+    all: ["radiat*|spread*|shooting", "arm|arms|jaw"]
+  - term: blood
+    all: ["cough*|vomit*|puk*|throwing|threw", "blood|bloody"]
+  - term: blood
+    all: ["blood in ~ urine|pee|stool"]
+  - term: dark urine
+    all: ["dark|brown|cola|tea|coke", "urine|pee"]
+  - term: dark urine
+    all: ["rhabdo*"]
+  - term: emergency
+    all: ["911|ambulance"]
+  - term: emergency
+    all: ["emergency room|services|department"]
+
+# Pain and injury: run the safety agent first. Reduced by negations.
+pain:
+  - pain|pains|painful
+  - hurt|hurts|hurting|hurted
+  - ache|aches|aching|achy|achey
+  - ouch|ow|owww
+  - injury|injur*
+  - tweak|tweaks|tweaked|tweaking|tweaky
+  - strain|strains|strained|straining
+  - sprain|sprain*
+  - pulled my|something
+  - pulled a muscle
+  - term: pulled
+    all: ["pulled", "@region"]
+  - popped
+  - term: popped
+    all: ["felt|heard ~ pop|popping|crack|cracking|snap|snapping|tear|tearing|rip"]
+  - snapped
+  - swelling|swollen|swell|swelled|swells
+  - sharp
+  - stabbing
+  - shooting
+  - throb|throbs|throbbing
+  - cant|cannot|couldnt ~ put|bear weight
+  - cant|cannot|couldnt walk
+  - cant|cannot|couldnt ~ straighten|bend|raise|rotate|extend
+  - cant|cannot|couldnt catch my breath
+  - limp|limping|limped
+  - term: sore joint
+    all: ["sore|soreness|stiff|stiffness|tight|tender|achy", "joint|joints"]
+  - term: sore joint
+    all: ["sore|soreness|stiff|stiffness|tight|tender|burning", "@joint"]
+  - term: joint giving out
+    all: ["click|clicking|clunk|clunking|grind|grinding|catch|catching|locking|locked|unstable|buckled|buckling", "@joint"]
+  - term: joint giving out
+    all: ["gave|giving|gives ~ out|way", "@joint"]
+  - bruise|bruised|bruising
+  - dislocation|dislocat*
+  - torn|tore
+  - term: torn
+    all: ["tear", "@region"]
+  - rupture|rupture*
+  - fracture|fractur*
+  - term: broken
+    all: ["broke|broken|break", "@region"]
+  - pinch|pinched|pinching
+  - impingement|impinge*
+  - sciatica|sciatic*
+  - herniated|herniat*
+  - bulging disc|discs|disk
+  - tendonitis|tendinitis|tendinopathy|bursitis|fasciitis
+  - twinge|twinges|twingy
+  - niggle|niggles|niggling|niggly
+  - banged|beat up
+  - messed|jacked|screwed|effed|fucked up my
+  - term: messed up
+    all: ["messed|jacked|screwed|effed|fucked|banged|beat up", "@region"]
+  - wrecked|busted|blew|blown my
+  - threw|thrown out my
+  - term: went out
+    all: ["went|go|goes out", "@region"]
+  - term: rolled or twisted
+    all: ["rolled|twisted|turned|jammed|tweaked|wrenched|jarred", "@region"]
+  - term: killing me
+    all: ["killing|kills|murdering", "@region"]
+  - term: feels off
+    all: ["weird|funny|odd|wrong", "@joint"]
+  - term: feels off
+    all: ["not right", "@joint"]
+  - term: feels off
+    all: ["feels|felt|feel|feeling off", "@joint"]
+  - tingling|tingl*
+  - pins and needles
+  - dizzy|dizziness|lightheaded|woozy
+  - light headed
+  - headache|headaches|migraine*
+  - cramp|cramps|cramping|cramped
+  - discomfort
+  - agony|excruciating
+  - spasm|spasms|spasming
+
+# Negations: a matching span is removed before the pain list is matched (urgent is not).
+# Conservative by design:
+#   - no gaps: only adjacent words, so "no improvement in pain" stays pain;
+#   - a negation does not apply when "not", "never", "isnt", "hardly" and similar come up to
+#     2 words before it, so "not pain-free" and "not quite pain free" stay pain;
+#   - "no knee pain" stays pain too (a region word breaks adjacency). A false hold is cheap.
+negations:
+  - no pain|pains|soreness|discomfort|swelling|aches|twinges
+  - zero|0 pain|pains
+  - pain|pains zero|none
+  - pain|pains 0 10
+  - without pain|pains
+  - pain|pains free
+  - painfree|painless
+  - free of pain
+  - doesnt|dont|didnt|isnt|wasnt|arent|never hurt|hurts|hurting|painful|sore|swollen
+  - not hurt|hurts|hurting|painful|sore|swollen|injured
+  - not in pain
+  - no longer hurt|hurts|hurting|painful|sore|swollen
+  - nothing hurts
+  - pain|pains|soreness gone|resolved
+  - pain|pains|soreness is|has|was gone|resolved
+  - pain|pains|soreness went away
+  - no pain no gain

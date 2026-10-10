@@ -1,0 +1,63 @@
+{
+  "name": "pwd-convert-lbs-to-kg",
+  "description": "A lbs call for a kg user (known unit) is converted to the nearest 0.5 kg; weightless exercises untouched.",
+  "source": [
+    "workout-api/lib/mcp/tools/planWorkout.ts:108",
+    "workout-api/lib/mcp/weightUnit.ts:27",
+    "workout-api/lib/mcp/tools/planWorkout.test.ts:263"
+  ],
+  "unit": {
+    "weightUnit": "kg",
+    "weightUnitSource": "settings"
+  },
+  "before": {},
+  "call": {
+    "tool": "plan_workout_day",
+    "args": {
+      "date": "2026-10-13",
+      "dayType": "strength",
+      "dayName": "Lower A",
+      "exercises": [
+        {
+          "exerciseId": "Bench_Press",
+          "name": "Bench Press",
+          "suggestedSets": 3,
+          "suggestedWeight": 225
+        },
+        {
+          "exerciseId": "Calf_Raise",
+          "name": "Calf Raise",
+          "suggestedSets": 2,
+          "suggestedReps": 15
+        }
+      ],
+      "timezone": "America/Los_Angeles",
+      "weightUnit": "lbs"
+    }
+  },
+  "expect": {
+    "days": {
+      "2026-10-13": {
+        "dayType": "strength",
+        "dayName": "Lower A",
+        "source": "mcp",
+        "userModified": false,
+        "skipped": false,
+        "exercises": [
+          {
+            "exerciseId": "Bench_Press",
+            "name": "Bench Press",
+            "suggestedSets": 3,
+            "suggestedWeight": 102
+          },
+          {
+            "exerciseId": "Calf_Raise",
+            "name": "Calf Raise",
+            "suggestedSets": 2,
+            "suggestedReps": 15
+          }
+        ]
+      }
+    }
+  }
+}

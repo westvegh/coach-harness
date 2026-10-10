@@ -1,0 +1,61 @@
+# ALTERNATIVE — NOT THE SUPPORTED PATH. Not tested.
+#
+# The supported paths are a cloud routine (automation/routine.md) and a Mac launchd agent
+# (automation/launchd/README.md). This workflow shows how the daily run could work on
+# GitHub Actions with anthropics/claude-code-action.
+#
+# Limits of this path:
+# - There are no claude.ai connectors in Actions. Tally must be reached through an MCP
+#   config with its own credentials. That access is not verified for Tally.
+# - Usage bills to the key or token in the secret.
+# - Cron here is UTC. It covers both UTC offsets of the timezone; the prompt runs
+#   window-check first, which stops the runs outside the local window. Get the cron from
+#   `node engine/cli.ts routine-body --kind daily …` (field cron.cron).
+#
+# To use it: copy this file to .github/workflows/today.yml, add the secrets, and edit the
+# MCP config.
+name: coach-today
+
+on:
+  schedule:
+    - cron: "7 12-18 * * *"   # 05:07-10:07 America/Los_Angeles, in both PDT and PST
+  workflow_dispatch: {}
+
+permissions:
+  contents: write        # the run commits athlete/ changes to main
+  pull-requests: write   # proposals open a pull request
+
+concurrency:
+  group: coach-today
+  cancel-in-progress: false
+
+jobs:
+  today:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - run: npm ci
+
+      - uses: anthropics/claude-code-action@v1
+        env:
+          COACH_UNATTENDED: "1"      # the hooks run in unattended mode
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: >-
+            First run: node engine/cli.ts window-check --kind daily. If it exits with a nonzero code, stop and do nothing else.
+            Otherwise read .claude/skills/today/SKILL.md and follow it exactly. Unattended run.
+            This is a scheduled GitHub Actions run.
+            Commit to the main branch: run git pull --rebase before you push.
+          claude_args: >-
+            --mcp-config .github/coach-mcp.json
+            --allowedTools Bash,Read,Write,Edit,Glob,Grep,mcp__tally__get_training_context,mcp__tally__get_workout_history,mcp__tally__get_planned_workout,mcp__tally__get_exercise_progress,mcp__tally__search_exercises,mcp__tally__plan_workout_day,mcp__tally__plan_workout_range,mcp__tally__update_planned_workout,mcp__tally__move_planned_workout,mcp__tally__skip_planned_workout,mcp__tally__delete_planned_workout

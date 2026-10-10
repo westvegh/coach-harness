@@ -1,0 +1,50 @@
+{
+  "name": "pwd-convert-kg-to-lbs",
+  "description": "A kg call for a lbs user (history unit) is converted to the nearest 1 lb.",
+  "source": [
+    "workout-api/lib/mcp/tools/planWorkout.ts:108",
+    "workout-api/lib/mcp/tools/planWorkout.test.ts:274"
+  ],
+  "unit": {
+    "weightUnit": "lbs",
+    "weightUnitSource": "history"
+  },
+  "before": {},
+  "call": {
+    "tool": "plan_workout_day",
+    "args": {
+      "date": "2026-10-13",
+      "dayType": "strength",
+      "dayName": "Lower A",
+      "exercises": [
+        {
+          "exerciseId": "Squat",
+          "name": "Squat",
+          "suggestedSets": 5,
+          "suggestedWeight": 100
+        }
+      ],
+      "timezone": "America/Los_Angeles",
+      "weightUnit": "kg"
+    }
+  },
+  "expect": {
+    "days": {
+      "2026-10-13": {
+        "dayType": "strength",
+        "dayName": "Lower A",
+        "source": "mcp",
+        "userModified": false,
+        "skipped": false,
+        "exercises": [
+          {
+            "exerciseId": "Squat",
+            "name": "Squat",
+            "suggestedSets": 5,
+            "suggestedWeight": 220
+          }
+        ]
+      }
+    }
+  }
+}

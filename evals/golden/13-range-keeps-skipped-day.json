@@ -1,0 +1,115 @@
+{
+  "name": "range-keeps-skipped-day",
+  "description": "keepSkipped: a skipped day is left alone; the other day is written.",
+  "source": [
+    "workout-api/lib/mcp/upsertPlannedDay.ts:147",
+    "workout-api/lib/mcp/tools/planWorkout.test.ts:122"
+  ],
+  "unit": {
+    "weightUnit": "lbs",
+    "weightUnitSource": "settings"
+  },
+  "before": {
+    "2026-10-13": {
+      "id": "row-2026-10-13",
+      "day_type": "strength",
+      "day_name": "Lower A",
+      "exercises": [
+        {
+          "exerciseId": "Goblet_Squat",
+          "name": "Goblet Squat",
+          "suggestedSets": 3,
+          "suggestedReps": 10,
+          "suggestedWeight": 50
+        }
+      ],
+      "notes": "sick",
+      "source": "mcp",
+      "user_modified": false,
+      "status": "skipped",
+      "updated_at": "2026-10-10T08:00:00.000Z"
+    }
+  },
+  "call": {
+    "tool": "plan_workout_range",
+    "args": {
+      "timezone": "America/Los_Angeles",
+      "days": [
+        {
+          "date": "2026-10-13",
+          "dayType": "strength",
+          "dayName": "Lower B",
+          "exercises": [
+            {
+              "exerciseId": "Leg_Press",
+              "name": "Leg Press",
+              "suggestedSets": 3,
+              "suggestedReps": 12
+            }
+          ]
+        },
+        {
+          "date": "2026-10-14",
+          "dayType": "strength",
+          "dayName": "Upper",
+          "exercises": [
+            {
+              "exerciseId": "Bench_Press",
+              "name": "Bench Press",
+              "suggestedSets": 4,
+              "suggestedReps": 5,
+              "repsMax": 8,
+              "suggestedWeight": 185,
+              "rpe": 8,
+              "muscle": "chest",
+              "equipment": "Barbell",
+              "trackingType": "weight_reps"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "expect": {
+    "days": {
+      "2026-10-13": {
+        "dayType": "strength",
+        "dayName": "Lower A",
+        "source": "mcp",
+        "userModified": false,
+        "skipped": true,
+        "exercises": [
+          {
+            "exerciseId": "Goblet_Squat",
+            "name": "Goblet Squat",
+            "suggestedSets": 3,
+            "suggestedReps": 10,
+            "suggestedWeight": 50
+          }
+        ],
+        "notes": "sick"
+      },
+      "2026-10-14": {
+        "dayType": "strength",
+        "dayName": "Upper",
+        "source": "mcp",
+        "userModified": false,
+        "skipped": false,
+        "exercises": [
+          {
+            "exerciseId": "Bench_Press",
+            "name": "Bench Press",
+            "suggestedSets": 4,
+            "suggestedReps": 5,
+            "repsMax": 8,
+            "suggestedWeight": 185,
+            "rpe": 8,
+            "muscle": "chest",
+            "equipment": "Barbell",
+            "trackingType": "weight_reps"
+          }
+        ]
+      }
+    }
+  }
+}

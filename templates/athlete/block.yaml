@@ -1,0 +1,8 @@
+# The current training block. The block skill writes this file (shape: engine/types.ts Block).
+version: 1
+id: ""                               # for example B-001
+method: nine-adaptations
+template: { days: 4, emphasis: all-around }
+start: null                          # a Monday, YYYY-MM-DD
+weeks: []                            # [{ week: 1, kind: build | deload | test, sessions: 4, targets: { quads: 10 } }]
+days: []                             # [{ day: mon, focus: lower, slots: [{ pattern, adaptation, sets, reps, rest_s }] }]

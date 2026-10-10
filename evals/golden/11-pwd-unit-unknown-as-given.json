@@ -1,0 +1,50 @@
+{
+  "name": "pwd-unit-unknown-as-given",
+  "description": "An unknown user unit (source default) stores the weights as given.",
+  "source": [
+    "workout-api/lib/mcp/tools/planWorkout.ts:104",
+    "workout-api/lib/mcp/tools/planWorkout.test.ts:311"
+  ],
+  "unit": {
+    "weightUnit": "lbs",
+    "weightUnitSource": "default"
+  },
+  "before": {},
+  "call": {
+    "tool": "plan_workout_day",
+    "args": {
+      "date": "2026-10-13",
+      "dayType": "strength",
+      "dayName": "Lower A",
+      "exercises": [
+        {
+          "exerciseId": "Squat",
+          "name": "Squat",
+          "suggestedSets": 5,
+          "suggestedWeight": 100
+        }
+      ],
+      "timezone": "America/Los_Angeles",
+      "weightUnit": "kg"
+    }
+  },
+  "expect": {
+    "days": {
+      "2026-10-13": {
+        "dayType": "strength",
+        "dayName": "Lower A",
+        "source": "mcp",
+        "userModified": false,
+        "skipped": false,
+        "exercises": [
+          {
+            "exerciseId": "Squat",
+            "name": "Squat",
+            "suggestedSets": 5,
+            "suggestedWeight": 100
+          }
+        ]
+      }
+    }
+  }
+}

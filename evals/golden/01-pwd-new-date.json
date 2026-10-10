@@ -1,0 +1,65 @@
+{
+  "name": "pwd-new-date",
+  "description": "A new date is inserted: source mcp, status planned, no notes.",
+  "source": [
+    "workout-api/lib/mcp/upsertPlannedDay.ts:181",
+    "workout-api/lib/mcp/upsertPlannedDay.test.ts:42"
+  ],
+  "unit": {
+    "weightUnit": "lbs",
+    "weightUnitSource": "settings"
+  },
+  "before": {},
+  "call": {
+    "tool": "plan_workout_day",
+    "args": {
+      "date": "2026-10-13",
+      "dayType": "strength",
+      "dayName": "Lower A",
+      "exercises": [
+        {
+          "exerciseId": "Goblet_Squat",
+          "name": "Goblet Squat",
+          "suggestedSets": 3,
+          "suggestedReps": 10,
+          "suggestedWeight": 50
+        },
+        {
+          "exerciseId": "Romanian_Deadlift",
+          "name": "Romanian Deadlift",
+          "suggestedSets": 4,
+          "suggestedReps": 8,
+          "suggestedWeight": 135
+        }
+      ],
+      "timezone": "America/Los_Angeles"
+    }
+  },
+  "expect": {
+    "days": {
+      "2026-10-13": {
+        "dayType": "strength",
+        "dayName": "Lower A",
+        "source": "mcp",
+        "userModified": false,
+        "skipped": false,
+        "exercises": [
+          {
+            "exerciseId": "Goblet_Squat",
+            "name": "Goblet Squat",
+            "suggestedSets": 3,
+            "suggestedReps": 10,
+            "suggestedWeight": 50
+          },
+          {
+            "exerciseId": "Romanian_Deadlift",
+            "name": "Romanian Deadlift",
+            "suggestedSets": 4,
+            "suggestedReps": 8,
+            "suggestedWeight": 135
+          }
+        ]
+      }
+    }
+  }
+}

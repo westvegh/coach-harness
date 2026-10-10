@@ -1,0 +1,5 @@
+# PROTECTED. Injury limits, enforced in code by the guard (contracts §2).
+# Change this file only through the limits skill, with an interactive yes.
+version: 1
+pain_threshold: 4                    # 0-10; check-in pain in a region at or above this blocks exercises that load it
+limits: []

@@ -1,0 +1,25 @@
+# Copy to coach.yaml (setup does this for you). Contracts §1.
+version: 1
+athlete:
+  name: Alex
+  timezone: America/Los_Angeles      # IANA, authoritative
+  units: lbs                         # lbs | kg
+  sleep_target_min: 480              # optional; minutes of sleep a night (240-720), used by readiness
+method: nine-adaptations             # folder under methods/
+template: { days: 4, emphasis: all-around }   # days 3|4|5; emphasis all-around|strength|hypertrophy|endurance|general-health
+signals:
+  wearable: apple-health-shortcut    # apple-health-shortcut | oura | none
+  checkin: shortcut                  # shortcut | chat
+logger: tally                        # folder under adapters/loggers/
+consent:
+  logger_health_notes: false         # true only after the separate yes in setup: health details in logger notes
+automation:
+  mode: manual                       # cloud | mac | manual
+  daily_window: { start: "05:07", end: "10:07" }
+  weekly: { day: sun, time: "17:07" }
+  verified: false                    # true only after a successful test run
+  # tool_prefix: mcp__claude_ai_Tally_Workout__   # setup writes the connected Tally server's prefix
+approval:                            # PROTECTED. Policy input to engine/classify.
+  auto: [trim_session, swap_to_recovery, load_progression, reschedule_within_week, annotate, block_session]
+  ask:  [new_exercise, volume_above_plan, override_user_day, skip_or_delete_user_day, limit_change, new_block, method_change]
+thresholds: {}                       # PROTECTED. Optional overrides of the readiness defaults, same keys.

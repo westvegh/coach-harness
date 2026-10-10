@@ -1,0 +1,365 @@
+# Nine-adaptations method pack: rules.
+#
+# Format: docs/contracts.md §4. Each rule has an ID, a kind (sourced:
+# the source says it; policy: this pack's own choice), a severity, a source
+# (key in sources.md plus a timestamp) and, where the engine can enforce it, a
+# check. source.precision says whether the timestamp is the exact statement
+# or only the chapter start. Rule texts are written fresh, in our own words.
+#
+# Adaptation IDs: skill, speed, power, strength, hypertrophy,
+# muscular_endurance, anaerobic_capacity, max_aerobic, long_duration.
+
+pack: nine-adaptations
+version: 1
+rules:
+  # --- 01 The nine adaptations -------------------------------------------
+  - id: NA-ADP-001
+    text: "Treat fitness as nine separate, trainable adaptations: skill, speed, power, strength, hypertrophy, muscular endurance, anaerobic capacity, maximal aerobic output and long-duration endurance. Every block states which of them it targets."
+    kind: sourced
+    severity: soft
+    source: { ref: E1, at: "00:05:40", precision: chapter }
+
+  - id: NA-ADP-002
+    text: "Adaptations next to each other on the list train well together. The farther apart two are, the more they compete, so heavy strength work and high-volume long-duration work need care (separate days, or modest volume of one)."
+    kind: sourced
+    severity: soft
+    source: { ref: E4, at: "00:29:24", precision: exact }
+
+  - id: NA-ADP-003
+    text: "Inside one session, do the fresh, neural work (skill, speed, power, strength) before the fatiguing work (hypertrophy, conditioning). Fatigue first spoils the fast work; fast work first costs the later work little."
+    kind: sourced
+    severity: soft
+    source: { ref: E4, at: "02:35:08", precision: exact }
+
+  - id: NA-ADP-004
+    text: "Keep some strength and power work in every phase of the year. Endurance training by itself keeps the heart and lungs fit but does not keep fast-twitch muscle or leg strength."
+    kind: sourced
+    severity: soft
+    source: { ref: E1, at: "00:26:10", precision: chapter }
+
+  # --- 02 Strength and power ---------------------------------------------
+  - id: NA-STR-001
+    text: "Strength work sets use 3 to 5 reps. Singles and doubles are fine; more than 5 reps moves the set away from strength."
+    kind: sourced
+    severity: soft
+    source: { ref: E2, at: "01:14:35", precision: exact }
+    check: { type: rep_range, value: { adaptation: strength, min: 1, max: 5 } }
+
+  - id: NA-STR-002
+    text: "Rest 3 to 5 minutes between strength sets, and between power and speed sets, so each set starts fully recovered and stays fast."
+    kind: sourced
+    severity: soft
+    source: { ref: E2, at: "01:14:35", precision: exact }
+    check: { type: rest_range_s, value: { adaptation: strength, min: 180, max: 300 } }
+
+  - id: NA-STR-003
+    text: "A strength or power phase uses 3 to 5 exercises a session, 3 to 5 work sets per exercise, on 3 to 5 days a week. Warm-up sets do not count. The low end still works; the high end costs more recovery."
+    kind: sourced
+    severity: soft
+    source: { ref: E2, at: "01:13:31", precision: exact }
+
+  - id: NA-STR-004
+    text: "Power sets use roughly 30-70% of one-rep max, 5 reps or fewer, and the athlete tries to move each rep as fast as possible. A rep done at moderate speed does not train power."
+    kind: sourced
+    severity: soft
+    source: { ref: E2, at: "01:55:11", precision: exact }
+    check: { type: rep_range, value: { adaptation: power, min: 1, max: 5 } }
+
+  - id: NA-STR-005
+    text: "Before strength and power work, warm up with dynamic movement and ramp-up sets until the athlete feels sharp. Before hypertrophy work, a short warm-up is enough."
+    kind: sourced
+    severity: soft
+    source: { ref: E2, at: "01:22:02", precision: chapter }
+
+  # --- 03 Hypertrophy ----------------------------------------------------
+  - id: NA-HYP-001
+    text: "For muscle growth, give each muscle 10 to 20 hard sets a week, split across one or more sessions. Below 10 is light for growth; above 20 is rarely needed and costs recovery."
+    kind: sourced
+    severity: soft
+    source: { ref: E2, at: "03:23:47", precision: exact }
+    check: { type: weekly_sets_per_muscle_range, value: [10, 20] }
+
+  - id: NA-HYP-002
+    text: "Hypertrophy sets can use anywhere from about 4 to 30 reps, as long as the set ends near failure. Most sets sit in the middle of that range."
+    kind: sourced
+    severity: soft
+    source: { ref: E2, at: "03:27:16", precision: exact }
+    check: { type: rep_range, value: { adaptation: hypertrophy, min: 4, max: 30 } }
+
+  - id: NA-HYP-003
+    text: "Rest about 1 to 3 minutes between hypertrophy sets; up to 5 is fine. Longer rest lowers the metabolic stress, so the load or the effort must rise to make up for it."
+    kind: sourced
+    severity: soft
+    source: { ref: E2, at: "03:32:29", precision: exact }
+    check: { type: rest_range_s, value: { adaptation: hypertrophy, min: 60, max: 300 } }
+
+  - id: NA-HYP-004
+    text: "End hypertrophy sets close to failure, with only a rep or two left. Absolute failure is not required, and it is a poor idea on heavy compound lifts."
+    kind: sourced
+    severity: soft
+    source: { ref: E2, at: "03:27:38", precision: exact }
+
+  - id: NA-HYP-005
+    text: "After a hard hypertrophy session, give that muscle about 48 hours before it trains hard again."
+    kind: sourced
+    severity: soft
+    source: { ref: E2, at: "02:11:00", precision: exact }
+
+  - id: NA-HYP-006
+    text: "Do not drop a muscle group from the plan. If one needs less, cut its sets; keep it in the week."
+    kind: sourced
+    severity: soft
+    source: { ref: E2, at: "03:03:02", precision: chapter }
+
+  - id: NA-HYP-007
+    text: "In a phase that aims at muscle growth, avoid deliberate cold immersion right after training; it blocks part of the growth signal. In a competition phase, cold after events is fine."
+    kind: sourced
+    severity: soft
+    source: { ref: E2, at: "04:22:48", precision: exact }
+
+  # --- 04 Endurance ------------------------------------------------------
+  - id: NA-END-001
+    text: "Plan 60 to 120 minutes a week of long-duration work, in sessions of 20 minutes or more, at a pace that allows nasal breathing or conversation. Shorter, slightly harder sessions of 30 to 60 minutes also work."
+    kind: sourced
+    severity: soft
+    source: { ref: E3, at: "03:29:11", precision: exact }
+    note: "The host proposes the 60-120 minute dose; Dr. Galpin endorses it at 03:30:52 and adds the shorter, harder option."
+
+  - id: NA-END-002
+    text: "Anaerobic capacity work: all-out bouts of about 20 to 90 seconds. A standard set is 30 seconds hard and 30 seconds easy for at least 4 rounds, about 2 days a week. More than 3 to 4 days a week adds fatigue without benefit."
+    kind: sourced
+    severity: soft
+    source: { ref: E3, at: "03:06:59", precision: exact }
+
+  - id: NA-END-003
+    text: "Maximal aerobic work: one hard, sustained effort of about 5 to 15 minutes (for example a timed mile), about once a week. Do not put it on the same day as anaerobic capacity work."
+    kind: sourced
+    severity: soft
+    source: { ref: E3, at: "03:16:51", precision: exact }
+    note: "Keeping it apart from anaerobic capacity work is discussed at E3 03:19:52."
+
+  - id: NA-END-004
+    text: "Muscular endurance sets use about 11 to 30 reps, taken close to failure, with a load near what the athlete wants to be good at."
+    kind: sourced
+    severity: soft
+    source: { ref: E4, at: "02:42:04", precision: exact }
+    check: { type: rep_range, value: { adaptation: muscular_endurance, min: 11, max: 30 } }
+
+  - id: NA-END-005
+    text: "Progress muscular endurance by adding a rep or two each week (or a few seconds for holds), on the exact movement the athlete wants to improve."
+    kind: sourced
+    severity: soft
+    source: { ref: E3, at: "02:43:55", precision: exact }
+
+  # --- 05 Program design -------------------------------------------------
+  - id: NA-DES-001
+    text: "Each block has one primary goal. Other adaptations get maintenance doses. A specific goal converges faster than a mixed one."
+    kind: sourced
+    severity: soft
+    source: { ref: E2, at: "01:18:58", precision: exact }
+
+  - id: NA-DES-002
+    text: "Before writing a block, name the most likely obstacle (travel, work peaks, a fragile joint) and plan around it."
+    kind: sourced
+    severity: soft
+    source: { ref: E4, at: "00:48:02", precision: chapter }
+
+  - id: NA-DES-003
+    text: "Set training days and session length from the real calendar, conservatively. A plan the athlete completes beats a bigger plan they miss."
+    kind: sourced
+    severity: soft
+    source: { ref: E4, at: "01:06:59", precision: exact }
+
+  - id: NA-DES-004
+    text: "Keep a planned session at or under 60 minutes, warm-up and cool-down included. Longer sessions get a warning, not a block."
+    kind: policy
+    severity: soft
+    source: { ref: E4, at: "01:06:59", precision: exact }
+    check: { type: session_minutes_max, value: 60 }
+    note: "Policy. Dr. Galpin uses 3 days of 60 minutes as a conservative example, not as a limit."
+
+  - id: NA-DES-005
+    text: "Plan for disruption in advance: decide what the minimum session is for a bad day or a busy week, so a short session replaces a skipped one."
+    kind: sourced
+    severity: soft
+    source: { ref: E4, at: "01:45:12", precision: exact }
+
+  - id: NA-DES-006
+    text: "Three-day frame: day 1 speed and power, then hypertrophy; day 2 strength, then high-heart-rate conditioning; day 3 long-duration endurance. Other days are off or easy movement."
+    kind: sourced
+    severity: soft
+    source: { ref: E4, at: "02:34:39", precision: exact }
+
+  - id: NA-DES-007
+    text: "Four-day frame: day 1 whole-body lifting at about 5 to 10 reps; day 2 long-duration work; day 3 muscular endurance at 11 to 30 reps; day 4 moderate intervals with a few minutes near maximal heart rate at the end."
+    kind: sourced
+    severity: soft
+    source: { ref: E4, at: "02:41:03", precision: exact }
+
+  - id: NA-DES-008
+    text: "Five-day frame: repeat the three-day rotation with fewer rest days, splitting lifting into lower- and upper-body emphasis so each muscle still gets about 48 hours between hard sessions."
+    kind: policy
+    severity: soft
+    source: { ref: E4, at: "02:51:29", precision: exact }
+    note: "Dr. Galpin suggests running the three-day rotation back to back for 5-6 days; the exact five-day layout is this pack's choice."
+
+  # --- 06 Progression and deload -----------------------------------------
+  - id: NA-PROG-001
+    text: "Never raise weekly volume for a muscle by more than 10% over the reference week."
+    kind: sourced
+    severity: hard
+    source: { ref: E4, at: "01:36:25", precision: exact }
+    check: { type: weekly_volume_increase_max, value: 0.10 }
+
+  - id: NA-PROG-002
+    text: "Aim to raise volume about 5-7% a week and intensity about 3% a week. Pick one or two variables to progress at a time."
+    kind: sourced
+    severity: soft
+    source: { ref: E4, at: "01:36:25", precision: exact }
+
+  - id: NA-PROG-003
+    text: "A planned top set may not exceed the last logged top set of the same exercise by more than 10%."
+    kind: policy
+    severity: hard
+    source: { ref: E4, at: "01:37:46", precision: exact }
+    check: { type: top_set_jump_max, value: 0.10 }
+    note: "Policy. The source applies its 10% weekly ceiling to lifting in general; this pack applies it per exercise to the top set. The weekly target pace is about 3% (NA-PROG-002)."
+
+  - id: NA-PROG-004
+    text: "Small loads need small absolute jumps. A heavy lower-body lift can take about 5 lb a week; a light upper-body lift usually cannot."
+    kind: sourced
+    severity: soft
+    source: { ref: E2, at: "01:16:14", precision: exact }
+
+  - id: NA-PROG-005
+    text: "Deload on a fixed cycle: every 6th week (5 build weeks, then 1 deload week)."
+    kind: sourced
+    severity: soft
+    source: { ref: E4, at: "02:20:07", precision: exact }
+    check: { type: deload_every_weeks, value: 6 }
+    note: "deload_every_weeks N means a cycle of N weeks whose last week is the deload. The source also allows 4-8 weeks between deloads (01:41:14)."
+
+  - id: NA-PROG-006
+    text: "A deload week drops volume and load to about 70% of the last build week."
+    kind: sourced
+    severity: soft
+    source: { ref: E4, at: "02:20:07", precision: exact }
+    check: { type: deload_depth, value: { volume: 0.7, load: 0.7 } }
+
+  - id: NA-PROG-007
+    text: "Put deloads in the calendar when the block is written (every 4 to 8 weeks), instead of waiting until the athlete feels run down. End each quarter with a deload or a week off."
+    kind: sourced
+    severity: soft
+    source: { ref: E4, at: "01:41:14", precision: exact }
+    note: "The end-of-quarter week off or deload is at E4 02:18:37."
+
+  - id: NA-PROG-008
+    text: "The first build week after a deload may return to the best pre-deload week, plus at most one regular step."
+    kind: policy
+    severity: hard
+    source: { ref: E4, at: "01:40:51", precision: exact }
+    note: "Policy, enforced by engine/progression.ts (contracts §8). The source describes returning to the highest level done before the deload."
+
+  - id: NA-PROG-009
+    text: "When a muscle's reference week has fewer than 10 sets, one extra set a week is always allowed, even when that exceeds 10%."
+    kind: policy
+    severity: hard
+    note: "Policy (contracts §7). A 10% step on a small base is less than one set."
+
+  # --- 07 Recovery and readiness -----------------------------------------
+  # NA-REC-001 (2 of 3 categories change the session) and NA-REC-002 (the 30% trim and
+  # the two-reds swap) were retired on 2026-10-10: the daily rules now follow the
+  # source's pattern teaching (NA-REC-008 to NA-REC-012).
+  - id: NA-REC-003
+    text: "Change the program (not just a session) only when performance, physiology and symptoms all point the same way on at least 3 separate days."
+    kind: sourced
+    severity: soft
+    source: { ref: E5, at: "01:29:11", precision: exact }
+    check: { type: program_change_min_categories, value: 3 }
+
+  - id: NA-REC-004
+    text: "A performance dip of a day or two is expected in hard training. More than about 5 days in a row of decline deserves action; close to a competition, act sooner."
+    kind: sourced
+    severity: soft
+    source: { ref: E5, at: "01:30:03", precision: exact }
+
+  - id: NA-REC-005
+    text: "Read HRV against the athlete's own baseline (about a month or more of data), never against other people, and compare like with like (same device, same time of day)."
+    kind: sourced
+    severity: soft
+    source: { ref: E5, at: "02:09:17", precision: exact }
+    note: "The engine needs 28 valid days (4 weeks) in a 42-day window before the wearable category counts (thresholds baseline_days_min and baseline_window_days)."
+
+  - id: NA-REC-006
+    text: "Use easy, low-level movement to ease soreness, and a few minutes of slow nasal breathing after a session to shift toward recovery."
+    kind: sourced
+    severity: soft
+    source: { ref: E5, at: "00:14:49", precision: exact }
+    note: "The breathing part is at E5 00:55:10 (box breathing after training)."
+
+  - id: NA-REC-007
+    text: "Pain is not soreness. Pain reported in a region stops loading that region and goes to the safety path; the pack never programs through pain."
+    kind: policy
+    severity: hard
+    note: "Policy. Enforced by the guard and the limits file (contracts §7, §10)."
+
+  - id: NA-REC-008
+    text: "One morning is not a pattern. A flag on a single day, in any category (a low HRV, a high resting heart rate, a short night, a low check-in, or one hard session), earns a note and no session change. A dip the morning after a hard session is often the training stress at work. Watch the trend, not the daily score."
+    kind: sourced
+    severity: soft
+    source: { ref: E5, precision: approximate }
+    check: { type: single_day_action, value: note }
+    note: "Aversion [NA-REC-012] and pain [NA-REC-007] are the exceptions."
+
+  - id: NA-REC-009
+    text: "When HRV stays below, or resting heart rate stays above, the athlete's own normal band on 3 or more mornings in a row, reassess the load: hold load progression, lighten today's session, and ask about sleep, eating and drinking."
+    kind: sourced
+    severity: soft
+    source: { ref: E5, precision: approximate }
+    check: { type: off_mornings_short_pattern, value: 3 }
+    note: "The band is the athlete's own baseline (NA-REC-005): the amber line, z of -1 for HRV and +1 for resting HR. A morning with no reading is unknown and ends the run."
+
+  - id: NA-REC-010
+    text: "On that short pattern, trim about 20% of the hard sets and keep the exercises and loads. If the check-in or performance is also red that day, swap to a recovery day instead: easy aerobic work, mobility and breathing. One adjustment a day; a safety hold beats a recovery day, which beats a trim, which beats progression."
+    kind: policy
+    severity: soft
+    note: "Policy. The source says to reassess the load but gives no size; 20% (thresholds.trim_fraction) and the recovery escalation are this pack's choices."
+
+  - id: NA-REC-011
+    text: "When the off-mornings run 7 days or more, and the check-in and performance both point down too, propose a program change: an early deload or a new block. Only all three kinds of evidence together justify it, and the athlete approves it."
+    kind: sourced
+    severity: soft
+    source: { ref: E5, precision: approximate }
+    check: { type: off_mornings_long_pattern, value: 7 }
+
+  - id: NA-REC-012
+    text: "Not wanting to train at all (aversion, not ordinary tiredness) is a reason to rest. When the check-in's want-to-train answer is 1 of 5, offer a recovery day; an unattended run makes the day a recovery day, which is always the safer change."
+    kind: sourced
+    severity: soft
+    source: { ref: E2, precision: approximate }
+    check: { type: aversion_scale_max, value: 1 }
+
+  # --- 08 Assessment -----------------------------------------------------
+  - id: NA-ASM-001
+    text: "Test fresh qualities first: body composition and movement quality, then skill, power and maximal strength, then muscular endurance, and the most fatiguing tests last. No hard training in the 48 hours before a body composition test."
+    kind: sourced
+    severity: soft
+    source: { ref: E1, at: "01:46:21", precision: exact }
+
+  - id: NA-ASM-002
+    text: "Run the full test battery at least once a year (twice is better), spread over about a week. Retest a weak area more often, under the same conditions each time."
+    kind: sourced
+    severity: soft
+    source: { ref: E1, at: "01:44:46", precision: exact }
+
+  - id: NA-ASM-003
+    text: "Score movement quality per lift on a 0/1/3 scale: 0 means do not load it yet, 1 means a minor flaw to work on, 3 means train normally."
+    kind: sourced
+    severity: soft
+    source: { ref: E1, at: "01:11:45", precision: exact }
+
+  - id: NA-ASM-004
+    text: "When the athlete has no clear goal, use the lowest test result to pick the next block's priority for about three months."
+    kind: sourced
+    severity: soft
+    source: { ref: E4, at: "00:13:00", precision: exact }

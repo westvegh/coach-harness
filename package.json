@@ -1,0 +1,41 @@
+{
+  "name": "coach-harness",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A strength and conditioning coach for Claude Code: plans from a cited method, adjusts each day from recovery data, and enforces injury limits in code.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/westvegh/coach-harness.git"
+  },
+  "homepage": "https://github.com/westvegh/coach-harness#readme",
+  "bugs": {
+    "url": "https://github.com/westvegh/coach-harness/issues"
+  },
+  "keywords": [
+    "claude-code",
+    "strength-training",
+    "coaching",
+    "fitness",
+    "training-plan",
+    "hrv",
+    "readiness",
+    "mcp"
+  ],
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "test": "tsc --noEmit && node --test \"engine/**/*.test.ts\" \"tests/**/*.test.ts\" \"evals/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit",
+    "eval": "node evals/run.ts"
+  },
+  "dependencies": {
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "typescript": "^5.9.3"
+  }
+}

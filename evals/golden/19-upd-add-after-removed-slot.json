@@ -1,0 +1,103 @@
+{
+  "name": "upd-add-after-removed-slot",
+  "description": "An add after a removed slot lands where that slot was.",
+  "source": [
+    "workout-api/lib/mcp/tools/updatePlannedWorkout.test.ts:165"
+  ],
+  "unit": {
+    "weightUnit": "lbs",
+    "weightUnitSource": "settings"
+  },
+  "before": {
+    "2026-10-13": {
+      "id": "row-2026-10-13",
+      "day_type": "strength",
+      "day_name": "Lower A",
+      "exercises": [
+        {
+          "exerciseId": "Goblet_Squat",
+          "name": "Goblet Squat",
+          "suggestedSets": 3,
+          "suggestedReps": 10,
+          "suggestedWeight": 50
+        },
+        {
+          "exerciseId": "Romanian_Deadlift",
+          "name": "Romanian Deadlift",
+          "suggestedSets": 4,
+          "suggestedReps": 8,
+          "suggestedWeight": 135
+        },
+        {
+          "exerciseId": "Leg_Press",
+          "name": "Leg Press",
+          "suggestedSets": 3,
+          "suggestedReps": 12
+        }
+      ],
+      "notes": null,
+      "source": "mcp",
+      "user_modified": false,
+      "status": "planned",
+      "updated_at": "2026-10-10T08:00:00.000Z"
+    }
+  },
+  "call": {
+    "tool": "update_planned_workout",
+    "args": {
+      "date": "2026-10-13",
+      "timezone": "America/Los_Angeles",
+      "operations": [
+        {
+          "op": "remove",
+          "target": {
+            "index": 1
+          }
+        },
+        {
+          "op": "add",
+          "afterIndex": 1,
+          "exercise": {
+            "exerciseId": "Calf_Raise",
+            "name": "Calf Raise",
+            "suggestedSets": 2,
+            "suggestedReps": 15
+          }
+        }
+      ],
+      "expectedVersion": "$version"
+    }
+  },
+  "expect": {
+    "days": {
+      "2026-10-13": {
+        "dayType": "strength",
+        "dayName": "Lower A",
+        "source": "mcp",
+        "userModified": false,
+        "skipped": false,
+        "exercises": [
+          {
+            "exerciseId": "Goblet_Squat",
+            "name": "Goblet Squat",
+            "suggestedSets": 3,
+            "suggestedReps": 10,
+            "suggestedWeight": 50
+          },
+          {
+            "exerciseId": "Calf_Raise",
+            "name": "Calf Raise",
+            "suggestedSets": 2,
+            "suggestedReps": 15
+          },
+          {
+            "exerciseId": "Leg_Press",
+            "name": "Leg Press",
+            "suggestedSets": 3,
+            "suggestedReps": 12
+          }
+        ]
+      }
+    }
+  }
+}

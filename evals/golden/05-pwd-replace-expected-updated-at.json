@@ -1,0 +1,71 @@
+{
+  "name": "pwd-replace-expected-updated-at",
+  "description": "A prior read via expectedUpdatedAt passes the exists guard and replaces the day.",
+  "source": [
+    "workout-api/lib/mcp/upsertPlannedDay.ts:212",
+    "workout-api/lib/mcp/upsertPlannedDay.test.ts:212"
+  ],
+  "unit": {
+    "weightUnit": "lbs",
+    "weightUnitSource": "settings"
+  },
+  "before": {
+    "2026-10-13": {
+      "id": "row-2026-10-13",
+      "day_type": "strength",
+      "day_name": "Lower A",
+      "exercises": [
+        {
+          "exerciseId": "Goblet_Squat",
+          "name": "Goblet Squat",
+          "suggestedSets": 3,
+          "suggestedReps": 10,
+          "suggestedWeight": 50
+        }
+      ],
+      "notes": null,
+      "source": "mcp",
+      "user_modified": false,
+      "status": "planned",
+      "updated_at": "2026-10-10T08:00:00.000Z"
+    }
+  },
+  "call": {
+    "tool": "plan_workout_day",
+    "args": {
+      "date": "2026-10-13",
+      "dayType": "strength",
+      "dayName": "Lower A",
+      "exercises": [
+        {
+          "exerciseId": "Leg_Press",
+          "name": "Leg Press",
+          "suggestedSets": 3,
+          "suggestedReps": 12
+        }
+      ],
+      "timezone": "America/Los_Angeles",
+      "expectedUpdatedAt": "2026-10-10T08:00:00.000Z",
+      "expectedVersion": "$version"
+    }
+  },
+  "expect": {
+    "days": {
+      "2026-10-13": {
+        "dayType": "strength",
+        "dayName": "Lower A",
+        "source": "mcp",
+        "userModified": false,
+        "skipped": false,
+        "exercises": [
+          {
+            "exerciseId": "Leg_Press",
+            "name": "Leg Press",
+            "suggestedSets": 3,
+            "suggestedReps": 12
+          }
+        ]
+      }
+    }
+  }
+}

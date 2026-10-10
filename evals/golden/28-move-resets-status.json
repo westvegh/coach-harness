@@ -1,0 +1,78 @@
+{
+  "name": "move-resets-status",
+  "description": "A move of a skipped day lands as planned at toDate; the source date is empty.",
+  "source": [
+    "migrations/013_move_planned_workout_fn.sql:76",
+    "workout-api/lib/mcp/tools/movePlannedWorkout.test.ts:45"
+  ],
+  "unit": {
+    "weightUnit": "lbs",
+    "weightUnitSource": "settings"
+  },
+  "before": {
+    "2026-10-13": {
+      "id": "row-2026-10-13",
+      "day_type": "strength",
+      "day_name": "Lower A",
+      "exercises": [
+        {
+          "exerciseId": "Goblet_Squat",
+          "name": "Goblet Squat",
+          "suggestedSets": 3,
+          "suggestedReps": 10,
+          "suggestedWeight": 50
+        },
+        {
+          "exerciseId": "Romanian_Deadlift",
+          "name": "Romanian Deadlift",
+          "suggestedSets": 4,
+          "suggestedReps": 8,
+          "suggestedWeight": 135
+        }
+      ],
+      "notes": "moved",
+      "source": "mcp",
+      "user_modified": false,
+      "status": "skipped",
+      "updated_at": "2026-10-10T08:00:00.000Z"
+    }
+  },
+  "call": {
+    "tool": "move_planned_workout",
+    "args": {
+      "fromDate": "2026-10-13",
+      "toDate": "2026-10-15",
+      "timezone": "America/Los_Angeles",
+      "expectedVersion": "$version"
+    }
+  },
+  "expect": {
+    "days": {
+      "2026-10-13": null,
+      "2026-10-15": {
+        "dayType": "strength",
+        "dayName": "Lower A",
+        "source": "mcp",
+        "userModified": false,
+        "skipped": false,
+        "exercises": [
+          {
+            "exerciseId": "Goblet_Squat",
+            "name": "Goblet Squat",
+            "suggestedSets": 3,
+            "suggestedReps": 10,
+            "suggestedWeight": 50
+          },
+          {
+            "exerciseId": "Romanian_Deadlift",
+            "name": "Romanian Deadlift",
+            "suggestedSets": 4,
+            "suggestedReps": 8,
+            "suggestedWeight": 135
+          }
+        ],
+        "notes": "moved"
+      }
+    }
+  }
+}

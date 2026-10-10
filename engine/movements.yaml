@@ -1,0 +1,427 @@
+# Movement taxonomy (contracts §3). Ships with the harness; PROTECTED.
+# athlete/movements.local.yaml has the same shape and wins when both define an entry.
+#
+# regions:   body regions that limits and pain refer to. A side region (left-knee)
+#            also matches its parent (knee).
+# patterns:  what a movement loads (regions) and trains (muscles, for weekly sets).
+#            recovery: true marks recovery-day patterns; they load no region.
+# keywords:  lowercase words → patterns. A keyword matches whole words in the exercise
+#            name (a plural "s" or "es" is allowed). The longest match wins.
+# exercises: exact name or exerciseId → patterns. Beats keywords.
+version: 1
+
+regions:
+  - neck
+  - upper-back
+  - low-back
+  - chest
+  - abdomen
+  - shoulder
+  - left-shoulder
+  - right-shoulder
+  - elbow
+  - left-elbow
+  - right-elbow
+  - wrist
+  - left-wrist
+  - right-wrist
+  - hand
+  - hip
+  - left-hip
+  - right-hip
+  - groin
+  - knee
+  - left-knee
+  - right-knee
+  - ankle
+  - left-ankle
+  - right-ankle
+  - foot
+
+patterns:
+  # lower body
+  squat:                    { loads: [knee, hip, low-back], muscles: [quads, glutes] }
+  loaded_deep_knee_flexion: { loads: [knee], muscles: [] }
+  lunge:                    { loads: [knee, hip], muscles: [quads, glutes] }
+  step_up:                  { loads: [knee, hip], muscles: [quads, glutes] }
+  leg_press:                { loads: [knee, hip], muscles: [quads, glutes] }
+  knee_extension:           { loads: [knee], muscles: [quads] }
+  knee_flexion:             { loads: [knee], muscles: [hamstrings] }
+  hinge:                    { loads: [low-back, hip], muscles: [hamstrings, glutes] }
+  hinge_isometric:          { loads: [low-back, hip], muscles: [] }
+  hip_thrust:               { loads: [hip], muscles: [glutes] }
+  back_extension:           { loads: [low-back, hip], muscles: [glutes, hamstrings] }
+  hip_abduction:            { loads: [hip], muscles: [glutes] }
+  hip_adduction:            { loads: [hip, groin], muscles: [adductors] }
+  calf_raise:               { loads: [ankle, foot], muscles: [calves] }
+  ankle_dorsiflexion:       { loads: [ankle], muscles: [] }
+  sled:                     { loads: [knee, hip, ankle], muscles: [quads, glutes] }
+  # upper body push
+  horizontal_push:          { loads: [shoulder, elbow, wrist], muscles: [chest, triceps] }
+  incline_push:             { loads: [shoulder, elbow, wrist], muscles: [chest, shoulders] }
+  vertical_push:            { loads: [shoulder, elbow, wrist], muscles: [chest, triceps] }
+  overhead_press:           { loads: [shoulder, elbow], muscles: [shoulders, triceps] }
+  chest_fly:                { loads: [shoulder, chest], muscles: [chest] }
+  # upper body pull
+  horizontal_pull:          { loads: [shoulder, elbow, upper-back], muscles: [upper-back, lats] }
+  vertical_pull:            { loads: [shoulder, elbow], muscles: [lats, biceps] }
+  lateral_raise:            { loads: [shoulder], muscles: [shoulders] }
+  rear_delt:                { loads: [shoulder], muscles: [shoulders, upper-back] }
+  shoulder_rotation:        { loads: [shoulder], muscles: [shoulders] }
+  shrug:                    { loads: [neck, upper-back], muscles: [traps] }
+  neck_work:                { loads: [neck], muscles: [neck] }
+  # arms
+  elbow_flexion:            { loads: [elbow, wrist], muscles: [biceps] }
+  elbow_extension:          { loads: [elbow], muscles: [triceps] }
+  wrist_forearm:            { loads: [wrist, hand], muscles: [forearms] }
+  # trunk
+  loaded_spinal_flexion:    { loads: [low-back, abdomen], muscles: [core] }
+  core_anti_extension:      { loads: [low-back, abdomen], muscles: [core] }
+  core_anti_rotation:       { loads: [abdomen], muscles: [core] }
+  core_lateral:             { loads: [low-back, abdomen], muscles: [core] }
+  rotation:                 { loads: [low-back, abdomen], muscles: [core] }
+  carry:                    { loads: [shoulder, wrist, hand, low-back, hip], muscles: [forearms, traps, core] }
+  # power and conditioning
+  olympic_lift:             { loads: [knee, hip, low-back, shoulder, wrist], muscles: [quads, glutes, hamstrings, traps] }
+  plyometric:               { loads: [knee, ankle, hip, foot], muscles: [] }
+  sprint:                   { loads: [knee, ankle, hip, foot], muscles: [] }
+  impact_running:           { loads: [knee, ankle, hip, foot], muscles: [] }
+  rowing_erg:               { loads: [low-back, knee, shoulder], muscles: [] }
+  balance:                  { loads: [ankle, foot], muscles: [] }
+  intervals:                { loads: [], muscles: [] }
+  # recovery
+  zone2_cardio:             { loads: [], muscles: [], recovery: true }
+  mobility:                 { loads: [], muscles: [], recovery: true }
+  breathing:                { loads: [], muscles: [], recovery: true }
+
+keywords:
+  # squat family
+  # A bare "squat" is a loaded barbell squat in most loggers ("Squat (Barbell)"): count it as deep.
+  "squat": [squat, loaded_deep_knee_flexion]
+  "smith machine squat": [squat, loaded_deep_knee_flexion]
+  "air squat": [squat]
+  "bodyweight squat": [squat]
+  "back squat": [squat, loaded_deep_knee_flexion]
+  "front squat": [squat, loaded_deep_knee_flexion]
+  "goblet squat": [squat]
+  "box squat": [squat]
+  "belt squat": [squat]
+  "hack squat": [squat, loaded_deep_knee_flexion]
+  "pistol squat": [squat, loaded_deep_knee_flexion]
+  "pause squat": [squat, loaded_deep_knee_flexion]
+  "zercher squat": [squat, loaded_deep_knee_flexion]
+  "safety bar squat": [squat, loaded_deep_knee_flexion]
+  "overhead squat": [squat, loaded_deep_knee_flexion, overhead_press]
+  "sissy squat": [knee_extension, loaded_deep_knee_flexion]
+  "spanish squat": [knee_extension]
+  "jump squat": [squat, plyometric]
+  "cossack squat": [lunge, hip_adduction, loaded_deep_knee_flexion]
+  "wall sit": [squat]
+  "thruster": [squat, overhead_press]
+  "wall ball": [squat, overhead_press]
+  # single leg
+  "lunge": [lunge]
+  "walking lunge": [lunge]
+  "reverse lunge": [lunge]
+  "lateral lunge": [lunge, hip_adduction]
+  "curtsy lunge": [lunge]
+  "jumping lunge": [lunge, plyometric]
+  "split squat": [lunge, loaded_deep_knee_flexion]
+  "bulgarian split squat": [lunge, loaded_deep_knee_flexion]
+  "rear foot elevated split squat": [lunge, loaded_deep_knee_flexion]
+  "step up": [step_up]
+  "step down": [step_up]
+  # knee isolation
+  "leg press": [leg_press]
+  "leg extension": [knee_extension]
+  "terminal knee extension": [knee_extension]
+  "leg curl": [knee_flexion]
+  "hamstring curl": [knee_flexion]
+  "nordic": [knee_flexion]
+  "nordic curl": [knee_flexion]
+  "reverse nordic": [knee_extension, loaded_deep_knee_flexion]
+  "glute ham raise": [knee_flexion, back_extension]
+  # hinge
+  "deadlift": [hinge]
+  "romanian deadlift": [hinge]
+  "rdl": [hinge]
+  "stiff leg deadlift": [hinge]
+  "sumo deadlift": [hinge]
+  "trap bar deadlift": [hinge, squat]
+  "hex bar deadlift": [hinge, squat]
+  "single leg deadlift": [hinge, balance]
+  "suitcase deadlift": [hinge, core_lateral]
+  "rack pull": [hinge]
+  "good morning": [hinge]
+  "kettlebell swing": [hinge]
+  "swing": [hinge]
+  "pull through": [hinge]
+  "cable pull through": [hinge]
+  "jefferson curl": [loaded_spinal_flexion, hinge]
+  # hip
+  "hip thrust": [hip_thrust]
+  "glute bridge": [hip_thrust]
+  "single leg glute bridge": [hip_thrust]
+  "hip extension": [hip_thrust]
+  "back extension": [back_extension]
+  "hyperextension": [back_extension]
+  "reverse hyper": [back_extension]
+  "superman": [back_extension]
+  "hip abduction": [hip_abduction]
+  "clamshell": [hip_abduction]
+  "fire hydrant": [hip_abduction]
+  "monster walk": [hip_abduction]
+  "lateral band walk": [hip_abduction]
+  "side lying leg raise": [hip_abduction]
+  "hip adduction": [hip_adduction]
+  "adductor": [hip_adduction]
+  "copenhagen": [hip_adduction, core_lateral]
+  # lower leg
+  "calf raise": [calf_raise]
+  "seated calf raise": [calf_raise]
+  "tibialis raise": [ankle_dorsiflexion]
+  "tib raise": [ankle_dorsiflexion]
+  "balance": [balance]
+  "hip airplane": [balance, hip_abduction]
+  "single leg balance": [balance]
+  "sled push": [sled]
+  "sled drag": [sled]
+  "prowler": [sled]
+  # horizontal and vertical push
+  "press": [horizontal_push]
+  "bench": [horizontal_push]
+  "bench press": [horizontal_push]
+  "close grip bench": [horizontal_push, elbow_extension]
+  "decline bench": [horizontal_push]
+  "floor press": [horizontal_push]
+  "chest press": [horizontal_push]
+  "dumbbell press": [horizontal_push]
+  "push up": [horizontal_push]
+  "pushup": [horizontal_push]
+  "press up": [horizontal_push]
+  "incline bench": [incline_push]
+  "incline press": [incline_push]
+  "dip": [vertical_push]
+  "chest dip": [vertical_push]
+  "bench dip": [vertical_push]
+  "chest fly": [chest_fly]
+  "fly": [chest_fly]
+  "flye": [chest_fly]
+  "pec deck": [chest_fly]
+  "cable crossover": [chest_fly]
+  # overhead
+  "overhead press": [overhead_press]
+  "ohp": [overhead_press]
+  "shoulder press": [overhead_press]
+  "military press": [overhead_press]
+  "push press": [overhead_press]
+  "arnold press": [overhead_press]
+  "landmine press": [overhead_press]
+  "z press": [overhead_press]
+  "pike push up": [overhead_press]
+  "handstand push up": [overhead_press]
+  # horizontal pull
+  "row": [horizontal_pull]
+  "bent over row": [horizontal_pull, hinge_isometric]
+  "barbell row": [horizontal_pull, hinge_isometric]
+  "pendlay row": [horizontal_pull, hinge_isometric]
+  "t bar row": [horizontal_pull, hinge_isometric]
+  "dumbbell row": [horizontal_pull]
+  "single arm row": [horizontal_pull]
+  "one arm row": [horizontal_pull]
+  "seated row": [horizontal_pull]
+  "cable row": [horizontal_pull]
+  "chest supported row": [horizontal_pull]
+  "seal row": [horizontal_pull]
+  "meadows row": [horizontal_pull]
+  "inverted row": [horizontal_pull]
+  "ring row": [horizontal_pull]
+  "renegade row": [horizontal_pull, core_anti_rotation]
+  "upright row": [lateral_raise, shrug]
+  # vertical pull
+  "pull up": [vertical_pull]
+  "pullup": [vertical_pull]
+  "chin up": [vertical_pull]
+  "chinup": [vertical_pull]
+  "lat pulldown": [vertical_pull]
+  "pulldown": [vertical_pull]
+  "pull down": [vertical_pull]
+  "straight arm pulldown": [vertical_pull]
+  "pullover": [vertical_pull]
+  # shoulders
+  "lateral raise": [lateral_raise]
+  "side raise": [lateral_raise]
+  "front raise": [lateral_raise]
+  "rear delt": [rear_delt]
+  "rear delt fly": [rear_delt]
+  "rear delt raise": [rear_delt]
+  "reverse fly": [rear_delt]
+  "face pull": [rear_delt]
+  "band pull apart": [rear_delt]
+  "pull apart": [rear_delt]
+  "y raise": [rear_delt]
+  "ytw": [rear_delt]
+  "external rotation": [shoulder_rotation]
+  "internal rotation": [shoulder_rotation]
+  "cuban press": [shoulder_rotation, overhead_press]
+  "scapular": [shoulder_rotation]
+  "shrug": [shrug]
+  "neck": [neck_work]
+  "neck curl": [neck_work]
+  "neck extension": [neck_work]
+  "neck flexion": [neck_work]
+  # arms and grip
+  "curl": [elbow_flexion]
+  "bicep curl": [elbow_flexion]
+  "biceps curl": [elbow_flexion]
+  "hammer curl": [elbow_flexion]
+  "preacher curl": [elbow_flexion]
+  "concentration curl": [elbow_flexion]
+  "spider curl": [elbow_flexion]
+  "reverse curl": [elbow_flexion, wrist_forearm]
+  "wrist curl": [wrist_forearm]
+  "reverse wrist curl": [wrist_forearm]
+  "wrist extension": [wrist_forearm]
+  "wrist roller": [wrist_forearm]
+  "grip": [wrist_forearm]
+  "dead hang": [wrist_forearm]
+  "triceps extension": [elbow_extension]
+  "tricep extension": [elbow_extension]
+  "overhead extension": [elbow_extension]
+  "skull crusher": [elbow_extension]
+  "pushdown": [elbow_extension]
+  "push down": [elbow_extension]
+  "tricep pushdown": [elbow_extension]
+  "kickback": [elbow_extension]
+  "french press": [elbow_extension]
+  # trunk
+  "crunch": [loaded_spinal_flexion]
+  "cable crunch": [loaded_spinal_flexion]
+  "sit up": [loaded_spinal_flexion]
+  "situp": [loaded_spinal_flexion]
+  "v up": [loaded_spinal_flexion]
+  "toes to bar": [loaded_spinal_flexion]
+  "leg raise": [loaded_spinal_flexion]
+  "hanging leg raise": [loaded_spinal_flexion]
+  "knee raise": [loaded_spinal_flexion]
+  "plank": [core_anti_extension]
+  "ab wheel": [core_anti_extension]
+  "rollout": [core_anti_extension]
+  "dead bug": [core_anti_extension]
+  "hollow": [core_anti_extension]
+  "body saw": [core_anti_extension]
+  "curl up": [core_anti_extension]
+  "mcgill curl up": [core_anti_extension]
+  "bird dog": [core_anti_rotation]
+  "pallof": [core_anti_rotation]
+  "pallof press": [core_anti_rotation]
+  "side plank": [core_lateral]
+  "side bend": [core_lateral]
+  "woodchop": [rotation]
+  "wood chop": [rotation]
+  "russian twist": [rotation]
+  "landmine rotation": [rotation]
+  "rotational throw": [rotation, plyometric]
+  # carries
+  "carry": [carry]
+  "turkish get up": [overhead_press, lunge, core_lateral]
+  "farmer": [carry]
+  "farmer walk": [carry]
+  "farmers walk": [carry]
+  "farmer s walk": [carry]
+  "suitcase walk": [carry]
+  "overhead walk": [carry]
+  "suitcase carry": [carry]
+  "yoke": [carry]
+  "ruck": [carry, zone2_cardio]
+  "rucking": [carry, zone2_cardio]
+  # olympic lifts
+  "clean": [olympic_lift]
+  "snatch": [olympic_lift]
+  "jerk": [olympic_lift]
+  "high pull": [olympic_lift]
+  # plyometrics
+  "jump": [plyometric]
+  "box jump": [plyometric]
+  "broad jump": [plyometric]
+  "depth jump": [plyometric]
+  "jump rope": [plyometric]
+  "jumping jack": [plyometric]
+  "skipping": [plyometric]
+  "hop": [plyometric]
+  "hopping": [plyometric]
+  "bound": [plyometric]
+  "skater": [plyometric]
+  "pogo": [plyometric]
+  "burpee": [plyometric, horizontal_push]
+  "slam": [plyometric]
+  "throw": [plyometric]
+  "med ball throw": [plyometric]
+  "chest pass": [plyometric]
+  # running and sprinting
+  "sprint": [sprint]
+  "hill sprint": [sprint]
+  "stride": [sprint]
+  "run": [zone2_cardio, impact_running]
+  "running": [zone2_cardio, impact_running]
+  "jog": [zone2_cardio, impact_running]
+  "jogging": [zone2_cardio, impact_running]
+  "easy run": [zone2_cardio, impact_running]
+  "tempo run": [intervals, impact_running]
+  "interval run": [intervals, impact_running]
+  "treadmill": [zone2_cardio, impact_running]
+  "treadmill walk": [zone2_cardio]
+  # other cardio
+  "walk": [zone2_cardio]
+  "walking": [zone2_cardio]
+  "incline walk": [zone2_cardio]
+  "hike": [zone2_cardio]
+  "hiking": [zone2_cardio]
+  "bike": [zone2_cardio]
+  "cycling": [zone2_cardio]
+  "cycle": [zone2_cardio]
+  "spin": [zone2_cardio]
+  "elliptical": [zone2_cardio]
+  "stair climber": [zone2_cardio]
+  "stairmaster": [zone2_cardio]
+  "swim": [zone2_cardio]
+  "swimming": [zone2_cardio]
+  "zone 2": [zone2_cardio]
+  "rower": [rowing_erg]
+  "rowing": [rowing_erg]
+  "rowing machine": [rowing_erg]
+  "ski erg": [rowing_erg]
+  "interval": [intervals]
+  "hiit": [intervals]
+  "tabata": [intervals]
+  "vo2": [intervals]
+  "assault bike": [intervals]
+  "air bike": [intervals]
+  # mobility and breathing
+  "mobility": [mobility]
+  "stretch": [mobility]
+  "stretching": [mobility]
+  "foam roll": [mobility]
+  "foam rolling": [mobility]
+  "yoga": [mobility]
+  "cat cow": [mobility]
+  "open book": [mobility]
+  "thoracic": [mobility]
+  "spinal twist": [mobility]
+  "child s pose": [mobility]
+  "pigeon": [mobility]
+  "wall slide": [mobility]
+  "90 90": [mobility]
+  "breathing": [breathing]
+  "breath": [breathing]
+  "box breathing": [breathing]
+  "90 90 breathing": [breathing]
+  "diaphragmatic": [breathing]
+  "meditation": [breathing]
+
+exercises:
+  Barbell_Squat: [squat, loaded_deep_knee_flexion]
+  Barbell Back Squat: [squat, loaded_deep_knee_flexion]
+  Barbell_Bench_Press: [horizontal_push]
+  Barbell_Deadlift: [hinge]
+  Pull_Up: [vertical_pull]

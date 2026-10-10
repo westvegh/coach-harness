@@ -1,0 +1,89 @@
+{
+  "name": "upd-day-name-and-notes",
+  "description": "dayName sets day_name; notes sets the notes; the exercises are edited in place.",
+  "source": [
+    "workout-api/lib/mcp/tools/updatePlannedWorkout.ts:277",
+    "workout-api/lib/mcp/tools/updatePlannedWorkout.ts:278",
+    "workout-api/lib/mcp/tools/updatePlannedWorkout.test.ts:171"
+  ],
+  "unit": {
+    "weightUnit": "lbs",
+    "weightUnitSource": "settings"
+  },
+  "before": {
+    "2026-10-13": {
+      "id": "row-2026-10-13",
+      "day_type": "strength",
+      "day_name": "Lower A",
+      "exercises": [
+        {
+          "exerciseId": "Goblet_Squat",
+          "name": "Goblet Squat",
+          "suggestedSets": 3,
+          "suggestedReps": 10,
+          "suggestedWeight": 50
+        },
+        {
+          "exerciseId": "Romanian_Deadlift",
+          "name": "Romanian Deadlift",
+          "suggestedSets": 4,
+          "suggestedReps": 8,
+          "suggestedWeight": 135
+        }
+      ],
+      "notes": null,
+      "source": "mcp",
+      "user_modified": false,
+      "status": "planned",
+      "updated_at": "2026-10-10T08:00:00.000Z"
+    }
+  },
+  "call": {
+    "tool": "update_planned_workout",
+    "args": {
+      "date": "2026-10-13",
+      "timezone": "America/Los_Angeles",
+      "operations": [
+        {
+          "op": "modify",
+          "target": {
+            "exerciseId": "Goblet_Squat"
+          },
+          "fields": {
+            "suggestedSets": 2
+          }
+        }
+      ],
+      "dayName": "Lower A (trimmed)",
+      "notes": "Trimmed: low HRV and a low check-in"
+    }
+  },
+  "expect": {
+    "days": {
+      "2026-10-13": {
+        "dayType": "strength",
+        "dayName": "Lower A (trimmed)",
+        "source": "mcp",
+        "userModified": false,
+        "skipped": false,
+        "exercises": [
+          {
+            "exerciseId": "Goblet_Squat",
+            "name": "Goblet Squat",
+            "suggestedSets": 2,
+            "suggestedReps": 10,
+            "suggestedWeight": 50
+          },
+          {
+            "exerciseId": "Romanian_Deadlift",
+            "name": "Romanian Deadlift",
+            "suggestedSets": 4,
+            "suggestedReps": 8,
+            "suggestedWeight": 135
+          }
+        ],
+        "notes": "Trimmed: low HRV and a low check-in"
+      }
+    }
+  }
+}

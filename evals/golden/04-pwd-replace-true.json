@@ -1,0 +1,84 @@
+{
+  "name": "pwd-replace-true",
+  "description": "replace: true replaces the day; exercises not in the array are removed.",
+  "source": [
+    "workout-api/lib/mcp/tools/planWorkout.test.ts:162"
+  ],
+  "unit": {
+    "weightUnit": "lbs",
+    "weightUnitSource": "settings"
+  },
+  "before": {
+    "2026-10-13": {
+      "id": "row-2026-10-13",
+      "day_type": "strength",
+      "day_name": "Lower A",
+      "exercises": [
+        {
+          "exerciseId": "Goblet_Squat",
+          "name": "Goblet Squat",
+          "suggestedSets": 3,
+          "suggestedReps": 10,
+          "suggestedWeight": 50
+        },
+        {
+          "exerciseId": "Leg_Press",
+          "name": "Leg Press",
+          "suggestedSets": 3,
+          "suggestedReps": 12
+        },
+        {
+          "exerciseId": "Calf_Raise",
+          "name": "Calf Raise",
+          "suggestedSets": 2,
+          "suggestedReps": 15
+        }
+      ],
+      "notes": null,
+      "source": "mcp",
+      "user_modified": false,
+      "status": "planned",
+      "updated_at": "2026-10-10T08:00:00.000Z"
+    }
+  },
+  "call": {
+    "tool": "plan_workout_day",
+    "args": {
+      "date": "2026-10-13",
+      "dayType": "strength",
+      "dayName": "Lower A",
+      "exercises": [
+        {
+          "exerciseId": "Goblet_Squat",
+          "name": "Goblet Squat",
+          "suggestedSets": 3,
+          "suggestedReps": 10,
+          "suggestedWeight": 50
+        }
+      ],
+      "timezone": "America/Los_Angeles",
+      "replace": true,
+      "expectedVersion": "$version"
+    }
+  },
+  "expect": {
+    "days": {
+      "2026-10-13": {
+        "dayType": "strength",
+        "dayName": "Lower A",
+        "source": "mcp",
+        "userModified": false,
+        "skipped": false,
+        "exercises": [
+          {
+            "exerciseId": "Goblet_Squat",
+            "name": "Goblet Squat",
+            "suggestedSets": 3,
+            "suggestedReps": 10,
+            "suggestedWeight": 50
+          }
+        ]
+      }
+    }
+  }
+}

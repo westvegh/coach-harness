@@ -1,0 +1,25 @@
+{
+  "name": "delete-not-found",
+  "description": "Nothing planned: Tally answers not_found (a no-op); the rebuild refuses (REBUILD_NOT_FOUND).",
+  "source": [
+    "workout-api/lib/mcp/tools/deletePlannedWorkout.ts:108",
+    "workout-api/lib/mcp/tools/deletePlannedWorkout.test.ts:70"
+  ],
+  "unit": {
+    "weightUnit": "lbs",
+    "weightUnitSource": "settings"
+  },
+  "before": {},
+  "call": {
+    "tool": "delete_planned_workout",
+    "args": {
+      "date": "2026-10-13"
+    }
+  },
+  "expect": {
+    "days": {
+      "2026-10-13": null
+    },
+    "rebuildError": "REBUILD_NOT_FOUND"
+  }
+}

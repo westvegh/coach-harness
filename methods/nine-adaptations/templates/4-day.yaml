@@ -1,0 +1,52 @@
+# Four-day week for a general strength-and-conditioning athlete.
+# Frame: NA-DES-007. Day 1 whole-body lifting at about 5 to 10 reps. Day 2
+# long-duration work. Day 3 muscular endurance at 11 to 30 reps. Day 4
+# moderate intervals with a few minutes near maximal heart rate at the end.
+# Rest days go where the calendar needs them (NA-DES-003).
+#
+# Format and rounding: see 3-day.yaml. Only the hypertrophy emphasis must put
+# every muscle inside 10-20 hard sets a week (NA-HYP-001).
+
+pack: nine-adaptations
+version: 1
+name: four-day
+days: 4
+week:
+  - day: 1
+    focus: "Whole-body lifting, 5 to 10 reps"
+    slots:
+      - { pattern: plyometric, adaptation: power, sets: 3, reps: 3, rest_s: 180, note: "jumps or throws, every rep as fast as possible" }
+      - { pattern: squat, adaptation: strength, sets: 3, reps: 5, rest_s: 180 }
+      - { pattern: horizontal_push, adaptation: strength, sets: 4, reps: 5, rest_s: 180 }
+      - { pattern: hinge, adaptation: hypertrophy, sets: 4, reps: [6, 10], rest_s: 150 }
+      - { pattern: vertical_pull, adaptation: hypertrophy, sets: 4, reps: [6, 10], rest_s: 120 }
+      - { pattern: overhead_press, adaptation: hypertrophy, sets: 4, reps: [8, 10], rest_s: 120, note: "superset with the pull" }
+      - { pattern: horizontal_pull, adaptation: hypertrophy, sets: 3, reps: [8, 10], rest_s: 120 }
+  - day: 2
+    focus: "Long-duration endurance"
+    slots:
+      - { pattern: zone2_cardio, adaptation: long_duration, sets: 1, duration: [2400, 3600], rest_s: 0, note: "nasal-breathing pace; swim, ride, run or hike" }
+      - { pattern: mobility, adaptation: recovery, sets: 1, duration: 600, rest_s: 0 }
+  - day: 3
+    focus: "Muscular endurance, 11 to 30 reps"
+    slots:
+      - { pattern: lunge, adaptation: muscular_endurance, sets: 3, reps: [12, 20], rest_s: 60 }
+      - { pattern: horizontal_push, adaptation: muscular_endurance, sets: 5, reps: [15, 30], rest_s: 60, note: "push-ups or light presses" }
+      - { pattern: horizontal_pull, adaptation: muscular_endurance, sets: 3, reps: [12, 20], rest_s: 60 }
+      - { pattern: knee_flexion, adaptation: muscular_endurance, sets: 4, reps: [12, 20], rest_s: 60 }
+      - { pattern: knee_extension, adaptation: muscular_endurance, sets: 2, reps: [15, 25], rest_s: 60 }
+      - { pattern: lateral_raise, adaptation: muscular_endurance, sets: 4, reps: [15, 25], rest_s: 45 }
+      - { pattern: elbow_flexion, adaptation: muscular_endurance, sets: 4, reps: [12, 20], rest_s: 45 }
+      - { pattern: rear_delt, adaptation: muscular_endurance, sets: 2, reps: [15, 25], rest_s: 45 }
+  - day: 4
+    focus: "Moderate intervals, then a maximal-heart-rate finish"
+    slots:
+      - { pattern: intervals, adaptation: anaerobic_capacity, sets: 12, duration: 60, rest_s: 60, note: "1 min at about 85-90% max heart rate, 1 min easy" }
+      - { pattern: intervals, adaptation: max_aerobic, sets: 1, duration: [300, 360], rest_s: 0, note: "5-6 min near maximal heart rate" }
+      - { pattern: breathing, adaptation: recovery, sets: 1, duration: 300, rest_s: 0 }
+emphasis:
+  all-around: {}
+  strength: { strength: 1.34, power: 1.34, hypertrophy: 0.75, muscular_endurance: 0.67, anaerobic_capacity: 0.67, long_duration: 0.75 }
+  hypertrophy: { hypertrophy: 1.5, strength: 1.34, muscular_endurance: 1.34, power: 0.67, anaerobic_capacity: 0.67, max_aerobic: 0.67, long_duration: 0.67 }
+  endurance: { long_duration: 1.5, anaerobic_capacity: 1.25, max_aerobic: 1.5, muscular_endurance: 1.34, strength: 0.67, hypertrophy: 0.75, power: 0.67 }
+  general-health: { long_duration: 1.25, strength: 0.67, hypertrophy: 0.75, power: 0.67, anaerobic_capacity: 0.67, max_aerobic: 0.67 }

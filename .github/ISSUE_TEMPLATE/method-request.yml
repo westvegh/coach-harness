@@ -1,0 +1,35 @@
+name: Method request
+description: Ask for a new method pack, or a change to a pack's rules.
+labels: [method]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A method pack needs public sources. We write packs in our own words and link each source with a timestamp.
+        This is not a place for medical questions. For pain or an injury, talk to a clinician.
+  - type: input
+    id: method
+    attributes:
+      label: Method
+      description: The name of the method or the coach or author it comes from.
+    validations:
+      required: true
+  - type: textarea
+    id: sources
+    attributes:
+      label: Public sources
+      description: Links to books, papers, podcasts or articles, with timestamps or pages where you can.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: Who the method is for, and what the current pack does not cover.
+    validations:
+      required: true
+  - type: textarea
+    id: rules
+    attributes:
+      label: Rules the engine should check
+      description: Optional. For example "raise weekly sets per muscle by 10% or less". Name the source for each.

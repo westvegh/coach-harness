@@ -1,0 +1,44 @@
+{
+  "name": "delete-day",
+  "description": "delete removes the day.",
+  "source": [
+    "workout-api/lib/mcp/tools/deletePlannedWorkout.ts:141",
+    "workout-api/lib/mcp/tools/deletePlannedWorkout.test.ts:33"
+  ],
+  "unit": {
+    "weightUnit": "lbs",
+    "weightUnitSource": "settings"
+  },
+  "before": {
+    "2026-10-13": {
+      "id": "row-2026-10-13",
+      "day_type": "strength",
+      "day_name": "Lower A",
+      "exercises": [
+        {
+          "exerciseId": "Goblet_Squat",
+          "name": "Goblet Squat",
+          "suggestedSets": 3,
+          "suggestedReps": 10,
+          "suggestedWeight": 50
+        }
+      ],
+      "notes": "x",
+      "source": "mcp",
+      "user_modified": false,
+      "status": "planned",
+      "updated_at": "2026-10-10T08:00:00.000Z"
+    }
+  },
+  "call": {
+    "tool": "delete_planned_workout",
+    "args": {
+      "date": "2026-10-13"
+    }
+  },
+  "expect": {
+    "days": {
+      "2026-10-13": null
+    }
+  }
+}

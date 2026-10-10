@@ -1,0 +1,56 @@
+# Three-day week for a general strength-and-conditioning athlete.
+# Frame: NA-DES-006. Day 1 speed and power, then hypertrophy. Day 2 strength,
+# then high-heart-rate conditioning. Day 3 long-duration endurance.
+# Other days: off, or easy walking and mobility.
+#
+# Slot fields: pattern (engine/movements.yaml), adaptation, sets, reps or
+# duration (seconds; a number or [min, max]), rest_s. For conditioning slots,
+# sets are rounds or bouts.
+#
+# emphasis: set multipliers per adaptation. A missing adaptation means 1.
+# Sets are rounded to the nearest whole set; any multiplier above 0 keeps at
+# least 1 set. Only the hypertrophy emphasis must put every muscle inside
+# 10-20 hard sets a week (NA-HYP-001); with two lifting days, the other
+# emphases sit below that range by design.
+#
+# With only two lifting days, the hypertrophy emphasis doubles the hypertrophy
+# slots (about 30 work sets a lifting day). Pair non-competing lifts as
+# supersets; those sessions still run past the 60-minute soft limit (NA-DES-004).
+
+pack: nine-adaptations
+version: 1
+name: three-day
+days: 3
+week:
+  - day: 1
+    focus: "Speed and power, then hypertrophy"
+    slots:
+      - { pattern: plyometric, adaptation: power, sets: 3, reps: 3, rest_s: 180, note: "jumps or throws, every rep as fast as possible" }
+      - { pattern: squat, adaptation: hypertrophy, sets: 3, reps: [6, 10], rest_s: 150 }
+      - { pattern: horizontal_push, adaptation: hypertrophy, sets: 3, reps: [8, 12], rest_s: 120 }
+      - { pattern: vertical_pull, adaptation: hypertrophy, sets: 3, reps: [8, 12], rest_s: 120, note: "superset with the push" }
+      - { pattern: horizontal_pull, adaptation: hypertrophy, sets: 3, reps: [8, 12], rest_s: 90 }
+      - { pattern: elbow_flexion, adaptation: hypertrophy, sets: 3, reps: [10, 15], rest_s: 60, note: "superset with the lateral raise" }
+      - { pattern: lateral_raise, adaptation: hypertrophy, sets: 3, reps: [12, 20], rest_s: 60 }
+  - day: 2
+    focus: "Strength, then high-heart-rate conditioning"
+    slots:
+      - { pattern: hinge, adaptation: strength, sets: 3, reps: [3, 5], rest_s: 180 }
+      - { pattern: horizontal_push, adaptation: strength, sets: 4, reps: [3, 5], rest_s: 180 }
+      - { pattern: horizontal_pull, adaptation: strength, sets: 3, reps: [3, 5], rest_s: 180, note: "superset with the push" }
+      - { pattern: overhead_press, adaptation: hypertrophy, sets: 3, reps: [8, 12], rest_s: 90 }
+      - { pattern: lunge, adaptation: hypertrophy, sets: 3, reps: [8, 12], rest_s: 90 }
+      - { pattern: knee_flexion, adaptation: hypertrophy, sets: 3, reps: [10, 15], rest_s: 60 }
+      - { pattern: intervals, adaptation: anaerobic_capacity, sets: 6, duration: 30, rest_s: 30, note: "30 s hard, 30 s easy; bike, rower or sprint" }
+  - day: 3
+    focus: "Long-duration endurance"
+    slots:
+      - { pattern: zone2_cardio, adaptation: long_duration, sets: 1, duration: [2400, 3600], rest_s: 0, note: "nasal-breathing pace" }
+      - { pattern: mobility, adaptation: recovery, sets: 1, duration: 600, rest_s: 0 }
+      - { pattern: breathing, adaptation: recovery, sets: 1, duration: 300, rest_s: 0, note: "slow nasal breathing to finish" }
+emphasis:
+  all-around: {}
+  strength: { strength: 1.34, power: 1.34, hypertrophy: 0.67, anaerobic_capacity: 0.67, long_duration: 0.75 }
+  hypertrophy: { hypertrophy: 2, strength: 1.34, power: 0.67, anaerobic_capacity: 0.5, long_duration: 0.67 }
+  endurance: { long_duration: 1.5, anaerobic_capacity: 1.34, max_aerobic: 1.5, muscular_endurance: 1.5, strength: 0.67, hypertrophy: 0.75, power: 0.67 }
+  general-health: { long_duration: 1.25, strength: 0.67, hypertrophy: 0.75, power: 0.67, anaerobic_capacity: 0.67 }

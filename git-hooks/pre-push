@@ -1,0 +1,6 @@
+#!/bin/sh
+# coach-harness pre-push. Installed by
+# `node engine/cli.ts install-git-hooks`. Checks the destination's visibility through
+# `gh api` (REST). A failed lookup denies the push. A public destination denies any
+# outgoing commit that touches athlete/.
+exec node "$(git rev-parse --show-toplevel)/engine/prepush.ts" "$@"

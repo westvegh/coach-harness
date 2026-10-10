@@ -1,0 +1,77 @@
+{
+  "name": "upd-keeps-skip-and-flags",
+  "description": "An edit writes only content columns: a skipped user-modified day stays skipped and user-modified (with override).",
+  "source": [
+    "workout-api/lib/mcp/tools/updatePlannedWorkout.test.ts:181",
+    "workout-api/lib/mcp/tools/updatePlannedWorkout.test.ts:187"
+  ],
+  "unit": {
+    "weightUnit": "lbs",
+    "weightUnitSource": "settings"
+  },
+  "before": {
+    "2026-10-13": {
+      "id": "row-2026-10-13",
+      "day_type": "strength",
+      "day_name": "Lower A",
+      "exercises": [
+        {
+          "exerciseId": "Goblet_Squat",
+          "name": "Goblet Squat",
+          "suggestedSets": 3,
+          "suggestedReps": 10,
+          "suggestedWeight": 50
+        },
+        {
+          "exerciseId": "Romanian_Deadlift",
+          "name": "Romanian Deadlift",
+          "suggestedSets": 4,
+          "suggestedReps": 8,
+          "suggestedWeight": 135
+        }
+      ],
+      "notes": "n",
+      "source": "mcp",
+      "user_modified": true,
+      "status": "skipped",
+      "updated_at": "2026-10-10T08:00:00.000Z"
+    }
+  },
+  "call": {
+    "tool": "update_planned_workout",
+    "args": {
+      "date": "2026-10-13",
+      "timezone": "America/Los_Angeles",
+      "operations": [
+        {
+          "op": "remove",
+          "target": {
+            "exerciseId": "Goblet_Squat"
+          }
+        }
+      ],
+      "overrideUserModified": true
+    }
+  },
+  "expect": {
+    "days": {
+      "2026-10-13": {
+        "dayType": "strength",
+        "dayName": "Lower A",
+        "source": "mcp",
+        "userModified": true,
+        "skipped": true,
+        "exercises": [
+          {
+            "exerciseId": "Romanian_Deadlift",
+            "name": "Romanian Deadlift",
+            "suggestedSets": 4,
+            "suggestedReps": 8,
+            "suggestedWeight": 135
+          }
+        ],
+        "notes": "n"
+      }
+    }
+  }
+}

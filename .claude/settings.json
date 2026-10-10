@@ -1,0 +1,100 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-context.ts\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/safety-detect.ts\"",
+            "timeout": 10,
+            "onFailure": "continue"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "^mcp__.*[Tt]ally.*__(plan_workout_day|plan_workout_range|update_planned_workout|move_planned_workout|skip_planned_workout|delete_planned_workout|update_user_profile|update_training_limits)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-writes.ts\"",
+            "timeout": 10,
+            "onFailure": "block"
+          }
+        ]
+      },
+      {
+        "matcher": "^(Edit|Write|MultiEdit|NotebookEdit|Bash)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-files.ts\"",
+            "timeout": 10,
+            "onFailure": "block"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "^mcp__.*[Tt]ally.*__(get_planned_workout|get_training_context|get_workout_history|plan_workout_day|plan_workout_range|update_planned_workout|move_planned_workout|skip_planned_workout|delete_planned_workout|update_user_profile|update_training_limits)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/capture-reads.ts\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "^mcp__.*[Tt]ally.*__(plan_workout_day|plan_workout_range|update_planned_workout|move_planned_workout|skip_planned_workout|delete_planned_workout|update_user_profile|update_training_limits)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/log-writes.ts\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/commit-check.ts\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "deny": [
+      "Edit(athlete/hold.yaml)",
+      "Write(athlete/hold.yaml)",
+      "Edit(/athlete/hold.yaml)",
+      "Write(/athlete/hold.yaml)",
+      "Edit(athlete/.safety-pending)",
+      "Write(athlete/.safety-pending)",
+      "Edit(/athlete/.safety-pending)",
+      "Write(/athlete/.safety-pending)",
+      "Edit(athlete/.cache/**)",
+      "Write(athlete/.cache/**)",
+      "Edit(/athlete/.cache/**)",
+      "Write(/athlete/.cache/**)"
+    ]
+  }
+}

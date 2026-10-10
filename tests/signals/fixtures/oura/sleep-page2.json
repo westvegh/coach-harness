@@ -1,0 +1,32 @@
+{
+  "data": [
+    {
+      "id": "6a2f1b55-3f0e-4c4e-8d0b-5a2f3e7c9d01",
+      "average_hrv": 39,
+      "bedtime_end": "2026-10-10T06:31:12-07:00",
+      "bedtime_start": "2026-10-09T23:12:44-07:00",
+      "day": "2026-10-10",
+      "efficiency": 84,
+      "low_battery_alert": false,
+      "lowest_heart_rate": 55,
+      "period": 1,
+      "time_in_bed": 26308,
+      "total_sleep_duration": 22080,
+      "type": "long_sleep"
+    },
+    {
+      "id": "d6c1e2f3-0000-4000-8000-000000000001",
+      "average_hrv": null,
+      "bedtime_end": "2026-10-10T07:30:00-07:00",
+      "bedtime_start": "2026-10-10T06:50:00-07:00",
+      "day": "2026-10-10",
+      "low_battery_alert": false,
+      "lowest_heart_rate": null,
+      "period": 2,
+      "time_in_bed": 2400,
+      "total_sleep_duration": null,
+      "type": "deleted"
+    }
+  ],
+  "next_token": null
+}

@@ -1,0 +1,97 @@
+{
+  "name": "range-two-new-days",
+  "description": "Each date is written independently.",
+  "source": [
+    "workout-api/lib/mcp/tools/planWorkout.ts:197",
+    "workout-api/lib/mcp/tools/planWorkout.test.ts:79"
+  ],
+  "unit": {
+    "weightUnit": "lbs",
+    "weightUnitSource": "settings"
+  },
+  "before": {},
+  "call": {
+    "tool": "plan_workout_range",
+    "args": {
+      "timezone": "America/Los_Angeles",
+      "days": [
+        {
+          "date": "2026-10-13",
+          "dayType": "strength",
+          "dayName": "Lower A",
+          "exercises": [
+            {
+              "exerciseId": "Goblet_Squat",
+              "name": "Goblet Squat",
+              "suggestedSets": 3,
+              "suggestedReps": 10,
+              "suggestedWeight": 50
+            }
+          ]
+        },
+        {
+          "date": "2026-10-15",
+          "dayType": "strength",
+          "dayName": "Upper A",
+          "exercises": [
+            {
+              "exerciseId": "Bench_Press",
+              "name": "Bench Press",
+              "suggestedSets": 4,
+              "suggestedReps": 5,
+              "repsMax": 8,
+              "suggestedWeight": 185,
+              "rpe": 8,
+              "muscle": "chest",
+              "equipment": "Barbell",
+              "trackingType": "weight_reps"
+            }
+          ],
+          "notes": "bench day"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "days": {
+      "2026-10-13": {
+        "dayType": "strength",
+        "dayName": "Lower A",
+        "source": "mcp",
+        "userModified": false,
+        "skipped": false,
+        "exercises": [
+          {
+            "exerciseId": "Goblet_Squat",
+            "name": "Goblet Squat",
+            "suggestedSets": 3,
+            "suggestedReps": 10,
+            "suggestedWeight": 50
+          }
+        ]
+      },
+      "2026-10-15": {
+        "dayType": "strength",
+        "dayName": "Upper A",
+        "source": "mcp",
+        "userModified": false,
+        "skipped": false,
+        "exercises": [
+          {
+            "exerciseId": "Bench_Press",
+            "name": "Bench Press",
+            "suggestedSets": 4,
+            "suggestedReps": 5,
+            "repsMax": 8,
+            "suggestedWeight": 185,
+            "rpe": 8,
+            "muscle": "chest",
+            "equipment": "Barbell",
+            "trackingType": "weight_reps"
+          }
+        ],
+        "notes": "bench day"
+      }
+    }
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "name": "pwd-new-date-notes-dayname",
+  "description": "Notes and dayName are stored as given.",
+  "source": [
+    "workout-api/lib/mcp/upsertPlannedDay.ts:191"
+  ],
+  "unit": {
+    "weightUnit": "lbs",
+    "weightUnitSource": "settings"
+  },
+  "before": {},
+  "call": {
+    "tool": "plan_workout_day",
+    "args": {
+      "date": "2026-10-13",
+      "dayType": "hypertrophy",
+      "dayName": "Legs",
+      "exercises": [
+        {
+          "exerciseId": "Goblet_Squat",
+          "name": "Goblet Squat",
+          "suggestedSets": 3,
+          "suggestedReps": 10,
+          "suggestedWeight": 50
+        }
+      ],
+      "timezone": "America/Los_Angeles",
+      "notes": "Keep 2 reps in reserve"
+    }
+  },
+  "expect": {
+    "days": {
+      "2026-10-13": {
+        "dayType": "hypertrophy",
+        "dayName": "Legs",
+        "source": "mcp",
+        "userModified": false,
+        "skipped": false,
+        "exercises": [
+          {
+            "exerciseId": "Goblet_Squat",
+            "name": "Goblet Squat",
+            "suggestedSets": 3,
+            "suggestedReps": 10,
+            "suggestedWeight": 50
+          }
+        ],
+        "notes": "Keep 2 reps in reserve"
+      }
+    }
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/westvegh/coach-harness/adapters/signals/apple-health-shortcut/schema.json",
+  "title": "coach-harness daily signal file (athlete/signals/YYYY-MM-DD.json)",
+  "description": "Contracts §11. Written by the iOS Shortcut (source apple-health-shortcut) or by a chat check-in (source chat). Every block except the header is optional.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "date", "source", "submitted_at"],
+  "properties": {
+    "version": { "const": 1 },
+    "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "description": "The morning this file is for, in the athlete's timezone. Must match the file name." },
+    "source": { "enum": ["apple-health-shortcut", "chat"] },
+    "submitted_at": { "$ref": "#/$defs/instant" },
+    "sleep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_at", "end_at", "duration_min"],
+      "properties": {
+        "start_at": { "$ref": "#/$defs/instant" },
+        "end_at": { "$ref": "#/$defs/instant" },
+        "duration_min": { "type": "number", "minimum": 0, "maximum": 1440, "description": "Minutes asleep (asleep stages only, not time in bed)." }
+      }
+    },
+    "hrv": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value_ms"],
+      "properties": {
+        "value_ms": { "type": "number", "minimum": 0, "maximum": 500 },
+        "method": { "enum": ["sdnn", "rmssd"], "description": "Apple Health reports SDNN. Absent means sdnn." },
+        "samples": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "rhr": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bpm"],
+      "properties": {
+        "bpm": { "type": "number", "minimum": 20, "maximum": 250 }
+      }
+    },
+    "checkin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sleep_quality", "energy", "soreness", "stress"],
+      "properties": {
+        "sleep_quality": { "$ref": "#/$defs/scale" },
+        "energy": { "$ref": "#/$defs/scale" },
+        "soreness": { "$ref": "#/$defs/scale" },
+        "stress": { "$ref": "#/$defs/scale" },
+        "want_to_train": { "$ref": "#/$defs/scale", "description": "Optional. How much the athlete wants to train today; 1 means aversion." },
+        "pain": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["region", "score"],
+            "properties": {
+              "region": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+              "score": { "type": "number", "minimum": 0, "maximum": 10 }
+            }
+          }
+        },
+        "source": { "enum": ["apple-health-shortcut", "chat"], "description": "Who wrote the check-in. Absent means the file's source." },
+        "submitted_at": { "$ref": "#/$defs/instant", "description": "When the check-in was answered. Absent means the file's submitted_at." }
+      }
+    }
+  },
+  "$defs": {
+    "instant": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$" },
+    "scale": { "type": "integer", "minimum": 1, "maximum": 5, "description": "1 to 5. sleep_quality, energy and want_to_train: 5 is best. soreness and stress: 5 is worst." }
+  }
+}

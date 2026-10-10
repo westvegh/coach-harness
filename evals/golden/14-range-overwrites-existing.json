@@ -1,0 +1,79 @@
+{
+  "name": "range-overwrites-existing",
+  "description": "The range tool has no exists guard: an existing MCP day is overwritten.",
+  "source": [
+    "workout-api/lib/mcp/tools/planWorkout.test.ts:212",
+    "workout-api/lib/mcp/upsertPlannedDay.test.ts:256"
+  ],
+  "unit": {
+    "weightUnit": "lbs",
+    "weightUnitSource": "settings"
+  },
+  "before": {
+    "2026-10-14": {
+      "id": "row-2026-10-14",
+      "day_type": "strength",
+      "day_name": "Lower A",
+      "exercises": [
+        {
+          "exerciseId": "Goblet_Squat",
+          "name": "Goblet Squat",
+          "suggestedSets": 3,
+          "suggestedReps": 10,
+          "suggestedWeight": 50
+        },
+        {
+          "exerciseId": "Leg_Press",
+          "name": "Leg Press",
+          "suggestedSets": 3,
+          "suggestedReps": 12
+        }
+      ],
+      "notes": null,
+      "source": "mcp",
+      "user_modified": false,
+      "status": "planned",
+      "updated_at": "2026-10-10T08:00:00.000Z"
+    }
+  },
+  "call": {
+    "tool": "plan_workout_range",
+    "args": {
+      "timezone": "America/Los_Angeles",
+      "days": [
+        {
+          "date": "2026-10-14",
+          "dayType": "strength",
+          "dayName": "Lower C",
+          "exercises": [
+            {
+              "exerciseId": "Calf_Raise",
+              "name": "Calf Raise",
+              "suggestedSets": 2,
+              "suggestedReps": 15
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "expect": {
+    "days": {
+      "2026-10-14": {
+        "dayType": "strength",
+        "dayName": "Lower C",
+        "source": "mcp",
+        "userModified": false,
+        "skipped": false,
+        "exercises": [
+          {
+            "exerciseId": "Calf_Raise",
+            "name": "Calf Raise",
+            "suggestedSets": 2,
+            "suggestedReps": 15
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,1144 @@
+[
+  {
+    "name": "get_training_context",
+    "title": "Read training plan & context",
+    "description": "Returns the user's planned workout days from today forward, in the given IANA timezone. Each day includes source and userModified. A day is protected when source is not \"mcp\" (the user built or saved it in the app) or userModified is true; the plan, update, move and delete tools skip protected days (plan_workout_day, update_planned_workout, move_planned_workout and delete_planned_workout accept overrideUserModified to change one anyway). With historyWeeks (1-12), also returns short summaries of recent completed workouts. Each planned day includes skipped: true when the day is marked skipped (in the Tally app or with skip_planned_workout). With historyWeeks, pastPlanned lists earlier planned rows with no synced completed workout found, and includes each row's skipped flag. The result includes weightUnit (lbs or kg), the unit of suggestedWeight in the user's plans, and weightUnitSource (settings, history, default or unknown). weightUnitSource \"default\" means no unit is stored for the user and \"unknown\" means the unit could not be read; in both cases Tally does not know the user's unit, weightUnit is lbs only as a placeholder, and the plan tools store weights as given.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "timezone": {
+          "type": "string"
+        },
+        "historyWeeks": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12
+        }
+      },
+      "required": [
+        "timezone"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "title": "Read training plan & context",
+      "readOnlyHint": true
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    }
+  },
+  {
+    "name": "get_planned_workout",
+    "title": "Read a planned workout day",
+    "description": "Returns one planned day's full exercise detail by date. The exercises use the same format as the plan tools accept. The result includes updatedAt, for use as expectedUpdatedAt on a later write, plus source and userModified: the day is protected when source is not \"mcp\" or userModified is true. A found day includes version, for use as expectedVersion on update_planned_workout, move_planned_workout and plan_workout_day; the positions in its exercises list are the indexes that update_planned_workout targets. A found day includes skipped: true when the day is marked skipped (in the Tally app or with skip_planned_workout). The result includes weightUnit, the user's unit for suggestedWeight, and weightUnitSource, as in get_training_context (default or unknown: Tally does not know the unit). The result includes operations, the opId receipts whose writes or decisions touched the date (newest first, at most 10; present when the date has no day), each with opId, tool, recordedAt and result (per input: date, status, code or reason, id and updatedAt). With opId, the result includes operation: that receipt, whatever its date, or null. When the receipts cannot be read, the result has operationsError instead.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "timezone": {
+          "type": "string"
+        },
+        "date": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "opId": {
+          "description": "An opId from an earlier write. The result then includes operation: that receipt (whatever its date), or null.",
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 120,
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        }
+      },
+      "required": [
+        "timezone",
+        "date"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "title": "Read a planned workout day",
+      "readOnlyHint": true
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    }
+  },
+  {
+    "name": "get_workout_history",
+    "title": "Read workout history",
+    "description": "Returns the user's completed workouts, newest first, with set-by-set detail. Paginated: the result includes nextCursor, which is passed back unchanged as cursor for the next page. Optional since/until (YYYY-MM-DD) limit the date range. Standalone cardio entries are stored on the device only and are not included.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "timezone": {
+          "type": "string"
+        },
+        "since": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "until": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "limit": {
+          "default": 20,
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "cursor": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "timezone"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "title": "Read workout history",
+      "readOnlyHint": true
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    }
+  },
+  {
+    "name": "get_exercise_progress",
+    "title": "Read exercise progress",
+    "description": "Returns progress for up to 10 exercises from the user's completed workouts in the last 365 days (the newest 300 workouts; truncated: true when there are more). Each exercise is a name, matched to logged exercises with the same name ignoring case and punctuation, or a stable exerciseId (a library id or the snake_case name). Each found exercise lists its newest sessions (default 6, up to 12) with sets, topSet and estimated1RM, plus sessionsFound and best (the best topSet and estimated1RM in the window, with their dates). topSet is the set with the highest weight x reps for weight_reps, the most reps for bodyweight_reps, the longest duration for duration types and the longest distance for distance types. estimated1RM is the Epley estimate, weight x (1 + reps / 30), from weight_reps sets of 1-12 reps. When weightUnitSource is settings or history, weights are in the user's unit (weightUnit) and sessions logged in the other unit are converted and carry convertedFrom. When it is default or unknown, weightUnit is null, nothing is converted, and each session and best entry states the unit it was logged in. Each session is ranked by its own trackingType. An exercise with no match has found: false and up to 5 candidates, logged names that contain every word of the query. Standalone cardio entries are stored on the device only and are not included.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "timezone": {
+          "type": "string"
+        },
+        "exercises": {
+          "minItems": 1,
+          "maxItems": 10,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "description": "Exercise names or exerciseIds, 1-10. A name matches logged exercises with the same name, ignoring case and punctuation (\"Bench-Press\" matches \"bench press\")."
+        },
+        "sessions": {
+          "default": 6,
+          "description": "Number of newest sessions returned per exercise, 1-12 (default 6).",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12
+        }
+      },
+      "required": [
+        "timezone",
+        "exercises"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "title": "Read exercise progress",
+      "readOnlyHint": true
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    }
+  },
+  {
+    "name": "search_exercises",
+    "title": "Resolve exercise names (recent + library)",
+    "description": "Matches exercise names against the user's own recent exercises and the Tally exercise library. Accepts one name (query) or up to 30 names (queries) per call. Results with source \"recent\" come from the user's own workouts; their exerciseId is the id Tally uses for that exercise in the user's workouts. A name with no match returns an empty result with a hint that explains how to plan it as a custom exercise. Library results include trackingType when Tally logs that exercise a specific way (for example, sled pushes by distance).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "description": "One exercise name to resolve. Provide at least one of `query` or `queries`.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "queries": {
+          "description": "Up to 30 exercise names, resolved in one call. Provide at least one of `query` or `queries`.",
+          "minItems": 1,
+          "maxItems": 30,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        }
+      },
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "title": "Resolve exercise names (recent + library)",
+      "readOnlyHint": true
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    }
+  },
+  {
+    "name": "plan_workout_day",
+    "title": "Plan / overwrite a workout day",
+    "description": "Creates or replaces one planned workout day. The exercises array becomes the full exercise list for that day; exercises not in the array are removed. A date that already has a planned day with exercises is skipped with code \"exists\" unless replace is true or the call carries expectedUpdatedAt or expectedVersion from get_planned_workout; such a write without replace returns a warning. Exercises can come from the library or be custom (see the exerciseId field). Dates before today in the given timezone are skipped unless allowPast is true. Protected days (source not \"mcp\", or userModified) are skipped unless overrideUserModified is true. The result reports whether the day was written or skipped, and can include openInTally, a markdown-ready link that opens the day in the Tally app. Writing a day that has skipped: true replaces it and clears the skip; that date's result includes clearedSkip: true. A written date that already had a planned day includes replacedExisting: true. Each skipped date has a reason and a code: protected, past, exists or version_conflict. suggestedWeight values are in the user's unit unless weightUnit is given; then they are converted to the user's unit when it is known (weightUnitSource settings or history) and stored as given, with a warning, when it is not. expectedVersion (from get_planned_workout) is checked against the day as stored, including its id; it takes precedence over expectedUpdatedAt. With ifAbsent: true, a date that has any planned day (any status, protected or not) is skipped with code exists before every other rule, and an empty date is written only while it stays empty (a concurrent write gives version_conflict). With opId, the change and a receipt are stored in one transaction. A repeat with the same opId and the same input writes nothing and returns replayed: true, recordedAt and results: per input, its date, status, code or reason, id and updatedAt (toDate for a move), with no workout content (read the day for its current content). The same opId with a different input is a validation error. Receipts are kept for at least 30 days.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "date": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "dayType": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "dayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "exercises": {
+          "minItems": 1,
+          "maxItems": 30,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "exerciseId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120,
+                "description": "Library id when one exists (from search_exercises). For a custom exercise: the name in lowercase snake_case (e.g. \"prone_row_rotation\"), the same id for that exercise on every day."
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120,
+                "description": "Human-readable display name — shown verbatim in the app."
+              },
+              "muscle": {
+                "description": "Primary muscle group. Needed for custom (non-library) exercises; the app displays it.",
+                "type": "string",
+                "maxLength": 60
+              },
+              "trackingType": {
+                "description": "How sets are logged. Needed for custom exercises; defaults to weight_reps.",
+                "type": "string",
+                "enum": [
+                  "weight_reps",
+                  "bodyweight_reps",
+                  "duration",
+                  "weight_duration",
+                  "distance",
+                  "weight_distance"
+                ]
+              },
+              "equipment": {
+                "description": "e.g. \"Bodyweight\", \"Dumbbell\", \"Band\". Needed for custom exercises; \"Bodyweight\" changes how sets are logged.",
+                "type": "string",
+                "maxLength": 60
+              },
+              "suggestedSets": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "suggestedReps": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100
+              },
+              "suggestedWeight": {
+                "description": "In the user's weight unit (weightUnit in get_training_context), or in this call's weightUnit when given.",
+                "type": "number",
+                "minimum": 0,
+                "maximum": 2000
+              },
+              "suggestedDuration": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 86400
+              },
+              "repsMax": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100
+              },
+              "rpe": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 10
+              },
+              "perSide": {
+                "type": "boolean"
+              },
+              "distanceMeters": {
+                "description": "Prescribed distance in meters, for trackingType \"distance\"/\"weight_distance\" (rows, sled work, carries); replaces suggestedReps/suggestedDuration.",
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 99999
+              }
+            },
+            "required": [
+              "exerciseId",
+              "name",
+              "suggestedSets"
+            ]
+          }
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "timezone": {
+          "type": "string"
+        },
+        "overrideUserModified": {
+          "description": "True confirms that the user explicitly asked to change a protected day (source not \"mcp\", or userModified).",
+          "type": "boolean"
+        },
+        "expectedUpdatedAt": {
+          "description": "updatedAt from get_planned_workout. The write is skipped if the day changed after that read.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expectedVersion": {
+          "description": "version from get_planned_workout. Takes precedence over expectedUpdatedAt. The write is skipped with code version_conflict if the day changed, or was deleted or re-created, after that read.",
+          "type": "string",
+          "maxLength": 400
+        },
+        "allowPast": {
+          "type": "boolean"
+        },
+        "weightUnit": {
+          "description": "Unit of the suggestedWeight values in this call. Weights are converted to the user's unit when they differ and the user's unit is known (weightUnitSource settings or history); otherwise they are stored as given.",
+          "type": "string",
+          "enum": [
+            "lbs",
+            "kg"
+          ]
+        },
+        "replace": {
+          "description": "True replaces an existing plan on this date; exercises not in the array are removed. Without it, a date that already has a plan is not overwritten unless the call carries expectedUpdatedAt or expectedVersion from get_planned_workout.",
+          "type": "boolean"
+        },
+        "ifAbsent": {
+          "description": "True writes only to an empty date: a date with any planned day (any status, protected or not) is skipped with code exists, checked before every other rule. Not combinable with expectedVersion, expectedUpdatedAt, replace: true or overrideUserModified: true.",
+          "type": "boolean"
+        },
+        "opId": {
+          "description": "Idempotency key, 8-120 characters (letters, digits, \".\", \"_\", \":\" or \"-\"). The change and a receipt are stored in one transaction. A later call with the same opId and the same input writes nothing and returns replayed: true, recordedAt and, per input, the date, status, code or reason, id and updatedAt (no workout content: get_planned_workout reads the day's current content). The same opId with a different input is a validation error. Receipts are kept for at least 30 days.",
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 120,
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        }
+      },
+      "required": [
+        "date",
+        "dayType",
+        "dayName",
+        "exercises",
+        "timezone"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "title": "Plan / overwrite a workout day",
+      "readOnlyHint": false,
+      "destructiveHint": true
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    }
+  },
+  {
+    "name": "plan_workout_range",
+    "title": "Plan a range of workout days",
+    "description": "Creates or replaces up to 31 planned days in one call. Each date is written independently and reported as written or skipped; each day's exercises array becomes its full exercise list. Exercises can come from the library or be custom (see the exerciseId field). Dates before today are skipped unless allowPast is true. Protected days (source not \"mcp\", or userModified) are always skipped. The result can include openInTally, a markdown-ready link that opens the earliest written day in the Tally app. Days with skipped: true are not written; they are listed in skippedDates with a reason. A written date that already had a planned day includes replacedExisting: true. Each skipped date has a reason and a code: protected, past, skipped_day, version_conflict or exists. suggestedWeight values are in the user's unit unless weightUnit is given; then they are converted to the user's unit when it is known (weightUnitSource settings or history) and stored as given, with a warning, when it is not. A day can carry expectedVersion from get_planned_workout: a day that changed after that read is skipped with code version_conflict, and protected and skipped days stay skipped. A day with ifAbsent: true is written only to an empty date; a date with any planned day is skipped with code exists. With opId, the change and a receipt are stored in one transaction. A repeat with the same opId and the same input writes nothing and returns replayed: true, recordedAt and results: per input, its date, status, code or reason, id and updatedAt (toDate for a move), with no workout content (read the day for its current content). The same opId with a different input is a validation error. Receipts are kept for at least 30 days.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "timezone": {
+          "type": "string"
+        },
+        "days": {
+          "minItems": 1,
+          "maxItems": 31,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "date": {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              "dayType": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40
+              },
+              "dayName": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              },
+              "exercises": {
+                "minItems": 1,
+                "maxItems": 30,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "exerciseId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 120,
+                      "description": "Library id when one exists (from search_exercises). For a custom exercise: the name in lowercase snake_case (e.g. \"prone_row_rotation\"), the same id for that exercise on every day."
+                    },
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 120,
+                      "description": "Human-readable display name — shown verbatim in the app."
+                    },
+                    "muscle": {
+                      "description": "Primary muscle group. Needed for custom (non-library) exercises; the app displays it.",
+                      "type": "string",
+                      "maxLength": 60
+                    },
+                    "trackingType": {
+                      "description": "How sets are logged. Needed for custom exercises; defaults to weight_reps.",
+                      "type": "string",
+                      "enum": [
+                        "weight_reps",
+                        "bodyweight_reps",
+                        "duration",
+                        "weight_duration",
+                        "distance",
+                        "weight_distance"
+                      ]
+                    },
+                    "equipment": {
+                      "description": "e.g. \"Bodyweight\", \"Dumbbell\", \"Band\". Needed for custom exercises; \"Bodyweight\" changes how sets are logged.",
+                      "type": "string",
+                      "maxLength": 60
+                    },
+                    "suggestedSets": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 20
+                    },
+                    "suggestedReps": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 100
+                    },
+                    "suggestedWeight": {
+                      "description": "In the user's weight unit (weightUnit in get_training_context), or in this call's weightUnit when given.",
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 2000
+                    },
+                    "suggestedDuration": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 86400
+                    },
+                    "repsMax": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 100
+                    },
+                    "rpe": {
+                      "type": "number",
+                      "minimum": 1,
+                      "maximum": 10
+                    },
+                    "perSide": {
+                      "type": "boolean"
+                    },
+                    "distanceMeters": {
+                      "description": "Prescribed distance in meters, for trackingType \"distance\"/\"weight_distance\" (rows, sled work, carries); replaces suggestedReps/suggestedDuration.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 99999
+                    }
+                  },
+                  "required": [
+                    "exerciseId",
+                    "name",
+                    "suggestedSets"
+                  ]
+                }
+              },
+              "notes": {
+                "type": "string",
+                "maxLength": 1000
+              },
+              "expectedVersion": {
+                "description": "version from get_planned_workout for this day. The day is skipped with code version_conflict if it changed, or was deleted or re-created, after that read; protected and skipped days stay skipped.",
+                "type": "string",
+                "maxLength": 400
+              },
+              "ifAbsent": {
+                "description": "True writes only to an empty date: a date with any planned day (any status, protected or not) is skipped with code exists, checked before every other rule. Not combinable with expectedVersion, expectedUpdatedAt, replace: true or overrideUserModified: true.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "date",
+              "dayType",
+              "dayName",
+              "exercises"
+            ],
+            "additionalProperties": {}
+          }
+        },
+        "allowPast": {
+          "type": "boolean"
+        },
+        "weightUnit": {
+          "description": "Unit of the suggestedWeight values in this call. Weights are converted to the user's unit when they differ and the user's unit is known (weightUnitSource settings or history); otherwise they are stored as given.",
+          "type": "string",
+          "enum": [
+            "lbs",
+            "kg"
+          ]
+        },
+        "opId": {
+          "description": "Idempotency key, 8-120 characters (letters, digits, \".\", \"_\", \":\" or \"-\"). The change and a receipt are stored in one transaction. A later call with the same opId and the same input writes nothing and returns replayed: true, recordedAt and, per input, the date, status, code or reason, id and updatedAt (no workout content: get_planned_workout reads the day's current content). The same opId with a different input is a validation error. Receipts are kept for at least 30 days.",
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 120,
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        }
+      },
+      "required": [
+        "timezone",
+        "days"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "title": "Plan a range of workout days",
+      "readOnlyHint": false,
+      "destructiveHint": true
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    }
+  },
+  {
+    "name": "delete_planned_workout",
+    "title": "Delete a planned workout day",
+    "description": "Removes one planned day by date. Protected days (source not \"mcp\", or userModified) are skipped unless overrideUserModified is true. The result returns the deleted day's content under deleted, in the plan_workout_day format. Status not_found means nothing was planned on that date; skipped means the day is protected (code protected) or changed during the delete (code version_conflict). The result can include openInTally, a markdown-ready link that opens that date in the Tally app. The deleted day includes skipped, its status before the delete. expectedVersion (from get_planned_workout) is checked before every other result: a day that changed, or no day on the date, is skipped with code version_conflict. With opId, the change and a receipt are stored in one transaction. A repeat with the same opId and the same input writes nothing and returns replayed: true, recordedAt and results: per input, its date, status, code or reason, id and updatedAt (toDate for a move), with no workout content (read the day for its current content). The same opId with a different input is a validation error. Receipts are kept for at least 30 days.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "date": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "overrideUserModified": {
+          "description": "True confirms that the user explicitly asked to delete a protected day (source not \"mcp\", or userModified).",
+          "type": "boolean"
+        },
+        "expectedVersion": {
+          "description": "version from get_planned_workout. Checked before every other result: a day that changed, or was deleted or re-created, after that read is skipped with code version_conflict.",
+          "type": "string",
+          "maxLength": 400
+        },
+        "opId": {
+          "description": "Idempotency key, 8-120 characters (letters, digits, \".\", \"_\", \":\" or \"-\"). The change and a receipt are stored in one transaction. A later call with the same opId and the same input writes nothing and returns replayed: true, recordedAt and, per input, the date, status, code or reason, id and updatedAt (no workout content: get_planned_workout reads the day's current content). The same opId with a different input is a validation error. Receipts are kept for at least 30 days.",
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 120,
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        }
+      },
+      "required": [
+        "date"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "title": "Delete a planned workout day",
+      "readOnlyHint": false,
+      "destructiveHint": true
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    }
+  },
+  {
+    "name": "skip_planned_workout",
+    "title": "Skip or restore a planned day",
+    "description": "Marks one planned day as skipped (skip: true, the default) or restores it (skip: false). Only the day's status changes; its exercises stay in Tally, and current versions of the Tally app show a skipped day as Skipped. Works on any planned day. The result has status updated (the status changed) or unchanged (it was already in that state), skipped (the day's status after the call), and the day's updatedAt. Status not_found means nothing was planned on that date; conflict means the day changed during the update. The result can include openInTally, a markdown-ready link that opens that date in the Tally app. expectedVersion (from get_planned_workout) is checked before every other result, unchanged included: a day that changed, or no day on the date, returns conflict. With opId, the change and a receipt are stored in one transaction. A repeat with the same opId and the same input writes nothing and returns replayed: true, recordedAt and results: per input, its date, status, code or reason, id and updatedAt (toDate for a move), with no workout content (read the day for its current content). The same opId with a different input is a validation error. Receipts are kept for at least 30 days.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "date": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "skip": {
+          "description": "False restores a skipped day. Default true.",
+          "type": "boolean"
+        },
+        "expectedVersion": {
+          "description": "version from get_planned_workout. Checked before every other result, unchanged included: a day that changed, or was deleted or re-created, after that read returns status conflict.",
+          "type": "string",
+          "maxLength": 400
+        },
+        "opId": {
+          "description": "Idempotency key, 8-120 characters (letters, digits, \".\", \"_\", \":\" or \"-\"). The change and a receipt are stored in one transaction. A later call with the same opId and the same input writes nothing and returns replayed: true, recordedAt and, per input, the date, status, code or reason, id and updatedAt (no workout content: get_planned_workout reads the day's current content). The same opId with a different input is a validation error. Receipts are kept for at least 30 days.",
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 120,
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        }
+      },
+      "required": [
+        "date"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "title": "Skip or restore a planned day",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    }
+  },
+  {
+    "name": "update_planned_workout",
+    "title": "Edit part of a planned day",
+    "description": "Changes one planned day in place with a list of operations: add, remove, replace or modify single exercises, plus optional dayName and notes. Exercises no operation names stay exactly as stored. A target is { exerciseId }, which matches exactly one exercise, or { index }, a position in the exercises list from get_planned_workout; index targets and afterIndex require expectedVersion. All targets refer to the day as read, before any operation in the call. Invalid operations return an error and change nothing. The day keeps its skip status, source and userModified. Protected days (source not \"mcp\", or userModified) are skipped unless overrideUserModified is true. suggestedWeight values in the operations are in the user's unit unless weightUnit is given; then they are converted when the user's unit is known (weightUnitSource settings or history) and stored as given, with a warning, when it is not. The result has status updated with the day in the get_planned_workout format (with its new version), not_found when nothing is planned on that date, or skipped with a reason and a code: protected or version_conflict. The Tally app shows the change after it refreshes; the result can include openInTally, a markdown-ready link that opens the day in the Tally app. With opId, the change and a receipt are stored in one transaction. A repeat with the same opId and the same input writes nothing and returns replayed: true, recordedAt and results: per input, its date, status, code or reason, id and updatedAt (toDate for a move), with no workout content (read the day for its current content). The same opId with a different input is a validation error. Receipts are kept for at least 30 days.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "timezone": {
+          "type": "string"
+        },
+        "date": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "expectedVersion": {
+          "description": "version from get_planned_workout. The call is skipped with code version_conflict if the day changed, or was deleted or re-created, after that read.",
+          "type": "string",
+          "maxLength": 400
+        },
+        "overrideUserModified": {
+          "description": "True confirms that the user explicitly asked to change a protected day (source not \"mcp\", or userModified).",
+          "type": "boolean"
+        },
+        "weightUnit": {
+          "description": "Unit of the suggestedWeight values in this call's operations. They are converted to the user's unit when they differ and the user's unit is known (weightUnitSource settings or history); exercises not named by an operation keep their stored values.",
+          "type": "string",
+          "enum": [
+            "lbs",
+            "kg"
+          ]
+        },
+        "dayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "notes": {
+          "description": "New day notes; null clears them.",
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 1000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "operations": {
+          "minItems": 1,
+          "maxItems": 30,
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "type": "string",
+                    "const": "add"
+                  },
+                  "exercise": {
+                    "type": "object",
+                    "properties": {
+                      "exerciseId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120,
+                        "description": "Library id when one exists (from search_exercises). For a custom exercise: the name in lowercase snake_case (e.g. \"prone_row_rotation\"), the same id for that exercise on every day."
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120,
+                        "description": "Human-readable display name — shown verbatim in the app."
+                      },
+                      "muscle": {
+                        "description": "Primary muscle group. Needed for custom (non-library) exercises; the app displays it.",
+                        "type": "string",
+                        "maxLength": 60
+                      },
+                      "trackingType": {
+                        "description": "How sets are logged. Needed for custom exercises; defaults to weight_reps.",
+                        "type": "string",
+                        "enum": [
+                          "weight_reps",
+                          "bodyweight_reps",
+                          "duration",
+                          "weight_duration",
+                          "distance",
+                          "weight_distance"
+                        ]
+                      },
+                      "equipment": {
+                        "description": "e.g. \"Bodyweight\", \"Dumbbell\", \"Band\". Needed for custom exercises; \"Bodyweight\" changes how sets are logged.",
+                        "type": "string",
+                        "maxLength": 60
+                      },
+                      "suggestedSets": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 20
+                      },
+                      "suggestedReps": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100
+                      },
+                      "suggestedWeight": {
+                        "description": "In the user's weight unit (weightUnit in get_training_context), or in this call's weightUnit when given.",
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 2000
+                      },
+                      "suggestedDuration": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 86400
+                      },
+                      "repsMax": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100
+                      },
+                      "rpe": {
+                        "type": "number",
+                        "minimum": 1,
+                        "maximum": 10
+                      },
+                      "perSide": {
+                        "type": "boolean"
+                      },
+                      "distanceMeters": {
+                        "description": "Prescribed distance in meters, for trackingType \"distance\"/\"weight_distance\" (rows, sled work, carries); replaces suggestedReps/suggestedDuration.",
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 99999
+                      }
+                    },
+                    "required": [
+                      "exerciseId",
+                      "name",
+                      "suggestedSets"
+                    ]
+                  },
+                  "afterIndex": {
+                    "description": "Insert after this 0-based position (from get_planned_workout; needs expectedVersion). -1 inserts first; omitted appends at the end.",
+                    "type": "integer",
+                    "minimum": -1,
+                    "maximum": 29
+                  }
+                },
+                "required": [
+                  "op",
+                  "exercise"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "type": "string",
+                    "const": "remove"
+                  },
+                  "target": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "index": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 29
+                          }
+                        },
+                        "required": [
+                          "index"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "exerciseId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120
+                          }
+                        },
+                        "required": [
+                          "exerciseId"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ],
+                    "description": "{ index } is the 0-based position in the exercises list from get_planned_workout (needs expectedVersion); { exerciseId } matches exactly one exercise on the day."
+                  }
+                },
+                "required": [
+                  "op",
+                  "target"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "type": "string",
+                    "const": "replace"
+                  },
+                  "target": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "index": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 29
+                          }
+                        },
+                        "required": [
+                          "index"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "exerciseId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120
+                          }
+                        },
+                        "required": [
+                          "exerciseId"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ],
+                    "description": "{ index } is the 0-based position in the exercises list from get_planned_workout (needs expectedVersion); { exerciseId } matches exactly one exercise on the day."
+                  },
+                  "exercise": {
+                    "type": "object",
+                    "properties": {
+                      "exerciseId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120,
+                        "description": "Library id when one exists (from search_exercises). For a custom exercise: the name in lowercase snake_case (e.g. \"prone_row_rotation\"), the same id for that exercise on every day."
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120,
+                        "description": "Human-readable display name — shown verbatim in the app."
+                      },
+                      "muscle": {
+                        "description": "Primary muscle group. Needed for custom (non-library) exercises; the app displays it.",
+                        "type": "string",
+                        "maxLength": 60
+                      },
+                      "trackingType": {
+                        "description": "How sets are logged. Needed for custom exercises; defaults to weight_reps.",
+                        "type": "string",
+                        "enum": [
+                          "weight_reps",
+                          "bodyweight_reps",
+                          "duration",
+                          "weight_duration",
+                          "distance",
+                          "weight_distance"
+                        ]
+                      },
+                      "equipment": {
+                        "description": "e.g. \"Bodyweight\", \"Dumbbell\", \"Band\". Needed for custom exercises; \"Bodyweight\" changes how sets are logged.",
+                        "type": "string",
+                        "maxLength": 60
+                      },
+                      "suggestedSets": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 20
+                      },
+                      "suggestedReps": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100
+                      },
+                      "suggestedWeight": {
+                        "description": "In the user's weight unit (weightUnit in get_training_context), or in this call's weightUnit when given.",
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 2000
+                      },
+                      "suggestedDuration": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 86400
+                      },
+                      "repsMax": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100
+                      },
+                      "rpe": {
+                        "type": "number",
+                        "minimum": 1,
+                        "maximum": 10
+                      },
+                      "perSide": {
+                        "type": "boolean"
+                      },
+                      "distanceMeters": {
+                        "description": "Prescribed distance in meters, for trackingType \"distance\"/\"weight_distance\" (rows, sled work, carries); replaces suggestedReps/suggestedDuration.",
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 99999
+                      }
+                    },
+                    "required": [
+                      "exerciseId",
+                      "name",
+                      "suggestedSets"
+                    ]
+                  }
+                },
+                "required": [
+                  "op",
+                  "target",
+                  "exercise"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "type": "string",
+                    "const": "modify"
+                  },
+                  "target": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "index": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 29
+                          }
+                        },
+                        "required": [
+                          "index"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "exerciseId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120
+                          }
+                        },
+                        "required": [
+                          "exerciseId"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ],
+                    "description": "{ index } is the 0-based position in the exercises list from get_planned_workout (needs expectedVersion); { exerciseId } matches exactly one exercise on the day."
+                  },
+                  "fields": {
+                    "type": "object",
+                    "properties": {
+                      "suggestedSets": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 20
+                      },
+                      "suggestedReps": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100
+                      },
+                      "repsMax": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100
+                      },
+                      "suggestedWeight": {
+                        "description": "In the user's weight unit (weightUnit in get_training_context), or in this call's weightUnit when given.",
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 2000
+                      },
+                      "suggestedDuration": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 86400
+                      },
+                      "distanceMeters": {
+                        "description": "Prescribed distance in meters, for trackingType \"distance\"/\"weight_distance\" (rows, sled work, carries); replaces suggestedReps/suggestedDuration.",
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 99999
+                      },
+                      "rpe": {
+                        "type": "number",
+                        "minimum": 1,
+                        "maximum": 10
+                      },
+                      "perSide": {
+                        "type": "boolean"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "op",
+                  "target",
+                  "fields"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "description": "Edits applied together. Targets refer to the day as read, before any operation in this call."
+        },
+        "opId": {
+          "description": "Idempotency key, 8-120 characters (letters, digits, \".\", \"_\", \":\" or \"-\"). The change and a receipt are stored in one transaction. A later call with the same opId and the same input writes nothing and returns replayed: true, recordedAt and, per input, the date, status, code or reason, id and updatedAt (no workout content: get_planned_workout reads the day's current content). The same opId with a different input is a validation error. Receipts are kept for at least 30 days.",
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 120,
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        }
+      },
+      "required": [
+        "timezone",
+        "date",
+        "operations"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "title": "Edit part of a planned day",
+      "readOnlyHint": false,
+      "destructiveHint": true
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    }
+  },
+  {
+    "name": "move_planned_workout",
+    "title": "Move a planned day to another date",
+    "description": "Moves one planned day from fromDate to toDate in one step: the day, with its exercises, name and notes, is removed from fromDate and planned on toDate (as planned, not skipped). A toDate that already has a planned day is not changed: the result is skipped with code destination_occupied and describes that day. toDate before today in the given timezone is skipped unless allowPast is true. Protected days (source not \"mcp\", or userModified) are skipped unless overrideUserModified is true. The result has status moved with the new version, not_found when nothing is planned on fromDate, or skipped with a reason and a code: protected, past, version_conflict or destination_occupied. Warnings state when Tally can show the change late. The result can include openInTally, a markdown-ready link that opens toDate in the Tally app. With opId, the change and a receipt are stored in one transaction. A repeat with the same opId and the same input writes nothing and returns replayed: true, recordedAt and results: per input, its date, status, code or reason, id and updatedAt (toDate for a move), with no workout content (read the day for its current content). The same opId with a different input is a validation error. Receipts are kept for at least 30 days.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "timezone": {
+          "type": "string"
+        },
+        "fromDate": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "toDate": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "expectedVersion": {
+          "description": "version from get_planned_workout. The call is skipped with code version_conflict if the day changed, or was deleted or re-created, after that read.",
+          "type": "string",
+          "maxLength": 400
+        },
+        "overrideUserModified": {
+          "description": "True confirms that the user explicitly asked to change a protected day (source not \"mcp\", or userModified).",
+          "type": "boolean"
+        },
+        "allowPast": {
+          "description": "True allows a toDate before today in the given timezone.",
+          "type": "boolean"
+        },
+        "opId": {
+          "description": "Idempotency key, 8-120 characters (letters, digits, \".\", \"_\", \":\" or \"-\"). The change and a receipt are stored in one transaction. A later call with the same opId and the same input writes nothing and returns replayed: true, recordedAt and, per input, the date, status, code or reason, id and updatedAt (no workout content: get_planned_workout reads the day's current content). The same opId with a different input is a validation error. Receipts are kept for at least 30 days.",
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 120,
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        }
+      },
+      "required": [
+        "timezone",
+        "fromDate",
+        "toDate"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "title": "Move a planned day to another date",
+      "readOnlyHint": false,
+      "destructiveHint": true
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    }
+  }
+]

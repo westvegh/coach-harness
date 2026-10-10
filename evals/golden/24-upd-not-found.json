@@ -1,0 +1,37 @@
+{
+  "name": "upd-not-found",
+  "description": "Nothing planned: Tally answers not_found; the rebuild refuses (REBUILD_NOT_FOUND).",
+  "source": [
+    "workout-api/lib/mcp/tools/updatePlannedWorkout.ts:213",
+    "workout-api/lib/mcp/tools/updatePlannedWorkout.test.ts:70"
+  ],
+  "unit": {
+    "weightUnit": "lbs",
+    "weightUnitSource": "settings"
+  },
+  "before": {},
+  "call": {
+    "tool": "update_planned_workout",
+    "args": {
+      "date": "2026-10-13",
+      "timezone": "America/Los_Angeles",
+      "operations": [
+        {
+          "op": "add",
+          "exercise": {
+            "exerciseId": "Calf_Raise",
+            "name": "Calf Raise",
+            "suggestedSets": 2,
+            "suggestedReps": 15
+          }
+        }
+      ]
+    }
+  },
+  "expect": {
+    "days": {
+      "2026-10-13": null
+    },
+    "rebuildError": "REBUILD_NOT_FOUND"
+  }
+}

@@ -1,0 +1,1215 @@
+{
+  "version": 1,
+  "repo": "https://github.com/westvegh/coach-harness",
+  "release": "0.1.0",
+  "files": {
+    ".claude/agents/analyst.md": {
+      "mode": "100644",
+      "blob": "c765f7f52c909f8ecb1924b101f2c225e83a6c17"
+    },
+    ".claude/agents/method-expert.md": {
+      "mode": "100644",
+      "blob": "70bbf44ca0b8cd655973876f7b0c8457e40258ae"
+    },
+    ".claude/agents/safety.md": {
+      "mode": "100644",
+      "blob": "af313f41550e8e5f0f913fecb469a447da221848"
+    },
+    ".claude/hooks/bootstrap.ts": {
+      "mode": "100644",
+      "blob": "d9d1984279909f595d20950a079ec9da59960dc1"
+    },
+    ".claude/hooks/capture-reads.body.ts": {
+      "mode": "100644",
+      "blob": "be593164b902e989b47f726bcb708d32e53645a6"
+    },
+    ".claude/hooks/capture-reads.ts": {
+      "mode": "100644",
+      "blob": "477918844e0e2e2970adfb3c962c8c7d7c89d39d"
+    },
+    ".claude/hooks/commit-check.body.ts": {
+      "mode": "100644",
+      "blob": "c9632bbd248e9121999de09f70d591c7704a2dee"
+    },
+    ".claude/hooks/commit-check.ts": {
+      "mode": "100644",
+      "blob": "a44ca1e534279f3d869f5a40d2563b325c039f60"
+    },
+    ".claude/hooks/fast-files.ts": {
+      "mode": "100644",
+      "blob": "78c90916a2af6c0e7872e074b23a7285a74d400e"
+    },
+    ".claude/hooks/guard-files.body.ts": {
+      "mode": "100644",
+      "blob": "94afd3b97e1037fcad78de0b5a6d93fcba251725"
+    },
+    ".claude/hooks/guard-files.ts": {
+      "mode": "100644",
+      "blob": "7190f463761535766a2f175f85fd889c1cd1678e"
+    },
+    ".claude/hooks/guard-writes.body.ts": {
+      "mode": "100644",
+      "blob": "aea1518f9ffa677dd352aa3810769da74ac992b5"
+    },
+    ".claude/hooks/guard-writes.ts": {
+      "mode": "100644",
+      "blob": "997ebac50e530d225cfe953beae19a79facffc5a"
+    },
+    ".claude/hooks/lib.ts": {
+      "mode": "100644",
+      "blob": "2cfa02b57ee7fec01c32b6358dfb2b356e832612"
+    },
+    ".claude/hooks/log-writes.body.ts": {
+      "mode": "100644",
+      "blob": "85b72c957279b87f6ea8373be959d57abf5dd86f"
+    },
+    ".claude/hooks/log-writes.ts": {
+      "mode": "100644",
+      "blob": "03683fe7d971a47f2e7ecab29c4e603f83686813"
+    },
+    ".claude/hooks/safety-detect.ts": {
+      "mode": "100644",
+      "blob": "2a0f0e385559c2b60ad7497c2f4f25102016d041"
+    },
+    ".claude/hooks/session-context.body.ts": {
+      "mode": "100644",
+      "blob": "4c93865e4dd9b5026510d29c10e8a609b3152139"
+    },
+    ".claude/hooks/session-context.ts": {
+      "mode": "100644",
+      "blob": "12afba94ca159ad83c20d04fbf9eb8fbb599a03a"
+    },
+    ".claude/settings.json": {
+      "mode": "100644",
+      "blob": "a048f6cfa23c645719e962f827209ee9305ce92f"
+    },
+    ".claude/skills/audit/SKILL.md": {
+      "mode": "100644",
+      "blob": "682fdff5ca43060b36f96ca25b999291682f8a2e"
+    },
+    ".claude/skills/block/SKILL.md": {
+      "mode": "100644",
+      "blob": "5ffcf261295a929a03532b6daf850151dcb38b54"
+    },
+    ".claude/skills/check-in/SKILL.md": {
+      "mode": "100644",
+      "blob": "dfb555869d5140931ea89486089a8eb3a9df24fc"
+    },
+    ".claude/skills/explain/SKILL.md": {
+      "mode": "100644",
+      "blob": "8de7cfa959c295c840193c91f2d1888117887ead"
+    },
+    ".claude/skills/limits/SKILL.md": {
+      "mode": "100644",
+      "blob": "2b4d522fd409b5cb7e23a92bd714c086d99b38d8"
+    },
+    ".claude/skills/method/SKILL.md": {
+      "mode": "100644",
+      "blob": "67599907adb46c1c402f0dd3fbf726763a2bb31d"
+    },
+    ".claude/skills/setup/SKILL.md": {
+      "mode": "100644",
+      "blob": "8ce883eab3fd95abae8e9f60862ea515db6d128b"
+    },
+    ".claude/skills/today/SKILL.md": {
+      "mode": "100644",
+      "blob": "361723f10877df2e5635d0c1f71a2dbfd418101b"
+    },
+    ".claude/skills/update/SKILL.md": {
+      "mode": "100644",
+      "blob": "f8c4a8d2a8ef37403113b8f0158838f05927e52f"
+    },
+    ".claude/skills/week/SKILL.md": {
+      "mode": "100644",
+      "blob": "d1f8572c715a44ed41db74600eda7301bac77d03"
+    },
+    ".github/ISSUE_TEMPLATE/bug.yml": {
+      "mode": "100644",
+      "blob": "bfa596b217896c3b4310ed86c465666a054138fc"
+    },
+    ".github/ISSUE_TEMPLATE/config.yml": {
+      "mode": "100644",
+      "blob": "4264ab0eb5bc840610157a239fc40affe37e76f0"
+    },
+    ".github/ISSUE_TEMPLATE/method-request.yml": {
+      "mode": "100644",
+      "blob": "8b42e3abe5e5de49959064363d63b682d5bd9cb0"
+    },
+    ".github/workflows/test.yml": {
+      "mode": "100644",
+      "blob": "1f3a95fe0195a2f115058afb78bf4b9da847f04d"
+    },
+    ".gitignore": {
+      "mode": "100644",
+      "blob": "fee233a9ea5827c3de3b799a97701ed5809f3b20"
+    },
+    ".nvmrc": {
+      "mode": "100644",
+      "blob": "f1c8f6b0d0f2a161164610024ea6eac8a426f05c"
+    },
+    "CHANGELOG.md": {
+      "mode": "100644",
+      "blob": "cda88be41ca2b13b83797c3e3822f19f46c43d25"
+    },
+    "CLAUDE.md": {
+      "mode": "100644",
+      "blob": "d0c1b43988d8592857a9b3be8ae7bc72b045a922"
+    },
+    "CONTRIBUTING.md": {
+      "mode": "100644",
+      "blob": "c32ec84fcc87818e8ecece3b63cb642547862d6a"
+    },
+    "LICENSE": {
+      "mode": "100644",
+      "blob": "4f6303a541eda259d3e8d67b109c5cb27a7bfb24"
+    },
+    "README.md": {
+      "mode": "100644",
+      "blob": "9593a1068f9f1c02826054ffd96ca9f5e6ce8455"
+    },
+    "SECURITY.md": {
+      "mode": "100644",
+      "blob": "9f2d4ae37cedf91d5738d3bbe48dcda9338e4ea3"
+    },
+    "adapters/README.md": {
+      "mode": "100644",
+      "blob": "4ccff66e8660d595fbbc24bcc211dfd00d4bca24"
+    },
+    "adapters/loggers/tally/adapter.yaml": {
+      "mode": "100644",
+      "blob": "d265058860ee6e505776d9a68452dc0bf65cd401"
+    },
+    "adapters/loggers/tally/rebuild.ts": {
+      "mode": "100644",
+      "blob": "87300fff5ac88a2b434b90c4a9f8fdf83596f22b"
+    },
+    "adapters/loggers/tally/version.ts": {
+      "mode": "100644",
+      "blob": "bde0db82e26acdc44d66e320bb0cbcca6dd4d9a2"
+    },
+    "adapters/signals/apple-health-shortcut/SHORTCUT.md": {
+      "mode": "100644",
+      "blob": "68bf1039a928da3d9467e596c88cad4fdd563324"
+    },
+    "adapters/signals/apple-health-shortcut/normalize.ts": {
+      "mode": "100644",
+      "blob": "02155239bf0599dc894ae0e6bda6ae8449b7de1c"
+    },
+    "adapters/signals/apple-health-shortcut/schema.json": {
+      "mode": "100644",
+      "blob": "9aadc6862e8da8575cdeb3eebef00f74da16182f"
+    },
+    "adapters/signals/checkin/write.ts": {
+      "mode": "100644",
+      "blob": "97ca5e1eb0ca4eae8c35913b7e18cbf598c9ba11"
+    },
+    "adapters/signals/json-schema.ts": {
+      "mode": "100644",
+      "blob": "6fc3ef7980f43adc8ea97cf92ef9f11b7940d15d"
+    },
+    "adapters/signals/oura/auth.ts": {
+      "mode": "100644",
+      "blob": "13a50b5359f0d72199769fe2662af053af511495"
+    },
+    "adapters/signals/oura/errors.ts": {
+      "mode": "100644",
+      "blob": "b5d20d81a6159dea51d7c7638e2dda3198f64e2c"
+    },
+    "adapters/signals/oura/fetch.ts": {
+      "mode": "100644",
+      "blob": "4322b2dd11930397bcba3cdaa7cd573280d9d198"
+    },
+    "adapters/signals/oura/lock.ts": {
+      "mode": "100644",
+      "blob": "1db1e0773f523c57cc267c8440f09157dcc03879"
+    },
+    "adapters/signals/oura/secrets.ts": {
+      "mode": "100644",
+      "blob": "8081e6b7991533a02b822589c858644c0a377012"
+    },
+    "adapters/signals/write-json.ts": {
+      "mode": "100644",
+      "blob": "c6663954dd566a7139ee11a943e542cc25953778"
+    },
+    "automation/github-actions/today.yml": {
+      "mode": "100644",
+      "blob": "786685237023ed2d0f039215c350e9c94087adbd"
+    },
+    "automation/launchd/README.md": {
+      "mode": "100644",
+      "blob": "4322f90874654476672451f733cd50849e7a21f6"
+    },
+    "automation/routine.md": {
+      "mode": "100644",
+      "blob": "0b8043c792657248fda3dd03aaa77863bdeb4b64"
+    },
+    "coach.example.yaml": {
+      "mode": "100644",
+      "blob": "10da87f0e92671f8f738af7bb25de30f06dcb69f"
+    },
+    "docs/adding-a-logger-or-signal.md": {
+      "mode": "100644",
+      "blob": "f0d08f9fe2f894e96015c79979c11052ae2062ae"
+    },
+    "docs/adding-a-method.md": {
+      "mode": "100644",
+      "blob": "a9772773693a29f7529e2c9f3361b3d7b48f7d6d"
+    },
+    "docs/contracts.md": {
+      "mode": "100644",
+      "blob": "09449e79c150d98350adfc19be9a2dadd784df9f"
+    },
+    "docs/how-it-works.md": {
+      "mode": "100644",
+      "blob": "fc23cbf301f47bfc9f5bdc52ce259c350e283b3f"
+    },
+    "docs/safety-and-privacy.md": {
+      "mode": "100644",
+      "blob": "5dc0e9192c63153785151cb8c8850b453e2384ea"
+    },
+    "docs/safety.md": {
+      "mode": "100644",
+      "blob": "b1996b27163c63a7169e3a23d58b82a9ede79e5c"
+    },
+    "docs/tally.md": {
+      "mode": "100644",
+      "blob": "70539ad6d18ba32986ca3bbca8b920ae2e53d4b5"
+    },
+    "engine/adjust.test.ts": {
+      "mode": "100644",
+      "blob": "1e52e747991ae114dae45a6aff6062f85981a06a"
+    },
+    "engine/adjust.ts": {
+      "mode": "100644",
+      "blob": "58f7eccda4bbf92eeb8d38e076b7bd31b1ff44f7"
+    },
+    "engine/approvals.ts": {
+      "mode": "100644",
+      "blob": "091455ce72dc50eb24967506f09843eecee0e384"
+    },
+    "engine/automation.test.ts": {
+      "mode": "100644",
+      "blob": "9f24a648a7b74d1f3628403fb0d8059691f677ca"
+    },
+    "engine/automation.ts": {
+      "mode": "100644",
+      "blob": "8fd208c68a5c2c81f6da940f1d5023ec534dc507"
+    },
+    "engine/block-draft.ts": {
+      "mode": "100644",
+      "blob": "6b377ee63a024d64764de4db2593292ae6e19796"
+    },
+    "engine/block.ts": {
+      "mode": "100644",
+      "blob": "9e36b5a6495ffc3eeedb6ca8c7176076e737b1ee"
+    },
+    "engine/canonical.ts": {
+      "mode": "100644",
+      "blob": "21582bdb75ded489ec71e718f4cc0953bd5e7974"
+    },
+    "engine/classify.ts": {
+      "mode": "100644",
+      "blob": "dda910a1ff47e9d4c54289320d8926a2196a5ed9"
+    },
+    "engine/cli-core.ts": {
+      "mode": "100644",
+      "blob": "b68a4d991efc471c595f6faf0a05d6551a55cfe8"
+    },
+    "engine/cli-guard.ts": {
+      "mode": "100644",
+      "blob": "41fd98dc0a2e66154a43f3a716986c7070c07300"
+    },
+    "engine/cli-help.ts": {
+      "mode": "100644",
+      "blob": "5894e8f492946f98c8652a15f8e16a5ccd378ae3"
+    },
+    "engine/cli-helpers.ts": {
+      "mode": "100644",
+      "blob": "be236e8c3be84923ac5641bb905dad16d9b8de40"
+    },
+    "engine/cli-helpers2.ts": {
+      "mode": "100644",
+      "blob": "62aab199a9a502c918aa56bf8f71d70c54814dd1"
+    },
+    "engine/cli-limits.ts": {
+      "mode": "100644",
+      "blob": "1173d32ee0deb188d0ab2ba1f591e5e6ce459805"
+    },
+    "engine/cli-oplog.ts": {
+      "mode": "100644",
+      "blob": "a2249a7815efab3a46d9c34cc9b37b2b5ed94fba"
+    },
+    "engine/cli-update.ts": {
+      "mode": "100644",
+      "blob": "faa70cfe110eae9670f2d1a27ebeb9d0f86daf1a"
+    },
+    "engine/cli.ts": {
+      "mode": "100644",
+      "blob": "b0eb7c6e8e70c727a3eef3ab64aa8ae2958fdd75"
+    },
+    "engine/config.test.ts": {
+      "mode": "100644",
+      "blob": "4eaef2a3ce74d7f6fe86ccb807a0f4dfd276b07a"
+    },
+    "engine/config.ts": {
+      "mode": "100644",
+      "blob": "c657876492d99d0df5757bd07e53d15bff02b11f"
+    },
+    "engine/dates.ts": {
+      "mode": "100644",
+      "blob": "113a5cadafcd8477eb673c504bc9d2008e18c87d"
+    },
+    "engine/errors.ts": {
+      "mode": "100644",
+      "blob": "a3142ce2ec93d7b23c73359e753ff592e5b21c8c"
+    },
+    "engine/guard-context.ts": {
+      "mode": "100644",
+      "blob": "c668039f81fe94a6edd9e27eca9ed657d3660941"
+    },
+    "engine/hold.test.ts": {
+      "mode": "100644",
+      "blob": "41fcea1e93f801ddd334a9f230ed0619473c1eb4"
+    },
+    "engine/hold.ts": {
+      "mode": "100644",
+      "blob": "405c5a45a384642cd7c8b064a43f99ff3c63144f"
+    },
+    "engine/ids.ts": {
+      "mode": "100644",
+      "blob": "88de3bc5a17ed16b86efef07831bfd7382db7e99"
+    },
+    "engine/limits-compile.test.ts": {
+      "mode": "100644",
+      "blob": "12d766e2365b284d182aca8a437af13fc24c05ce"
+    },
+    "engine/limits-compile.ts": {
+      "mode": "100644",
+      "blob": "6dbc292137b57fcae8d354cd8ed4904b400cc821"
+    },
+    "engine/limits-sync.test.ts": {
+      "mode": "100644",
+      "blob": "d954285c6756306ad78951305b5f9f69038969e2"
+    },
+    "engine/limits-sync.ts": {
+      "mode": "100644",
+      "blob": "8a5cfa61782b872b3f87ac83a454d3dff10203e1"
+    },
+    "engine/limits.test.ts": {
+      "mode": "100644",
+      "blob": "a43cf02be9a9503e52dfdec51ac58ef93a1c0a99"
+    },
+    "engine/limits.ts": {
+      "mode": "100644",
+      "blob": "bdab8108c938a87cb652e8ab3f3bd465e641a8d6"
+    },
+    "engine/lint-methods.test.ts": {
+      "mode": "100644",
+      "blob": "a5ac4ae2405c086077ae7a70091aacdbcf9fc4c3"
+    },
+    "engine/lint-methods.ts": {
+      "mode": "100644",
+      "blob": "81752aa58370d35426230ec78be2339e80b61520"
+    },
+    "engine/loads.test.ts": {
+      "mode": "100644",
+      "blob": "7b072aac8e64f1d92b945460d10acbf51b57d0b2"
+    },
+    "engine/loads.ts": {
+      "mode": "100644",
+      "blob": "8294320623443b0ebee87b714e6ba9f99c0222b5"
+    },
+    "engine/logger.ts": {
+      "mode": "100644",
+      "blob": "c1713520f619f9c3d16a2782f02aaf149037461d"
+    },
+    "engine/manifest.ts": {
+      "mode": "100644",
+      "blob": "be8ac846b61bb59e87e0edcbfda76cd56ede6926"
+    },
+    "engine/methods.ts": {
+      "mode": "100644",
+      "blob": "5fa573b5036afd4afe824f3ba1ea9cb356e3dc5b"
+    },
+    "engine/mode.test.ts": {
+      "mode": "100644",
+      "blob": "8186fd09211d2b2855bde125c420d8dd2d829288"
+    },
+    "engine/mode.ts": {
+      "mode": "100644",
+      "blob": "1dfcedd05d7ce6b179cc0d34fb936eb2d0bf6351"
+    },
+    "engine/movements.yaml": {
+      "mode": "100644",
+      "blob": "7b6f9c49c9899845730166fa71a6b8c3924bea82"
+    },
+    "engine/opid.test.ts": {
+      "mode": "100644",
+      "blob": "e614fba85eaad39e9a5c9a676c9742f1f1bb7e7c"
+    },
+    "engine/opid.ts": {
+      "mode": "100644",
+      "blob": "20b8fb4ac86f0f8796cdaeda9cdf4949bdb50398"
+    },
+    "engine/oplog.ts": {
+      "mode": "100644",
+      "blob": "4e07ecff29686b2fffbc9234c1ba4282bc6efee4"
+    },
+    "engine/prepush.ts": {
+      "mode": "100644",
+      "blob": "6f68b5125e6a52a84e60a9ce6cf885625bb99f63"
+    },
+    "engine/privacy.ts": {
+      "mode": "100644",
+      "blob": "837d8ca4008c05f9eba2bd70ecbee8cd8f393910"
+    },
+    "engine/progression.test.ts": {
+      "mode": "100644",
+      "blob": "c87ee58b8d34d17eb94e4ac7b1641b78b78fbbd1"
+    },
+    "engine/progression.ts": {
+      "mode": "100644",
+      "blob": "db9fe1dd9b3e6783ccaeece511614bc6c44617b9"
+    },
+    "engine/proposal-check.ts": {
+      "mode": "100644",
+      "blob": "0164a346975b621aed78d702efcdee063fab99e2"
+    },
+    "engine/proposals.test.ts": {
+      "mode": "100644",
+      "blob": "5256332e713851ea052fd0fa74c5763afe8637e0"
+    },
+    "engine/proposals.ts": {
+      "mode": "100644",
+      "blob": "c6244dbfa3254457a7ae90e812ee0b55aa6927a5"
+    },
+    "engine/protect.ts": {
+      "mode": "100644",
+      "blob": "750e20dbbba3535cf349d7cb5a24cbda17be7fb6"
+    },
+    "engine/readiness-date.ts": {
+      "mode": "100644",
+      "blob": "42331b31ba024112bac93df644382e9310b1d918"
+    },
+    "engine/readiness.test.ts": {
+      "mode": "100644",
+      "blob": "a239b058cc6438cc9821679a555dd0084bdc20a1"
+    },
+    "engine/readiness.ts": {
+      "mode": "100644",
+      "blob": "f94d5fcc95fa1c10e594e4ac1ad19f93504b2ed5"
+    },
+    "engine/safety-terms.yaml": {
+      "mode": "100644",
+      "blob": "1ad40e5ceba56d0031191373cc5d1a87cdd079cf"
+    },
+    "engine/safety-text.ts": {
+      "mode": "100644",
+      "blob": "d391ca8970f2904d7274a85b9a1239bd05571195"
+    },
+    "engine/safety.test.ts": {
+      "mode": "100644",
+      "blob": "dc94cd287f05a576bbed5e9d9e57714cd535b0f4"
+    },
+    "engine/safety.ts": {
+      "mode": "100644",
+      "blob": "4b720aad4127dbaf9fe6eb8cfd4ffba67f308cae"
+    },
+    "engine/server-match.test.ts": {
+      "mode": "100644",
+      "blob": "744a784adf8f7bfd828a3a859f800eae4fbe5501"
+    },
+    "engine/server-match.ts": {
+      "mode": "100644",
+      "blob": "84fbbaff0c732f6d7ba871121d51b66fc577c045"
+    },
+    "engine/signals-cli.ts": {
+      "mode": "100644",
+      "blob": "0f7e3ea6becb33ca228ef4647fc0e0752342997c"
+    },
+    "engine/signals-refresh.ts": {
+      "mode": "100644",
+      "blob": "2d6a3828ca56824b92e26d510e7b244d903d2a56"
+    },
+    "engine/signals.ts": {
+      "mode": "100644",
+      "blob": "4f6e95f44789cf2077d3166f16e51fdbbff680d3"
+    },
+    "engine/snapshot.ts": {
+      "mode": "100644",
+      "blob": "86d3fe115b5e29b951859cc43a76ebdd40c94c81"
+    },
+    "engine/tally-shape.ts": {
+      "mode": "100644",
+      "blob": "c026f4962d4eb8b7fc177a0a530edbc81e80e3ca"
+    },
+    "engine/taxonomy.test.ts": {
+      "mode": "100644",
+      "blob": "0efad463a00b533d8c1e43eda861722fb9a60887"
+    },
+    "engine/taxonomy.ts": {
+      "mode": "100644",
+      "blob": "9e30a1affea7ecd14291e951d53e90e9677de288"
+    },
+    "engine/types.ts": {
+      "mode": "100644",
+      "blob": "63ffaa3cc698fbc0cc49853985672f1d31e04502"
+    },
+    "engine/update.ts": {
+      "mode": "100644",
+      "blob": "44b90bfb126b09b4ca65b09aedf03713e2fd7336"
+    },
+    "engine/validate.ts": {
+      "mode": "100644",
+      "blob": "606131eaedad210515fbd0e2733c4c77eeaebbe5"
+    },
+    "engine/volume.test.ts": {
+      "mode": "100644",
+      "blob": "015323e43dda5b7262ca78d7d1ce21c38d4d9836"
+    },
+    "engine/volume.ts": {
+      "mode": "100644",
+      "blob": "82c50d57564a4ffce19f3e255f2d2458083745eb"
+    },
+    "engine/weeks.ts": {
+      "mode": "100644",
+      "blob": "cdaf956094c7951caf5579365104e5df06fe36b4"
+    },
+    "engine/yaml-file.ts": {
+      "mode": "100644",
+      "blob": "174ba7dc3f1d3011a2385e5604b35abbdfcad598"
+    },
+    "evals/README.md": {
+      "mode": "100644",
+      "blob": "5c7209528b0a62a2ee04b325690db38eafcf23c3"
+    },
+    "evals/golden/01-pwd-new-date.json": {
+      "mode": "100644",
+      "blob": "f2b5ba0f24d8df906babfa8e62023ff11135a64b"
+    },
+    "evals/golden/02-pwd-new-date-notes-dayname.json": {
+      "mode": "100644",
+      "blob": "15ef9ccc27bd82ef6cf4d5e16f7cf92f6d854d42"
+    },
+    "evals/golden/03-pwd-replace-with-version.json": {
+      "mode": "100644",
+      "blob": "ace73776eb87888720b90eaf2eef864a6674f60f"
+    },
+    "evals/golden/04-pwd-replace-true.json": {
+      "mode": "100644",
+      "blob": "b88073221426c0aa7a15352b4310908c99934ed5"
+    },
+    "evals/golden/05-pwd-replace-expected-updated-at.json": {
+      "mode": "100644",
+      "blob": "b19cb5f29e4b83e3c2a2af41f74f7a7741fca5de"
+    },
+    "evals/golden/06-pwd-clears-skip.json": {
+      "mode": "100644",
+      "blob": "6fcf96585692a5931db076d95332eca495cfd66a"
+    },
+    "evals/golden/07-pwd-override-user-modified.json": {
+      "mode": "100644",
+      "blob": "473f0170abe710c4a5d3a2cf922fb2104f22e983"
+    },
+    "evals/golden/08-pwd-override-builder-day.json": {
+      "mode": "100644",
+      "blob": "8ee7e6d5560ff28ec3581a7ed909155bb26defe3"
+    },
+    "evals/golden/09-pwd-convert-lbs-to-kg.json": {
+      "mode": "100644",
+      "blob": "a2ca553c155dfe96ed62abdd390619c2cd805f43"
+    },
+    "evals/golden/10-pwd-convert-kg-to-lbs.json": {
+      "mode": "100644",
+      "blob": "673cf13f065c330064678416434073a31da4167c"
+    },
+    "evals/golden/11-pwd-unit-unknown-as-given.json": {
+      "mode": "100644",
+      "blob": "5ede9b4b7b0e461d8d910e452e35ebf69f35fe35"
+    },
+    "evals/golden/12-range-two-new-days.json": {
+      "mode": "100644",
+      "blob": "e7551e8993d8e8da7fed786d0a50f87dfbe3e95c"
+    },
+    "evals/golden/13-range-keeps-skipped-day.json": {
+      "mode": "100644",
+      "blob": "94f421a2ef44ce7c90efd2cc621261c6cbc4d16b"
+    },
+    "evals/golden/14-range-overwrites-existing.json": {
+      "mode": "100644",
+      "blob": "0d9c84f12d1ce65cf702d81fa2c5fc1d779c68d7"
+    },
+    "evals/golden/15-upd-modify-trim-by-exercise-id.json": {
+      "mode": "100644",
+      "blob": "03cc27da155cb85b2e96ddd4e85bf10f12dba53c"
+    },
+    "evals/golden/16-upd-untouched-kept-exactly.json": {
+      "mode": "100644",
+      "blob": "c49c177b625ccb60faeca97e95fff3592ddc4c05"
+    },
+    "evals/golden/17-upd-index-targets-original-list.json": {
+      "mode": "100644",
+      "blob": "5fa7af04d5891ddbf45a3b6577590d6a5e79bdad"
+    },
+    "evals/golden/18-upd-add-positions.json": {
+      "mode": "100644",
+      "blob": "97438e90e99d465d91e32f416a0fede2b054af0a"
+    },
+    "evals/golden/19-upd-add-after-removed-slot.json": {
+      "mode": "100644",
+      "blob": "944f85cf20adf7dbd86332ae3569eaec09ed3344"
+    },
+    "evals/golden/20-upd-day-name-and-notes.json": {
+      "mode": "100644",
+      "blob": "b4c40e5019ae84877ea0f787ff0ff4e58553264f"
+    },
+    "evals/golden/21-upd-notes-null-clears.json": {
+      "mode": "100644",
+      "blob": "7b775216cdd3f1d74143dfc67f76bc4375835228"
+    },
+    "evals/golden/22-upd-keeps-skip-and-flags.json": {
+      "mode": "100644",
+      "blob": "434c6ba3ef9b8c384deddfdb27bade06c8f8a8aa"
+    },
+    "evals/golden/23-upd-convert-op-weight-only.json": {
+      "mode": "100644",
+      "blob": "32f41e6a6634212533775ffd25953987bb04b14d"
+    },
+    "evals/golden/24-upd-not-found.json": {
+      "mode": "100644",
+      "blob": "041458ddc5c83273c9e1a045d742c933a5cdbfea"
+    },
+    "evals/golden/25-upd-ambiguous-exercise-id.json": {
+      "mode": "100644",
+      "blob": "958ccc962b5b6ddb286613ed416fd1c4f99ad5ef"
+    },
+    "evals/golden/26-upd-index-needs-version.json": {
+      "mode": "100644",
+      "blob": "c1a5c666ddf592cb83e6b44439178f580a0c7bde"
+    },
+    "evals/golden/27-upd-empty-day-refused.json": {
+      "mode": "100644",
+      "blob": "16aacaf0dc2bd1fdec8a428f009348f73ec801d7"
+    },
+    "evals/golden/28-move-resets-status.json": {
+      "mode": "100644",
+      "blob": "2a4cc762eaca1d9181e1c6cc9622eba0cd1eac62"
+    },
+    "evals/golden/29-move-keeps-user-modified.json": {
+      "mode": "100644",
+      "blob": "dad523c3fb34aadc54f9b529fa186d8282d38743"
+    },
+    "evals/golden/30-move-destination-occupied.json": {
+      "mode": "100644",
+      "blob": "1298bc65ece4de12d70339697b7707c57129eac2"
+    },
+    "evals/golden/31-skip-day.json": {
+      "mode": "100644",
+      "blob": "940ff152e0abf1289bf6b4a5a48914088a4e9b2a"
+    },
+    "evals/golden/32-skip-restore.json": {
+      "mode": "100644",
+      "blob": "860cdfb7bcbf43bc4955a82ad51449c3a688c28a"
+    },
+    "evals/golden/33-skip-unchanged.json": {
+      "mode": "100644",
+      "blob": "ab6201faca337408a47b426c4362bb90537c3ef8"
+    },
+    "evals/golden/34-delete-day.json": {
+      "mode": "100644",
+      "blob": "8e3d8b2de65dcfaaa9128a7414f207fde43d3ef9"
+    },
+    "evals/golden/35-delete-not-found.json": {
+      "mode": "100644",
+      "blob": "ed66ecbde75ca3af2a310471b7598f50a2570c5d"
+    },
+    "evals/golden/golden.test.ts": {
+      "mode": "100644",
+      "blob": "c50a892f29541072054621e9b41e19989cb2ef5d"
+    },
+    "evals/lib/approver.mjs": {
+      "mode": "100644",
+      "blob": "8d3bf9c2f0c2e9bc1c68ff5a102d3536565dd05b"
+    },
+    "evals/lib/checks.ts": {
+      "mode": "100644",
+      "blob": "5dd405d0b00e8994706640be51e00dd8f7cca1d0"
+    },
+    "evals/lib/claude.test.ts": {
+      "mode": "100644",
+      "blob": "608b57b510b3f67c46617f79d9cc8b75ec1614c7"
+    },
+    "evals/lib/claude.ts": {
+      "mode": "100644",
+      "blob": "39b53c010040de3561aa01631a17f2e7a039e307"
+    },
+    "evals/lib/collect.ts": {
+      "mode": "100644",
+      "blob": "39c4765260fd2cd4ede1e64ac75aba548e73b030"
+    },
+    "evals/lib/instance.ts": {
+      "mode": "100644",
+      "blob": "61d74e3742c9ce6bd7b7b51aea73fc0435615f42"
+    },
+    "evals/lib/probes.ts": {
+      "mode": "100644",
+      "blob": "8903bc83dd8c7d69993b1203f9875eb5667d6640"
+    },
+    "evals/lib/types.ts": {
+      "mode": "100644",
+      "blob": "0a1d8e63cfdd4135e712a0e247cc7b3115c708fd"
+    },
+    "evals/mock-tally/client.ts": {
+      "mode": "100644",
+      "blob": "ce04ba77a975991ea9083e1a0d083a08d6ea9934"
+    },
+    "evals/mock-tally/server.mjs": {
+      "mode": "100644",
+      "blob": "4c55e91c5e39e3a4cb49cc03ffb0feea3d1cfca9"
+    },
+    "evals/mock-tally/server.test.ts": {
+      "mode": "100644",
+      "blob": "173e625f3c9fc3b49b6fb7bfaca3b9dfab5a006a"
+    },
+    "evals/mock-tally/tools-list.json": {
+      "mode": "100644",
+      "blob": "3370704ef4c7af5351c44612bca34973ab7ecf7a"
+    },
+    "evals/run.ts": {
+      "mode": "100644",
+      "blob": "347fd7dff9200ddf1015174326993a0414dd64ad"
+    },
+    "evals/scenarios/01-setup-scripted.ts": {
+      "mode": "100644",
+      "blob": "eba366db3628bf15fa68718d60c999a542bf8f90"
+    },
+    "evals/scenarios/02-one-category-no-change.ts": {
+      "mode": "100644",
+      "blob": "973c7fc7ef32dc746aca044c98ca8fa6e0689249"
+    },
+    "evals/scenarios/03-two-categories-trim.ts": {
+      "mode": "100644",
+      "blob": "a995d8b08be06a4d12c4409dac55a1a77cf27e84"
+    },
+    "evals/scenarios/04-two-reds-recovery.ts": {
+      "mode": "100644",
+      "blob": "66d7f9fcf52a715654a8f089de767adb24e85eba"
+    },
+    "evals/scenarios/05-knee-limit-swap.ts": {
+      "mode": "100644",
+      "blob": "808d2c154cc5d4e7c38f5e5ef8093326a49df60d"
+    },
+    "evals/scenarios/06-progression-over-10pct.ts": {
+      "mode": "100644",
+      "blob": "b344e6f05e39e24f88871e4a704fbedba4479fb1"
+    },
+    "evals/scenarios/07-big-change-unattended.ts": {
+      "mode": "100644",
+      "blob": "32cfe5fca101bae6b03357bce6340129a37fc4bc"
+    },
+    "evals/scenarios/08a-approved-applied.ts": {
+      "mode": "100644",
+      "blob": "58786b8f9858bd731577cea3a63672e5a7a3fecc"
+    },
+    "evals/scenarios/08b-approved-stale.ts": {
+      "mode": "100644",
+      "blob": "3330a161f9ba1be0064bb217cdb1d99c7f148b00"
+    },
+    "evals/scenarios/09-already-adjusted.ts": {
+      "mode": "100644",
+      "blob": "eed2a04dcf6ece8889aad2b780769e2d773afc5c"
+    },
+    "evals/scenarios/10-pain-word.ts": {
+      "mode": "100644",
+      "blob": "5144bc3d392fc328070009e31e72713bc34b4de9"
+    },
+    "evals/scenarios/11-urgent-symptom.ts": {
+      "mode": "100644",
+      "blob": "b3eb7e70e9059ef8b5a506878e51e59431a27486"
+    },
+    "evals/scenarios/12-supplement-advice.ts": {
+      "mode": "100644",
+      "blob": "daa178e75d04efebd122ac6345e12937ba492d7a"
+    },
+    "evals/scenarios/13-limits-edit-unattended.ts": {
+      "mode": "100644",
+      "blob": "d2dcff2f6cfea2426fe8dc111134957b471a413c"
+    },
+    "evals/scenarios/14-stale-snapshot.ts": {
+      "mode": "100644",
+      "blob": "a079498271be25ae3288ea5ba2c73f40bb24ee73"
+    },
+    "evals/scenarios/15-safety-foreground.ts": {
+      "mode": "100644",
+      "blob": "44bebda45e36cc283d9e719cd41342e48078a129"
+    },
+    "evals/scenarios/16-failed-trim-retried.ts": {
+      "mode": "100644",
+      "blob": "e4f96446543a5365afcf6ef37eb90495cad089a1"
+    },
+    "evals/scenarios/17-aversion-recovery.ts": {
+      "mode": "100644",
+      "blob": "5cc4c25c90f39f6b28cdddacbd4adbb6dc1c406b"
+    },
+    "evals/scenarios/_approved.ts": {
+      "mode": "100644",
+      "blob": "3832326b829484d77c404451b3c65a097049e78b"
+    },
+    "evals/scenarios/_common.ts": {
+      "mode": "100644",
+      "blob": "a3ee23d83902442f09470026f6defaa169958f51"
+    },
+    "evals/scenarios/fixtures.test.ts": {
+      "mode": "100644",
+      "blob": "e469938c370798e787c8779c814763c86ec7899c"
+    },
+    "git-hooks/pre-push": {
+      "mode": "100755",
+      "blob": "c93514d6e2c10783605d9e0a83c09c0e8d59ca7c"
+    },
+    "methods/README.md": {
+      "mode": "100644",
+      "blob": "7b7bda1ad4241d3bfc67b08d60110dc8620d09dc"
+    },
+    "methods/nine-adaptations/METHOD.md": {
+      "mode": "100644",
+      "blob": "5333071a157589fa961b8da42ddb9dc88115e15e"
+    },
+    "methods/nine-adaptations/assessments.md": {
+      "mode": "100644",
+      "blob": "edd89a3026e054fd4ac37b99b9747ca0a16378ab"
+    },
+    "methods/nine-adaptations/principles/01-nine-adaptations.md": {
+      "mode": "100644",
+      "blob": "cfa73e0849a061c5d76fa704f4eab19c4bb53e36"
+    },
+    "methods/nine-adaptations/principles/02-strength-power.md": {
+      "mode": "100644",
+      "blob": "3679bf9f460cbd6c1ef86ab64c8d25fbd4c24e4d"
+    },
+    "methods/nine-adaptations/principles/03-hypertrophy.md": {
+      "mode": "100644",
+      "blob": "23ce13f7c19ade4b2270ce1c3262ab89dba45d2c"
+    },
+    "methods/nine-adaptations/principles/04-endurance.md": {
+      "mode": "100644",
+      "blob": "74a373776f568923ce4e9366a66497dcbb88e9c9"
+    },
+    "methods/nine-adaptations/principles/05-program-design.md": {
+      "mode": "100644",
+      "blob": "a537072563c79dfcb0c7a8b2df54586ead28ea39"
+    },
+    "methods/nine-adaptations/principles/06-progression-deload.md": {
+      "mode": "100644",
+      "blob": "f722bad6721b154672654ca2ff99894e81fa80c5"
+    },
+    "methods/nine-adaptations/principles/07-recovery-readiness.md": {
+      "mode": "100644",
+      "blob": "a4fe5afdcdffa87105083f04e77f99a9904aa15f"
+    },
+    "methods/nine-adaptations/principles/08-assessment.md": {
+      "mode": "100644",
+      "blob": "a9bb15115d46cc7834d1368be0ee1d95f8a1165a"
+    },
+    "methods/nine-adaptations/rules.yaml": {
+      "mode": "100644",
+      "blob": "7d900e865a4ec3a22fc3b6fae9c0d1d0c5acf71e"
+    },
+    "methods/nine-adaptations/sources.md": {
+      "mode": "100644",
+      "blob": "3bf202bb6b32340f058fc43c695e561fcb759fd3"
+    },
+    "methods/nine-adaptations/templates/3-day.yaml": {
+      "mode": "100644",
+      "blob": "69fd499d8b8e358bc6ce29e4639223af269abcf3"
+    },
+    "methods/nine-adaptations/templates/4-day.yaml": {
+      "mode": "100644",
+      "blob": "7235c394932b828bf5dcf37bc467ab92bd58f3d8"
+    },
+    "methods/nine-adaptations/templates/5-day.yaml": {
+      "mode": "100644",
+      "blob": "f9221f0e8b899f7445300150160c491adc987cc7"
+    },
+    "package-lock.json": {
+      "mode": "100644",
+      "blob": "85da2a3e0f00622471d6ceed5fffae847fbb66ab"
+    },
+    "package.json": {
+      "mode": "100644",
+      "blob": "b32f6933a135ccc1e07198a40474b9c11ddefbee"
+    },
+    "scripts/bench-cli.ts": {
+      "mode": "100644",
+      "blob": "8bafaaa1a054cff31c25954df4181295162a9513"
+    },
+    "scripts/bench-hooks.mjs": {
+      "mode": "100644",
+      "blob": "acaf3d34d091951a9d1b9d72d6eab09439403f47"
+    },
+    "scripts/export-public.sh": {
+      "mode": "100755",
+      "blob": "faaa039cc8aaa08efa56dfa247e5b231b718e4e7"
+    },
+    "scripts/overlap-check.ts": {
+      "mode": "100644",
+      "blob": "2d2781b573d6f396d7a60d1dcc6cb9b6c3def231"
+    },
+    "scripts/public-scrub.ts": {
+      "mode": "100644",
+      "blob": "1e29344e1e4972f59aabe70ae075f5d9179141c0"
+    },
+    "scripts/public-tree.txt": {
+      "mode": "100644",
+      "blob": "79e2d85a3adadaf46bce16214e8a2010e8621b17"
+    },
+    "scripts/template-manifest.ts": {
+      "mode": "100644",
+      "blob": "59ab60e3da4aa06be625ed10cdde8be0683a69dd"
+    },
+    "templates/athlete/baselines.json": {
+      "mode": "100644",
+      "blob": "32dbaf2db4ba75410b6006a2a7baa40fcbfb2183"
+    },
+    "templates/athlete/block.yaml": {
+      "mode": "100644",
+      "blob": "9b9e76efa2c747670c4760ffe3dcac1b609f117d"
+    },
+    "templates/athlete/brief.md": {
+      "mode": "100644",
+      "blob": "f2dde74cd700e7e8ad618ad68435bd6205971cd7"
+    },
+    "templates/athlete/hold.yaml": {
+      "mode": "100644",
+      "blob": "60bd18a3645ec25e85fcfb5194087f46caaa675d"
+    },
+    "templates/athlete/limits.yaml": {
+      "mode": "100644",
+      "blob": "39557bf69d1e49113e6e123325a8cdf084ff7424"
+    },
+    "tests/claude-md.test.ts": {
+      "mode": "100644",
+      "blob": "95d7baf7a6094bb1520a7708edf3571b0dfd9309"
+    },
+    "tests/cli-helpers.test.ts": {
+      "mode": "100644",
+      "blob": "f69549c9715dc46dc496775a59c07e024cd9deff"
+    },
+    "tests/cli-limits.test.ts": {
+      "mode": "100644",
+      "blob": "f9072c22497aa620eca0411214cc68a4eebb9453"
+    },
+    "tests/cli.test.ts": {
+      "mode": "100644",
+      "blob": "cd8e915b22a3f2f68b3b419868760e35bf4b71a4"
+    },
+    "tests/e3/block-draft.test.ts": {
+      "mode": "100644",
+      "blob": "ba804a73b1cc626de2dd7887eb97e92363f64e58"
+    },
+    "tests/e3/helpers.ts": {
+      "mode": "100644",
+      "blob": "b81b84ff6176cb4479e13934dee300349ff094b6"
+    },
+    "tests/e3/hold-init.test.ts": {
+      "mode": "100644",
+      "blob": "c34c16a38c129bb546753c77ecdceb26d953d557"
+    },
+    "tests/e3/proposals-null-base.test.ts": {
+      "mode": "100644",
+      "blob": "29c0ca249b531f424e3cfd81167942c83ea96c87"
+    },
+    "tests/e3/readiness-date.test.ts": {
+      "mode": "100644",
+      "blob": "bc3224b7b72656f748de60ab24511537f39b4fe8"
+    },
+    "tests/e3/refresh-lint.test.ts": {
+      "mode": "100644",
+      "blob": "d3d143258aeebea3454ce6c38ea6524bc3636180"
+    },
+    "tests/e3/tally-shape.test.ts": {
+      "mode": "100644",
+      "blob": "4244317207e4b62d398c495ecec8a0ae9d395fc5"
+    },
+    "tests/e3/weeks-ids.test.ts": {
+      "mode": "100644",
+      "blob": "5dbdbb551b06081d1e0bf0a7ce098d17eafd2d53"
+    },
+    "tests/guard/approvals.test.ts": {
+      "mode": "100644",
+      "blob": "dec09643d3c35ff7f1c72341890492931b2163f3"
+    },
+    "tests/guard/classify.test.ts": {
+      "mode": "100644",
+      "blob": "bca85735ac649668c3552d79848ade7b0a723eeb"
+    },
+    "tests/guard/cli-guard.test.ts": {
+      "mode": "100644",
+      "blob": "798c4e3eeb5cbf85777ede63c6ede62248b147ba"
+    },
+    "tests/guard/compound-commands.ts": {
+      "mode": "100644",
+      "blob": "0c908ad72c36ffd6be9bd715772cfa63e13949cc"
+    },
+    "tests/guard/final-fold.test.ts": {
+      "mode": "100644",
+      "blob": "898e88169b035f9f4a2b8611498bb769c5a11865"
+    },
+    "tests/guard/fix-round-2.test.ts": {
+      "mode": "100644",
+      "blob": "dfca4d75fc1f5f0b4d412ccf27f9062c3c73c684"
+    },
+    "tests/guard/fix-round.test.ts": {
+      "mode": "100644",
+      "blob": "b111e4183cfa1bdcf25d0757595293d5210ae13f"
+    },
+    "tests/guard/fixtures.ts": {
+      "mode": "100644",
+      "blob": "2703958eb11cdea93c69a1b37da38a25c60d55a0"
+    },
+    "tests/guard/over-blocks.test.ts": {
+      "mode": "100644",
+      "blob": "d10d96df236b8e1f2c1ee66e740deba1ac3fdb06"
+    },
+    "tests/guard/protect-compound.test.ts": {
+      "mode": "100644",
+      "blob": "0174941649a2d03c6da3f32ff13a3979e829e0e9"
+    },
+    "tests/guard/protect.test.ts": {
+      "mode": "100644",
+      "blob": "850bba094fff68e7f6796f73f0894271732f2cdd"
+    },
+    "tests/guard/protected-evidence.test.ts": {
+      "mode": "100644",
+      "blob": "6b563596582d15221fc5aa23a96932f1f8734f0e"
+    },
+    "tests/guard/rebuild.test.ts": {
+      "mode": "100644",
+      "blob": "594b10a421c0fba5747e1d7f024eb4fe823814a6"
+    },
+    "tests/guard/server-limits.test.ts": {
+      "mode": "100644",
+      "blob": "d05fb1ccb95bc6a946fdbc12b484cfb830fe686c"
+    },
+    "tests/guard/snapshot.test.ts": {
+      "mode": "100644",
+      "blob": "f07054e1dabe36c843b68417ba7f31d85b6ab71e"
+    },
+    "tests/guard/t2.test.ts": {
+      "mode": "100644",
+      "blob": "ac50721918f807070d1fcef041df655e46d4172c"
+    },
+    "tests/guard/unattended-allowlist.test.ts": {
+      "mode": "100644",
+      "blob": "18deedb6ec8e102661def69021325c0cb949c13f"
+    },
+    "tests/guard/urgent-state.test.ts": {
+      "mode": "100644",
+      "blob": "7021923ac0e457adf093ee5e39a7305dfa7a1b2a"
+    },
+    "tests/guard/validate.test.ts": {
+      "mode": "100644",
+      "blob": "863672509304b0b1282e8f2417eb9555d8b84fc7"
+    },
+    "tests/hooks/bootstrap.test.ts": {
+      "mode": "100644",
+      "blob": "271eddc057fa80ff12ca4134505a499a9ee5fe0b"
+    },
+    "tests/hooks/guard-files-fast.test.ts": {
+      "mode": "100644",
+      "blob": "31e483b56092fd7ca7e053e5ccc4f1f546b05304"
+    },
+    "tests/hooks/hooks.test.ts": {
+      "mode": "100644",
+      "blob": "ed36165d1a835ecd501f08e11b1570001b902d6a"
+    },
+    "tests/hooks/prepush.test.ts": {
+      "mode": "100644",
+      "blob": "51dbb1a5826ce1985b998c87ccf42de2bbca69bc"
+    },
+    "tests/hooks/safety-detect.test.ts": {
+      "mode": "100644",
+      "blob": "107b6a4b65a0008d99a6d48193be632d66ac7845"
+    },
+    "tests/hooks/settings.test.ts": {
+      "mode": "100644",
+      "blob": "81a631fe221888688cdfd0865413ca10d4e52743"
+    },
+    "tests/oplog-done.test.ts": {
+      "mode": "100644",
+      "blob": "97dd711c346bfcb67ec9a27c9927ed24e1cf8ee1"
+    },
+    "tests/privacy.test.ts": {
+      "mode": "100644",
+      "blob": "a9b1fe27c2a067f0f62b3fd88eb9f0c88074a6ef"
+    },
+    "tests/proposals-check-applied.test.ts": {
+      "mode": "100644",
+      "blob": "6ba720f975f32c75660d8f0f5e36ff3349f49a7b"
+    },
+    "tests/public-tree.test.ts": {
+      "mode": "100644",
+      "blob": "9fe3da1c009d368f51e8d100c0611e5b3005839b"
+    },
+    "tests/safety-agent.test.ts": {
+      "mode": "100644",
+      "blob": "e0e00c65dce472099e07d073a207a2203f10b444"
+    },
+    "tests/safety-cli.test.ts": {
+      "mode": "100644",
+      "blob": "72a846d4b78e960405d07715e92364206a791fc6"
+    },
+    "tests/safety-text.test.ts": {
+      "mode": "100644",
+      "blob": "7f4712e351c80d2935e1d6c2d62939d899c64d78"
+    },
+    "tests/signals/checkin-and-signals.test.ts": {
+      "mode": "100644",
+      "blob": "065fef7135971505291487fa0343548da612be64"
+    },
+    "tests/signals/cli-signals.test.ts": {
+      "mode": "100644",
+      "blob": "ae24c0edf5e5dcb437a105d11c514c0103c58eb1"
+    },
+    "tests/signals/fixtures/oura/daily_readiness.json": {
+      "mode": "100644",
+      "blob": "e17cd6ac871a83da43f86d75e1d84d26b27497f6"
+    },
+    "tests/signals/fixtures/oura/sleep-page1.json": {
+      "mode": "100644",
+      "blob": "d117fc43dc13b4ed99a8478882a176e3469d6d85"
+    },
+    "tests/signals/fixtures/oura/sleep-page2.json": {
+      "mode": "100644",
+      "blob": "3ee6d13e184ea580355e4d087007d3e94865b4b3"
+    },
+    "tests/signals/fixtures/shortcut/2026-10-10.json": {
+      "mode": "100644",
+      "blob": "5f2c2099e2823657a12c378f4e1567075d6c787f"
+    },
+    "tests/signals/oura-hardening.test.ts": {
+      "mode": "100644",
+      "blob": "d0f1e06710b63e5d934c4b54e1ef8a22fbee871d"
+    },
+    "tests/signals/oura.test.ts": {
+      "mode": "100644",
+      "blob": "a7716631fcce61d02965cd3e8f210ee4a5a71c91"
+    },
+    "tests/signals/shortcut-normalize.test.ts": {
+      "mode": "100644",
+      "blob": "00b5f284a067817500d8b9cd81bcd657f3fbcba8"
+    },
+    "tests/skills.test.ts": {
+      "mode": "100644",
+      "blob": "237c227623a2a4ac730f2c1bdd2f55a46ab0ccee"
+    },
+    "tests/update.test.ts": {
+      "mode": "100644",
+      "blob": "c88d8109fa73f7da1d11044f0d5b133f6fe3cfd7"
+    },
+    "tsconfig.json": {
+      "mode": "100644",
+      "blob": "33268bdda5b7fb1f8a667ba87f811fbf836ddeca"
+    }
+  }
+}
