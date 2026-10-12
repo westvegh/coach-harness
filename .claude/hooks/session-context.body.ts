@@ -16,6 +16,13 @@ import { blockWeekAt } from "../../engine/progression.ts";
 import { loadSnapshot, snapshotAgeMinutes } from "../../engine/snapshot.ts";
 import { context, hookNow, projectRoot, readInput, runHook } from "./lib.ts";
 
+/** An error as one line, with its code (TAXONOMY_INVALID, …) when it has one. */
+function oneLine(e: unknown): string {
+  const err = e as Error & { code?: string };
+  const msg = err.message.replace(/\s*\n\s*/g, " ").trim();
+  return err.code && !msg.startsWith(err.code) ? `${err.code}: ${msg}` : msg;
+}
+
 runHook("session-context", () => {
   const sessionId = String(readInput().session_id ?? "");
   const root = projectRoot();
@@ -30,14 +37,32 @@ runHook("session-context", () => {
   const lines: string[] = [`coach-harness: today is ${today} (${weekdayOf(today)}) in ${cfg.athlete.timezone}.`];
 
   // Safety first. One effect, in the guard's precedence (P2 fix 7): urgent, then pending,
-  // then a systemic hold, then a regional hold.
+  // then a systemic hold, then a regional hold. Urgent and pending are decided before the
+  // taxonomy loads, and a taxonomy that does not load leaves the conservative text with
+  // the error (P3 fix 3). The taxonomy loads only when the effect depends on it.
   const hold = readHold(root);
   const pending = readPending(root);
   if (pending || hold?.active) {
-    const terms = loadSafetyTerms();
-    const urgentTerms = new Set(terms.urgent.map((e) => e.term));
-    const urgent = pending?.terms.some((t) => urgentTerms.has(t)) || (hold?.active === true && isUrgentHold(hold, terms));
-    const scope = hold?.active ? holdScope(hold, loadTaxonomy({ root })) : { regions: [], unknown: [] };
+    let urgent: boolean;
+    let termsError = "";
+    try {
+      const terms = loadSafetyTerms();
+      const urgentTerms = new Set(terms.urgent.map((e) => e.term));
+      urgent = !!pending?.terms.some((t) => urgentTerms.has(t)) || (hold?.active === true && isUrgentHold(hold, terms));
+    } catch (e) {
+      // The urgent terms are unknown: assume the strictest state.
+      urgent = true;
+      termsError = oneLine(e);
+    }
+    let scope: { regions: string[]; unknown: string[] } = { regions: [], unknown: [] };
+    let taxonomyError = "";
+    if (!urgent && !pending && hold?.active && hold.regions.length > 0) {
+      try {
+        scope = holdScope(hold, loadTaxonomy({ root }));
+      } catch (e) {
+        taxonomyError = oneLine(e);
+      }
+    }
     const effect = urgent
       ? "Urgent: no exercise. Only a note, a rest day or a skip is allowed"
       : pending
@@ -45,6 +70,8 @@ runHook("session-context", () => {
         : scope.regions.length === 0
           ? "Only rest, recovery, trims and notes are allowed"
           : "Exercises that load a held region, and unclassified ones, are denied; other training follows the normal rules";
+    if (termsError) lines.push(`ERROR: the safety terms do not load (${termsError}); the safety state is read as urgent until this is fixed.`);
+    if (taxonomyError) lines.push(`ERROR: the movement taxonomy does not load (${taxonomyError}); the hold is read as a hold with no regions, and the guard denies training writes until this is fixed.`);
     if (pending) lines.push(`SAFETY FIRST: a safety check is pending since ${pending.at} (terms: ${pending.terms.join(", ") || "none"}). ${effect}. Ask about the symptom before anything else.`);
     if (hold?.active) {
       const regions = scope.unknown.length

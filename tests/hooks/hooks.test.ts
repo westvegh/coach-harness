@@ -312,6 +312,37 @@ test("P2 fix 7: session-context wording follows the guard's precedence: urgent, 
   assert.match(ctx(), /\(regions: left-shoulder\)\. Exercises that load a held region, and unclassified ones, are denied; other training follows the normal rules/);
 });
 
+test("P3 fix 3: a taxonomy that does not load still leaves the conservative safety context, with the error", () => {
+  const root = instance();
+  const hold = (regions: string, extra = "") => writeFileSync(join(root, "athlete/hold.yaml"), `active: true\nset_at: '2026-10-13T08:00:00-07:00'\nreason: review fixture\nregions: ${regions}\nset_by: safety-agent\n${extra}`);
+  const pendingFile = join(root, "athlete/.safety-pending");
+  // The reviewer's malformed local taxonomy.
+  writeFileSync(join(root, "athlete/movements.local.yaml"), "version: 1\npatterns: bad\n");
+  const ctx = () => {
+    const r = hook("session-context", root, { session_id: SESSION });
+    assert.equal(r.code, 0, r.stderr);
+    return r.json.hookSpecificOutput.additionalContext as string;
+  };
+  const REGIONAL = /other training follows the normal rules/;
+  // The reviewer's urgent regional hold: the urgent text.
+  hold("[left-shoulder, right-shoulder]", "urgent: true\n");
+  let c = ctx();
+  assert.match(c, /HOLD ACTIVE since .*\(regions: left-shoulder, right-shoulder\)\. Urgent: no exercise\. Only a note, a rest day or a skip is allowed/);
+  assert.doesNotMatch(c, REGIONAL);
+  // A pending check: the pending text.
+  hold("[left-shoulder]");
+  writeFileSync(pendingFile, JSON.stringify({ at: "2026-10-14T06:00:00-07:00", terms: ["pain", "region:left-shoulder"], source: "prompt" }));
+  c = ctx();
+  assert.match(c, /SAFETY FIRST: .*Only rest, recovery, trims and notes until the questions are answered\./);
+  assert.doesNotMatch(c, REGIONAL);
+  rmSync(pendingFile);
+  // A regional hold needs the taxonomy: it is read as a hold with no regions, and the error is named.
+  c = ctx();
+  assert.match(c, /ERROR: the movement taxonomy does not load \(TAXONOMY_INVALID: .*patterns: must be a mapping/);
+  assert.match(c, /HOLD ACTIVE since .*\(regions: left-shoulder\)\. Only rest, recovery, trims and notes are allowed/);
+  assert.doesNotMatch(c, REGIONAL);
+});
+
 test("session-context: an approved, merged proposal is reported for apply", () => {
   const root = instance();
   const id = "P-20261014-new_block-1";

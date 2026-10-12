@@ -103,6 +103,8 @@ export type Classification = {
   regions: string[];
   muscles: string[];
   source: "exercise" | "keyword" | "none";
+  /** The patterns of each source entry: an exercises entry or one keyword match (P3 fix 2). */
+  groups?: string[][];
 };
 
 // ---------- §4 method pack (the subset the engine reads) ----------

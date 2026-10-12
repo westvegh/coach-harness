@@ -55,7 +55,7 @@ Everything you need is in this section. Do not read `engine/`, `adapters/` or `d
 ```
 
 **What a hold does** (the guard enforces it):
-- **Regional hold** (`--regions` given): it denies every exercise that loads a held region, and every unclassified exercise. Conditioning that loads no named region (a bike, intervals) passes only as recovery work that adds nothing, also when it is part of a combined exercise. The guard classifies each exercise by its id and by its name, and uses both. All other training follows the normal rules: limits, method rules, volume and progression. Trims, rest, recovery, notes and skips pass.
+- **Regional hold** (`--regions` given): it denies every exercise that loads a held region, and every unclassified exercise. Conditioning that loads no named region (a bike, intervals) passes only as recovery work that adds nothing, also when it is part of a combined exercise ("Bike and Bench Press"). A trim passes only when each exercise keeps its id and name class. The guard classifies each exercise by its id and by its name, and uses both. All other training follows the normal rules: limits, method rules, volume and progression. Trims, rest, recovery, notes and skips pass.
 - **Systemic hold** (no regions, for example dizziness or illness): only notes, rest, recovery, trims and skips.
 - **Urgent hold** (`--urgent`): no exercise at all, not even recovery. Only a note, a rest day or a skip.
 - **Pending file** (`athlete/.safety-pending`, questions not answered yet): global, like a systemic hold, because the regions are not known yet.

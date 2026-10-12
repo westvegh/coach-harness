@@ -175,6 +175,17 @@ function setsByMuscle(days: DayPlan[], tax: Taxonomy): Record<string, number> {
   return out;
 }
 
+/**
+ * True when `ex` has the same safety classification (exerciseId and name, P2 fix 3) as the
+ * exercise of `before` that it keeps (P3 fix 1). Only then is a trim of it a trim.
+ */
+function keepsSafetyClass(ex: ExerciseEntry, before: DayPlan, tax: Taxonomy): boolean {
+  const b = before.exercises.find((x) => sameExercise(ex, x));
+  if (!b) return false;
+  const key = (e: ExerciseEntry) => [...classifyForSafety(e, tax).patterns].sort().join(",");
+  return key(ex) === key(b);
+}
+
 // ---------- limits ----------
 
 function nameIs(n: string, ex: ExerciseEntry): boolean {
@@ -423,14 +434,18 @@ function run(i: GuardInput): Verdict {
       if (!after || after.status === "skipped") continue;
       const before = beforePlan(c);
       const sameContent = before && JSON.stringify(before.exercises) === JSON.stringify(after.exercises) && before.status === after.status;
-      // a trim (fewer or equal sets, load and reps) is safer: allowed under a hold.
+      // a trim (fewer or equal sets, load and reps) is safer: allowed under a hold, but only
+      // for an exercise that keeps its safety classification (P3 fix 1). A new name or id that
+      // adds a pattern ("Bench Press" on Barbell_Squat) goes through the normal hold checks.
       // A recovery day passes only when it adds no work to an exercise it keeps.
-      if (sameContent || (isRecoveryDay(after, i.tax) && addsWork(before, after, units) === null) || (before && after.date === before.date && isTrimOf(before, after, units))) continue;
+      const trim = before && after.date === before.date && isTrimOf(before, after, units);
+      const reclassified = trim ? after.exercises.filter((ex) => !keepsSafetyClass(ex, before, i.tax)) : after.exercises;
+      if (sameContent || (isRecoveryDay(after, i.tax) && addsWork(before, after, units) === null) || (trim && reclassified.length === 0)) continue;
       if (held.length === 0) {
         safety.push(`${why}: ${c.date} must be a recovery or rest day`);
         continue;
       }
-      for (const ex of after.exercises) {
+      for (const ex of reclassified) {
         // The exerciseId and the name both (P2 fix 3): a new name cannot hide a held region.
         const cl = classifyForSafety(ex, i.tax);
         if (cl.source === "none") {
@@ -440,8 +455,14 @@ function run(i: GuardInput): Verdict {
         // The taxonomy names no region for conditioning (zone 2, intervals), but a bike or
         // an interval run still loads a knee. So under a regional hold such an exercise passes
         // only as a recovery exercise that adds no work to itself (the recovery-day test).
-        // Each pattern on its own (P2 fix 6): another pattern's regions never exempt it.
-        const regionless = cl.patterns.filter((p) => i.tax.patterns[p].loads.length === 0 && (cl.regions.length === 0 || !i.tax.patterns[p].recovery));
+        // Each pattern on its own (P2 fix 6): another pattern's regions never exempt it. A
+        // recovery pattern next to a loaded one is exempt only when one entry gives both, so
+        // the loaded pattern names its regions: "Easy Run" (zone 2 and running in one keyword)
+        // follows the normal rules, "Bike and Bench Press" (two keywords) does not (P3 fix 2).
+        const sameEntry = (p: string) => (cl.groups ?? []).some((g) => g.includes(p) && g.some((q) => i.tax.patterns[q].loads.length > 0));
+        const regionless = cl.patterns
+          .filter((p) => i.tax.patterns[p].loads.length === 0 && !(i.tax.patterns[p].recovery && sameEntry(p)))
+          .sort((a, b) => Number(!!i.tax.patterns[a].recovery) - Number(!!i.tax.patterns[b].recovery));
         if (regionless.length > 0) {
           const extra = isRecoveryExercise(ex, i.tax) ? addsWork(before, { ...after, exercises: [ex] }, units) : "not a recovery exercise";
           if (extra) safety.push(`${why}: ${ex.name} (${c.date}) loads no named region in ${regionless.join(", ")}, so under a regional hold it must be a recovery exercise that adds no work (${extra})`);

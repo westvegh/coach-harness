@@ -2,6 +2,13 @@
 
 All notable changes to this project are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [semantic versioning](https://semver.org/).
 
+## [0.1.2]
+
+### Fixed
+
+- **Holds:** a trimmed exercise that is renamed to another movement goes through the hold checks; a cardio part of a combined exercise (for example "bike and bench press") is checked on its own; a ruck counts as knee and ankle loading, so a knee hold covers it.
+- **Session start:** the safety reminder still shows when the movement list fails to load, and loads faster for urgent and pending checks.
+
 ## [0.1.1]
 
 ### Changed

@@ -88,6 +88,8 @@ patterns:
   impact_running:           { loads: [knee, ankle, hip, foot], muscles: [] }
   rowing_erg:               { loads: [low-back, knee, shoulder], muscles: [] }
   balance:                  { loads: [ankle, foot], muscles: [] }
+  # walking under a load (a ruck): the lower body carries it too (P3)
+  loaded_walk:              { loads: [knee, ankle], muscles: [] }
   intervals:                { loads: [], muscles: [] }
   # recovery
   zone2_cardio:             { loads: [], muscles: [], recovery: true }
@@ -333,8 +335,8 @@ keywords:
   "overhead walk": [carry]
   "suitcase carry": [carry]
   "yoke": [carry]
-  "ruck": [carry, zone2_cardio]
-  "rucking": [carry, zone2_cardio]
+  "ruck": [carry, loaded_walk, zone2_cardio]
+  "rucking": [carry, loaded_walk, zone2_cardio]
   # olympic lifts
   "clean": [olympic_lift]
   "snatch": [olympic_lift]

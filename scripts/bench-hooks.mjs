@@ -62,6 +62,9 @@ const bare = instance(false);
 const floorTs = join(bare, "floor.ts");
 writeFileSync(floorTs, "const x: number = 0;\nexport { x };\n");
 const athlete = instance(true);
+// The same instance with an active regional hold, for the session-start row (P3).
+const held = instance(true);
+writeFileSync(join(held, "athlete/hold.yaml"), "active: true\nset_at: '2026-10-13T08:00:00-07:00'\nreason: bench fixture\nregions: [left-shoulder]\nset_by: safety-agent\n");
 const trim = { date: D, expectedVersion: v(`r-${D}`, "t0"), operations: [{ op: "modify", target: { exerciseId: "Barbell_Bench_Press" }, fields: { suggestedSets: 2 } }] };
 const tallyWrite = { session_id: SESSION, hook_event_name: "PreToolUse", tool_name: "mcp__claude_ai_Tally_Workout__update_planned_workout", tool_input: trim, tool_use_id: "toolu_bench" };
 const edit = (root) => ({ session_id: SESSION, tool_name: "Edit", tool_input: { file_path: join(root, "docs/notes.md"), old_string: "a", new_string: "b" } });
@@ -76,6 +79,8 @@ const cases = [
   { name: "guard-files Bash (unprotected), coach.yaml", hook: "guard-files", input: bash("npm test"), root: athlete, target: 80 },
   { name: "guard-files Edit athlete/limits.yaml, coach.yaml", hook: "guard-files", input: { ...edit(athlete), tool_input: { file_path: join(athlete, "athlete/limits.yaml"), old_string: "a", new_string: "b" } }, root: athlete, target: null },
   { name: "guard-writes Tally write, coach.yaml", hook: "guard-writes", input: tallyWrite, root: athlete, target: 200 },
+  { name: "session-context, no hold", hook: "session-context", input: { session_id: SESSION }, root: athlete, target: null },
+  { name: "session-context, regional hold", hook: "session-context", input: { session_id: SESSION }, root: held, target: null },
   // Unattended (COACH_UNATTENDED=1, as a launchd run): the fast path never decides, so these
   // take the engine path.
   { name: "unattended: Edit athlete/log/x.md", hook: "guard-files", input: { session_id: SESSION, tool_name: "Edit", tool_input: { file_path: join(athlete, "athlete/log/x.md"), old_string: "a", new_string: "b" } }, root: athlete, target: null, env: UNATTENDED },
@@ -105,4 +110,5 @@ for (const c of cases) {
 }
 rmSync(bare, { recursive: true, force: true });
 rmSync(athlete, { recursive: true, force: true });
+rmSync(held, { recursive: true, force: true });
 if (values.check && missed > 0) process.exitCode = 1;

@@ -207,7 +207,8 @@ function unique(xs: string[]): string[] {
 /** Tally `muscle` values that name no muscle (normalized): they add no volume. */
 const NOT_MUSCLES = ["cardio", "conditioning", "mobility", "stretching", "breathing", "full body", "other", "flexibility", "recovery", "endurance", "none"];
 
-function build(patterns: string[], source: Classification["source"], muscle: string | null | undefined, tax: Taxonomy): Classification {
+function build(groups: string[][], source: Classification["source"], muscle: string | null | undefined, tax: Taxonomy): Classification {
+  const patterns = groups.flat();
   const regions = unique(patterns.flatMap((p) => tax.patterns[p].loads));
   const muscles = unique(patterns.flatMap((p) => tax.patterns[p].muscles));
   // The exercise's own (Tally) muscle counts unless it names no muscle or the exercise is recovery work.
@@ -216,7 +217,7 @@ function build(patterns: string[], source: Classification["source"], muscle: str
     const m = own.replace(/ /g, "-");
     if (!muscles.includes(m)) muscles.push(m);
   }
-  return { patterns: unique(patterns), regions, muscles, source };
+  return { patterns: unique(patterns), regions, muscles, source, groups };
 }
 
 /**
@@ -228,12 +229,12 @@ export function classify(ex: ExerciseRef, tax: Taxonomy): Classification {
   const candidates = [ex.exerciseId, ex.name].filter((s): s is string => typeof s === "string" && s.trim() !== "").map(normalizeName);
   for (const c of candidates) {
     const pats = tax.exercises[c];
-    if (pats) return build(pats, "exercise", ex.muscle, tax);
+    if (pats) return build([pats], "exercise", ex.muscle, tax);
   }
   // Name first: it is what the athlete sees. The exerciseId is a fallback.
   for (const c of [...candidates].reverse()) {
     const matches = keywordMatches(c, tax);
-    if (matches.length > 0) return build(matches.flatMap((m) => tax.keywords[m.keyword]), "keyword", ex.muscle, tax);
+    if (matches.length > 0) return build(matches.map((m) => tax.keywords[m.keyword]), "keyword", ex.muscle, tax);
   }
   return build([], "none", ex.muscle, tax);
 }
@@ -248,7 +249,7 @@ export function classifyForSafety(ex: ExerciseRef, tax: Taxonomy): Classificatio
   const known = parts.filter((c) => c.source !== "none");
   if (known.length === 0) return classify(ex, tax);
   const source = known.some((c) => c.source === "exercise") ? "exercise" : "keyword";
-  return build(known.flatMap((c) => c.patterns), source, ex.muscle, tax);
+  return build(known.flatMap((c) => c.groups ?? [c.patterns]), source, ex.muscle, tax);
 }
 
 /** Region ids that the merged taxonomy does not know (P2 fix 2). */
