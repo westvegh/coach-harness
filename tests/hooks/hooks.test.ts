@@ -28,6 +28,9 @@ function instance(opts: { coach?: boolean } = {}): string {
   cpSync(join(REPO, "methods"), join(dir, "methods"), { recursive: true });
   writeFileSync(join(dir, ".gitignore"), "athlete/.cache/\n");
   git(dir, "init", "-q", "-b", "main");
+  // The hooks commit in a child process: give the repo its own identity (CI runners have none).
+  git(dir, "config", "user.name", "t");
+  git(dir, "config", "user.email", "t@t");
   git(dir, "add", ".");
   git(dir, "commit", "-q", "-m", "instance");
   return dir;

@@ -2,6 +2,12 @@
 
 All notable changes to this project are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [semantic versioning](https://semver.org/).
 
+## [0.2.1]
+
+### Fixed
+
+- Tests: the hook tests give their test repositories a git identity, so they pass on machines with no git user set (the template's CI).
+
 ## [0.2.0]
 
 v0.2 trusts the coach. Code enforces two rules only, the urgent stop and privacy, and the rest is the coach's judgment, guided by the method pack and the skills. Setup and pain reports take a few clicks.
