@@ -15,3 +15,11 @@ export function mode(env: NodeJS.ProcessEnv = process.env): RunMode {
   if (coach !== undefined && coach !== "" && coach !== "0") return "unattended";
   return "interactive";
 }
+
+/** The markers of an unattended run. Any non-empty value counts. */
+export const UNATTENDED_MARKERS = ["CLAUDE_CODE_REMOTE", "COACH_UNATTENDED"];
+
+/** The first unattended marker that is set, or null in an interactive run. */
+export function unattendedMarker(env: NodeJS.ProcessEnv = process.env): string | null {
+  return UNATTENDED_MARKERS.find((k) => (env[k] ?? "") !== "") ?? null;
+}

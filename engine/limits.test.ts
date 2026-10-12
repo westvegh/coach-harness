@@ -137,3 +137,12 @@ limits:
 `), /max_load: must be/);
   expectInvalid({ ...one({}), pain_threshold: Number.NaN }, /pain_threshold/);
 });
+
+test("build_back: a cap may build back; a ban may not; the value must be true or false", () => {
+  const base = { version: 1, pain_threshold: 4 };
+  const cap = { id: "L-001", region: "left-shoulder", rule: "cap", patterns: ["overhead_press"], max_sets_per_week: 6, source: "athlete", since: "2026-10-12" };
+  assert.equal(validateLimits({ ...base, limits: [{ ...cap, build_back: true }] }).limits[0].build_back, true);
+  assert.equal("build_back" in validateLimits({ ...base, limits: [cap] }).limits[0], false);
+  assert.throws(() => validateLimits({ ...base, limits: [{ ...cap, build_back: "yes" }] }), /build_back: must be true or false/);
+  assert.throws(() => validateLimits({ ...base, limits: [{ id: "L-002", region: "knee", rule: "ban", patterns: ["squat"], build_back: true, source: "athlete", since: "2026-10-12" }] }), /only a cap can build back/);
+});

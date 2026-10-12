@@ -1,5 +1,5 @@
-// Lint for the coach's skills and agents: front matter, CLI commands that exist,
-// Tally tool names, no protected write targets, and an unattended branch for every writer.
+// Lint for the coach's skills and agents (v0.2): front matter, CLI commands that exist,
+// Tally tool names, none of the removed machinery, and an unattended branch for every writer.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -7,11 +7,10 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
 import { HELP, HELPER_COMMANDS } from "../engine/cli-help.ts";
-import { PROTECTED_DIRS, PROTECTED_FILES } from "../engine/protect.ts";
 
 const REPO = new URL("..", import.meta.url).pathname;
-const SKILLS = ["setup", "today", "check-in", "week", "block", "audit", "limits", "explain", "method", "update"];
-const AGENTS = ["analyst", "method-expert", "safety"];
+const SKILLS = ["setup", "today", "check-in", "safety", "week", "block", "audit", "limits", "explain", "method", "update", "log", "recovery-data", "automation", "injury-history"];
+const AGENTS = ["analyst", "method-expert"];
 
 type Doc = { name: string; path: string; front: Record<string, unknown>; body: string; text: string };
 
@@ -40,12 +39,13 @@ const helpers2 = (/return \[([^\]]+)\]\.includes\(cmd\)/.exec(helpSource)?.[1] ?
 const COMMANDS = new Set<string>([
   ...HELPER_COMMANDS,
   ...[...cliSource.matchAll(/case "([a-z-]+)":/g)].map((m) => m[1]),
+  ...[...cliSource.matchAll(/cmd === "([a-z-]+)"/g)].map((m) => m[1]),
   ...helpers2,
   ...Object.keys(HELP).map((k) => k.split(" ")[0]),
 ]);
 
 const engineFiles = readdirSync(join(REPO, "engine")).filter((f) => /^cli.*\.ts$/.test(f) && !f.endsWith(".test.ts"));
-const usageText = [...engineFiles.map((f) => `engine/${f}`), "engine/hold.ts"]
+const usageText = [...engineFiles.map((f) => `engine/${f}`), "engine/urgent.ts"]
   .map((f) => readFileSync(join(REPO, f), "utf8"))
   .join("\n")
   .split("\n")
@@ -53,19 +53,20 @@ const usageText = [...engineFiles.map((f) => `engine/${f}`), "engine/hold.ts"]
   .concat(Object.entries(HELP).map(([k, v]) => `${k}: usage: ${v}`))
   .join("\n");
 const SUBCOMMANDS: Record<string, Set<string>> = {};
-for (const cmd of ["hold", "safety", "snapshot", "block", "ids", "oplog", "limits"]) {
+for (const cmd of ["urgent", "safety", "snapshot", "block", "ids", "oplog", "limits", "plans", "worktree"]) {
   SUBCOMMANDS[cmd] = new Set([...usageText.matchAll(new RegExp(`(?:usage: |\\| |cli\\.ts |^\\s*)${cmd} ([a-z][a-z-]*)`, "gm"))].map((m) => m[1]));
 }
-SUBCOMMANDS.proposals = new Set(HELP.proposals.split("|").map((part) => part.trim().replace(/^proposals /, "").split(" ")[0]));
 /** Commands whose subcommand is optional: the allowed ones. */
 const OPTIONAL_SUB: Record<string, Set<string>> = { signals: new Set(["refresh"]) };
 
-test("the engine command surface was found", () => {
-  for (const c of ["readiness", "volume", "hold", "signals", "checkin", "classify", "validate", "mode", "opid", "adjust", "loads", "targets", "proposals", "window-check", "weeks", "block", "ids", "lint-methods", "oplog", "limits"]) {
+test("the engine command surface was found; the removed commands are gone", () => {
+  for (const c of ["readiness", "volume", "urgent", "signals", "checkin", "classify", "mode", "opid", "adjust", "loads", "targets", "window-check", "weeks", "block", "ids", "lint-methods", "oplog", "limits", "push"]) {
     assert.ok(COMMANDS.has(c), `engine/cli.ts has ${c}`);
   }
-  assert.deepEqual([...SUBCOMMANDS.hold].sort(), ["clear", "clear-pending", "init", "set", "status"]);
-  for (const sub of ["create", "approve-copy", "open-pr", "list", "mark-applied", "check-applied"]) assert.ok(SUBCOMMANDS.proposals.has(sub), `proposals ${sub}`);
+  for (const c of ["hold", "validate", "proposals"]) assert.ok(!COMMANDS.has(c), `${c} is removed in v0.2`);
+  assert.deepEqual([...SUBCOMMANDS.urgent].sort(), ["clear", "set", "status"]);
+  for (const sub of ["schema", "regions", "check"]) assert.ok(SUBCOMMANDS.limits.has(sub), `limits ${sub}`);
+  assert.ok(!SUBCOMMANDS.limits.has("sync-ops") && !SUBCOMMANDS.limits.has("server-rules"));
   assert.ok(SUBCOMMANDS.block.has("draft") && SUBCOMMANDS.ids.has("next") && SUBCOMMANDS.oplog.has("done"));
 });
 
@@ -80,14 +81,13 @@ const TALLY_TOOLS = new Set([
   ...TALLY_WRITES,
   "get_exercise_progress",
   "search_exercises",
-  "update_training_limits", // named only in the capability-gated server-side limits step
 ]);
 const SERVER_FORMS = ["tally", "Tally_Workout", "claude_ai_Tally_Workout"];
 const TOOL_WORD = /\b(?:get|plan|update|move|skip|delete|search)_[a-z_]+\b/g;
 
 // ---------- skills ----------
 
-test("all ten skills exist", () => {
+test("all fifteen skills exist", () => {
   const dirs = readdirSync(join(REPO, ".claude/skills")).filter((d) => existsSync(join(REPO, ".claude/skills", d, "SKILL.md")));
   assert.deepEqual(dirs.sort(), [...SKILLS].sort());
 });
@@ -129,19 +129,11 @@ for (const s of skills) {
     }
   });
 
-  test(`${s.name}: no protected file is a write target`, () => {
-    const writes = section(s.body, "Writes")!;
-    for (const raw of writes.split("\n")) {
-      // An engine command in backticks is how a file is written, not the target itself.
-      const line = raw.replace(/`node [^`]*`/g, "");
-      const hits = [...PROTECTED_FILES, ...PROTECTED_DIRS].filter((p) => line.includes(p));
-      if (hits.length === 0) continue;
-      // A file that only a trusted engine command writes (contracts §23: athlete/signals/ through `checkin`).
-      if (/only through `node engine\/cli\.ts [^`]+`\.?$/.test(raw.trim())) continue;
-      // The only exception: a reviewed entry the guard asks the user about, never unattended.
-      assert.ok(line.includes("(interactive yes only)"), `${s.name} names ${hits.join(", ")} as a write target: ${line.trim()}`);
+  test(`${s.name}: none of the removed machinery (guard, hold, pending file, safety agent, copy-exactly blocks, --approved, proposal PRs)`, () => {
+    for (const re of [/\bguard\b/i, /hold\.yaml|hold (set|clear|status|init)|\bactive hold\b/i, /\.safety-pending|pending (file|safety)/i, /the `safety` agent/, /copy exactly/i, /--approved/, /proposals (create|list|open-pr|approve-copy|mark-applied|check-applied)|proposal\/<id>|athlete\/proposals/, /node engine\/cli\.ts validate/, /update_training_limits|sync-ops|server-rules/]) {
+      assert.doesNotMatch(s.text, re, `${s.name}: ${re}`);
     }
-    assert.doesNotMatch(writes, /hold\.yaml|\.safety-pending|\.cache\//, "hold, pending and cache files are never write targets");
+    assert.doesNotMatch(section(s.body, "Writes")!, /\.cache\//, "the cache is never a write target");
   });
 
   test(`${s.name}: a skill that writes has an unattended branch`, () => {
@@ -166,11 +158,11 @@ test("today and week run window-check first, then mode", () => {
   }
 });
 
-test("today checks safety before the already-adjusted exit", () => {
+test("today checks the urgent stop and the notes before the already-adjusted exit", () => {
   const steps = section(skills.find((s) => s.name === "today")!.body, "Steps")!;
   const exit = steps.indexOf("Today is already adjusted.");
   assert.ok(exit > 0, "the already-adjusted exit");
-  assert.ok(steps.indexOf("hold status") < exit);
+  assert.ok(steps.indexOf("urgent status") < exit);
   assert.ok(steps.indexOf("safety scan-notes") < exit);
 });
 
@@ -178,24 +170,22 @@ test("setup writes the athlete files, coach.yaml and block.yaml before week 1", 
   const steps = section(skills.find((s) => s.name === "setup")!.body, "Steps")!;
   const files = steps.indexOf("Write the athlete files");
   const block = steps.indexOf("athlete/block.yaml");
-  const week1 = steps.indexOf("**Write week 1**");
+  const week1 = steps.indexOf("**Write week 1.**");
   assert.ok(files > 0 && block > files && week1 > block);
   assert.ok(steps.indexOf("Write `coach.yaml` last") > files);
 });
 
-test("limits and setup gate the server-side limits step on the tool list, silently", () => {
-  for (const name of ["limits", "setup"]) {
-    const s = skills.find((x) => x.name === name)!;
-    assert.ok(s.body.includes("Server-side limits (only when available)"), `${name}: the marked step`);
-    assert.ok(s.body.includes("skip this step silently"), `${name}: skipped without a word`);
-    assert.ok(s.body.includes("update_training_limits"), `${name}: gated on the tool list`);
-  }
+test("no skill syncs limits to Tally; limits says once that old Tally limits stay until the athlete removes them", () => {
+  for (const s of skills) assert.doesNotMatch(s.text, /Server-side limits|update_training_limits/, s.name);
+  assert.match(skill("limits").body, /v0\.2 never writes limits to Tally[^\n]*say once[^\n]*Settings → Training limits/);
 });
 
-test("unattended proposals go through the engine and a PR, never approved on main", () => {
-  const week = skills.find((s) => s.name === "week")!.body;
-  for (const c of ["proposals create", "proposals approve-copy", "proposals open-pr", "git switch -c proposal/"]) assert.ok(week.includes(c), c);
-  for (const s of skills) assert.doesNotMatch(s.text, /gh pr (create|merge)/, `${s.name}: no gh pr create or merge`);
+test("unattended big changes become one log line for the next live session; no PR, no proposal file", () => {
+  assert.match(steps("week").get(11)!, /\*\*Unattended:\*\* never write it\. Write one log line per change: "- proposal for the next live session: /);
+  assert.match(claudeMd, /Unattended: make no big change; write one line in the athlete log, "- proposal for the next live session: <the change>"/);
+  for (const s of skills) assert.doesNotMatch(s.text, /gh pr (create|merge)|git switch -c/, `${s.name}: no PR flow`);
+  // The next live session offers them.
+  assert.match(steps("today").get(3)!, /\*\*Proposals for the live session\*\* \(interactive only\)[^\n]*"- proposal for the next live session: …"[^\n]*A\) Yes, do it, B\) Not now/);
 });
 
 // ---------- agents ----------
@@ -219,14 +209,20 @@ for (const a of agents) {
         assert.ok(TALLY_TOOLS.has(suffix), `${t}: unknown tool`);
       }
     }
+    assert.doesNotMatch(a.text, /\bguard\b|hold status|validate --tool|proposals (list|check-applied)/, `${a.name} names a removed command`);
   });
 }
 
-test("method-expert has read-only tools", () => {
+test("the safety agent is gone: the safety skill replaces it", () => {
+  assert.equal(existsSync(join(REPO, ".claude/agents/safety.md")), false);
+  assert.ok(existsSync(join(REPO, ".claude/skills/safety/SKILL.md")));
+});
+
+test("method-expert has read-only tools and checks the limits under NA-REC-007", () => {
   const tools = String(agents.find((a) => a.name === "method-expert")!.front.tools).split(",").map((t) => t.trim());
   assert.deepEqual(tools.sort(), ["Glob", "Grep", "Read"]);
   const body = agents.find((a) => a.name === "method-expert")!.body;
-  for (const s of ["[ID]", "source", "Never estimate"]) assert.ok(body.includes(s), s);
+  for (const s of ["[ID]", "source", "Never estimate", "athlete/limits.yaml", "[NA-REC-007]", "limits check"]) assert.ok(body.includes(s), s);
 });
 
 test("analyst reports numbers with inputs and never estimates", () => {
@@ -258,22 +254,36 @@ function inOrder(text: string, needles: string[], what: string): void {
   }
 }
 
+const claudeMd = readFileSync(join(REPO, "CLAUDE.md"), "utf8");
+
 test("finding 1: today and week read history through today and scan notes before proposals, planning and every early exit", () => {
   for (const name of ["today", "week"]) {
     const st = steps(name);
     const safety = st.get(2)!;
-    assert.match(safety, /\*\*Safety\.\*\*/, `${name}: step 2 is the safety step`);
+    assert.match(safety, /\*\*Safety/, `${name}: step 2 is the safety step`);
     assert.match(safety, /get_workout_history[^\n]*`until` today/, `${name}: the history read runs through today`);
     assert.ok(safety.includes("node engine/cli.ts safety scan-notes"), `${name}: step 2 scans the session notes`);
-    // Step 1 may stop only at window-check (an out-of-window run is not this run).
+    assert.ok(safety.includes("node engine/cli.ts urgent status"), `${name}: step 2 reads the urgent stop`);
     const step1 = st.get(1)!;
     for (const line of step1.split("\n").filter((l) => /\bstop\b|End the run|end the run/.test(l))) {
       assert.ok(line.includes("window-check"), `${name}: step 1 exits only at window-check: ${line.trim()}`);
     }
-    assert.ok(!st.get(2)!.includes("proposals list"), `${name}: proposals come after the scan`);
   }
-  inOrder(section(skill("today").body, "Steps")!, ["safety scan-notes", "proposals list", "Today is already adjusted.", "node engine/cli.ts readiness"], "today");
-  inOrder(section(skill("week").body, "Steps")!, ["safety scan-notes", "Apply merged proposals", "a new block is due", "node engine/cli.ts targets"], "week");
+  inOrder(section(skill("today").body, "Steps")!, ["safety scan-notes", "Proposals for the live session", "Today is already adjusted.", "node engine/cli.ts readiness"], "today");
+  inOrder(section(skill("week").body, "Steps")!, ["safety scan-notes", "Proposals for the live session", "a new block is due", "node engine/cli.ts targets"], "week");
+});
+
+test("the urgent stop: today and week make no plan write under it, and clear it only through the safety skill's question", () => {
+  for (const name of ["today", "week"]) {
+    const safety = steps(name).get(2)!;
+    assert.match(safety, /\*\*Urgent stop\*\*/);
+    assert.match(safety, /urgent gate denies every plan write/);
+    assert.match(safety, /the `safety` skill's clear question \(its step 6\)/);
+  }
+  for (const s of [...skills.map((x) => x.text), claudeMd]) {
+    for (const line of s.split("\n").filter((l) => /urgent clear/.test(l))) assert.match(line, /--reason clinician|clinician`? or `?--reason false-alarm|false-alarm/, line.trim());
+  }
+  assert.match(claudeMd, /Never clear it on your own reading, and never in an unattended run\./);
 });
 
 test("finding 2: no load progression after trim or recovery", () => {
@@ -283,57 +293,87 @@ test("finding 2: no load progression after trim or recovery", () => {
   assert.match(loads, /Skip it when `hold_progression` is true \(`trim`, `recovery` or `propose_deload`\)/);
 });
 
-test("finding 3: setup initializes the hold file before the audit and any write", () => {
+test("setup never runs hold init or the safety agent; pain goes to the safety skill and urgent signs to urgent set", () => {
   const text = section(skill("setup").body, "Steps")!;
-  inOrder(text, ["node engine/cli.ts hold init", "**Audit.**", "**Write week 1**"], "setup");
-  assert.doesNotMatch(text, /no file means no hold/, "a missing hold file fails the guard");
+  assert.doesNotMatch(text, /hold init|`safety` agent/);
+  assert.match(steps("setup").get(4)!, /run the `safety` skill for it now \(screen: Region\): its one question screen \(two regions per screen\)/);
+  assert.match(steps("setup").get(4)!, /node engine\/cli\.ts urgent set --term "chest pain" --source answer/);
 });
 
-test("finding 5: proposal replay reads the §20 evidence first, and week reads history before step 3", () => {
-  const apply = steps("today").get(3)!;
-  inOrder(apply, ["get_training_context", "every date of that week", "under 15 minutes", "Make each write"], "today step 3");
-  assert.ok(steps("week").get(2)!.includes("get_workout_history"), "week reads the history in step 2, before proposals");
-  assert.match(steps("week").get(3)!, /§20 evidence reads/);
-});
-
-test("finding 6: week routes approval denies to a proposal, and changes the plan only for hard failures", () => {
+test("week classifies each change in code and routes big changes to step 11", () => {
   const classify = steps("week").get(9)!;
-  assert.match(classify, /`deny` with `big: true`[^\n]*needs an approved proposal[^\n]*Do not change the plan\. Go to step 11/);
-  assert.match(classify, /Any other `deny`[^\n]*hard rule[^\n]*fix the draft/);
-  assert.match(steps("week").get(11)!, /\*\*Unattended:\*\*[^\n]*Make a proposal/);
+  assert.match(classify, /node engine\/cli\.ts classify --input \.tmp\/coach\/call\.json/);
+  assert.match(classify, /`big: false`: a small change\. Go to step 10\./);
+  assert.match(classify, /`big: true`: a big change\. Go to step 11\./);
 });
 
-test("finding 8: after open-pr, the proposal branch is committed and pushed before switching to main", () => {
-  inOrder(steps("week").get(11)!, ["proposals open-pr", "git add athlete/proposals/<id>.yaml", "commit", "node engine/cli.ts push", "git switch main"], "week step 11");
+test("the plan follows the limits: week checks the drafted week with limits check; today checks today", () => {
+  assert.match(steps("week").get(8)!, /node engine\/cli\.ts limits check --input \.tmp\/coach\/week\.json/);
+  assert.match(steps("today").get(2)!, /node engine\/cli\.ts limits check --input \.tmp\/coach\/today\.json/);
+  assert.match(steps("audit").get(3)!, /\*\*Limits review\*\* \(advisory\)[^\n]*node engine\/cli\.ts limits check/);
+  assert.match(claudeMd, /4\. \*\*Follow the limits\.\*\*/);
 });
 
-test("finding 9: mark-applied only after check-applied confirms every write and read-back", () => {
-  const apply = steps("today").get(3)!;
-  inOrder(apply, ["Make each write", "Read each date the writes touch", "node engine/cli.ts proposals check-applied --id <id>", "prints `status: applied`", "node engine/cli.ts proposals mark-applied <id>"], "today step 3");
-  assert.match(apply, /Otherwise do not mark it applied\*\* \(`partial` or `not-applied`\)\. Log the partial state/);
-  assert.match(steps("week").get(3)!, /mark-applied` only after full success/);
+test("week builds back a capped region once a week, interactive only", () => {
+  const safety = steps("week").get(2)!;
+  assert.match(safety, /\*\*Build back\*\* \(interactive\): for each limit with `build_back: true`, ask once "<Region>: how did it feel this week\? A\) Fine: build back one step, B\) The same: keep the cap, C\) Worse: avoid loading it for now"/);
+  assert.match(safety, /Unattended: keep the caps as they are\./);
 });
 
-test("finding 10: setup commits and pushes before automation, and sets mode and verified only after a confirmed run", () => {
-  const text = section(skill("setup").body, "Steps")!;
-  inOrder(text, ["node engine/cli.ts install-git-hooks", "node engine/cli.ts push", "**Automation.**", "RemoteTrigger", "shows success: set `automation.mode: cloud` and `automation.verified: true`"], "setup");
+test("finding 10: setup commits and pushes at its end; automation pushes first and sets mode and verified only after a confirmed run", () => {
+  inOrder(steps("setup").get(8)!, ["node engine/cli.ts install-git-hooks", "node engine/cli.ts prepush-check", "node engine/cli.ts commit --message", "node engine/cli.ts push"], "setup finish");
+  const text = section(skill("automation").body, "Steps")!;
+  inOrder(text, ["node engine/cli.ts push", "**Cloud.**", "RemoteTrigger", "shows success: set `automation.mode: cloud` and `automation.verified: true`"], "automation");
   for (const line of text.split("\n").filter((l) => /set `automation\.mode: (cloud|mac)`|Set `automation\.mode: (cloud|mac)`/.test(l))) {
     assert.match(line, /success/, `mode is set only after a confirmed run: ${line.trim()}`);
   }
 });
 
-test("finding 13: every pain follow-up in check-in offers options", () => {
+test("finding 13: every pain follow-up in check-in offers options; the warning-sign question passes --urgent", () => {
   const pain = steps("check-in").get(4)!;
-  for (const q of ["Where?", "Which side?", "How bad"]) {
+  for (const q of ["Where?", "Which side?", "How bad", "Any of these now?"]) {
     const line = pain.split("\n").find((l) => l.includes(q));
     assert.ok(line && /A\) [^\n]*B\) /.test(line), `${q} has options`);
   }
   assert.match(pain, /not sure/);
+  assert.match(steps("check-in").get(5)!, /\[--urgent <term>,\.\.\.\]/);
+  assert.match(steps("check-in").get(6)!, /run the `safety` skill for that region/);
+});
+
+// ---------- the safety skill ----------
+
+test("safety skill: one clickable screen (at most 4 questions), the three handling choices, side, warning signs, two regions per screen", () => {
+  const ask = steps("safety").get(2)!;
+  assert.match(ask, /at most 4 questions in one AskUserQuestion call/);
+  assert.match(ask, /"<Region>: how should the coach handle it\?" with the options "It's fine now: train normally", "Go light and build back slowly", "Avoid loading it for now/);
+  assert.match(ask, /Say the caution once, in the option text, never as a refusal/);
+  assert.match(ask, /only for regions that have sides \(shoulder, elbow, wrist, hip, knee, ankle\)/);
+  assert.match(ask, /"Any of these now\?" \(`multiSelect: true`\) with "New numbness or weakness", "Swelling with heat or redness", "Cannot bear weight", "None of these"/);
+  assert.match(ask, /More than two regions: one screen per two regions/);
+  assert.match(ask, /node engine\/cli\.ts urgent set/);
+  assert.match(steps("safety").get(3)!, /By default, the limit covers the patterns that load the region: run `node engine\/cli\.ts limits regions`/);
+});
+
+test("safety skill: writes the limit the athlete chose (note, cap with build_back, ban), and the it's-better and old-notes flows", () => {
+  const write = steps("safety").get(4)!;
+  assert.match(write, /node engine\/cli\.ts limits schema/);
+  assert.match(write, /"It's fine now": no limit/);
+  assert.match(write, /"Go light and build back slowly": `rule: cap`[^\n]*`build_back: true`/);
+  assert.match(write, /"Avoid loading it for now": `rule: ban`/);
+  assert.match(steps("safety").get(6)!, /"A clinician has seen me about it", "It was a false alarm", "Not yet"[^\n]*--reason clinician[^\n]*--reason false-alarm[^\n]*Never clear it on your own reading/);
+  assert.match(steps("safety").get(7)!, /"Remove the <region> limit\? A\) Yes, B\) Loosen it, C\) Keep it"/);
+  assert.match(steps("safety").get(8)!, /one multi-select: "Which of these still bother you\?"/);
+  assert.match(steps("safety").get(9)!, /See a clinician for new pain, pain that gets worse, or pain that does not settle\.[^\n]*once per conversation/);
+  assert.match(skill("safety").body, /Without AskUserQuestion \(print mode\)[^\n]*ask the same questions as text with lettered options/);
+  assert.doesNotMatch(skill("safety").text, /\bAgent\b|subagent|`safety` agent/, "no agent call");
+});
+
+test("CLAUDE.md hard rules 1 and 2: the urgent stop first, then the safety skill for ordinary pain", () => {
+  assert.match(claudeMd, /1\. \*\*The urgent stop comes first\.\*\*/);
+  assert.match(claudeMd, /2\. \*\*Pain and injuries: the `safety` skill\.\*\* Ask one clickable question screen\./);
 });
 
 // ---------- wiring round (contracts §21-§22, G evals) ----------
-
-const claudeMd = readFileSync(join(REPO, "CLAUDE.md"), "utf8");
 
 test("no E3 marker is left: every engine helper is wired", () => {
   for (const d of [...skills, ...agents]) assert.doesNotMatch(d.text, /E3:/, `${d.name} still has an E3 marker`);
@@ -352,29 +392,8 @@ test("skills name no engine/ script path and leave no arithmetic to the model", 
   assert.match(steps("week").get(6)!, /node engine\/cli\.ts weeks --from/);
   assert.match(steps("week").get(8)!, /node engine\/cli\.ts block draft/);
   assert.match(steps("block").get(5)!, /node engine\/cli\.ts ids next --kind block[\s\S]*node engine\/cli\.ts block draft/);
-  assert.match(steps("setup").get(9)!, /node engine\/cli\.ts ids next --kind limit/);
+  assert.match(steps("setup").get(7)!, /node engine\/cli\.ts ids next --kind block[\s\S]*node engine\/cli\.ts block draft/);
   assert.match(steps("today").get(6)!, /node engine\/cli\.ts signals refresh/);
-});
-
-test("the safety agent always runs in the foreground, and its questions reach the user", () => {
-  const handoff = /(run|hand off to|hand any current pain to)[^\n]*the `safety` agent/i;
-  const docs = [...skills.map((s) => ({ name: s.name, text: s.text })), { name: "CLAUDE.md", text: claudeMd }];
-  let count = 0;
-  for (const d of docs) {
-    for (const line of d.text.split("\n").filter((l) => handoff.test(l))) {
-      count++;
-      assert.match(line, /in the foreground/, `${d.name}: the safety agent runs in the foreground: ${line.trim()}`);
-      assert.match(line, /never as a background agent/, `${d.name}: ${line.trim()}`);
-      assert.match(line, /word for word/, `${d.name}: its questions are relayed word for word: ${line.trim()}`);
-      assert.match(line, /`run_in_background: false`/, `${d.name}: the call sets run_in_background: false: ${line.trim()}`);
-    }
-    assert.doesNotMatch(d.text, /run_in_background: true|in the background\b(?! agent)/, `${d.name}: no background safety run`);
-  }
-  assert.ok(count >= 7, `every hand-off is checked (found ${count})`);
-  for (const name of ["today", "week"]) {
-    assert.match(steps(name).get(2)!, /unattended: ask nothing[^\n]*\n?[^\n]*node engine\/cli\.ts hold set/i, `${name}: unattended runs set the hold instead of asking`);
-  }
-  assert.match(claudeMd, /In an unattended run, ask nothing: set the hold with `node engine\/cli\.ts hold set`/);
 });
 
 test("today exits as already adjusted only when oplog done says so", () => {
@@ -384,27 +403,24 @@ test("today exits as already adjusted only when oplog done says so", () => {
 });
 
 test("setup writes every planned week-1 day from block draft and checks the count", () => {
-  const w1 = steps("setup").get(14)!;
-  inOrder(w1, ["every planned day of week 1", "`block draft`", "planned count", "**Check the count.**", "write it once more", "do not try again"], "setup step 14");
-  assert.match(steps("setup").get(5)!, /sleep_target_min/);
+  const w1 = steps("setup").get(7)!;
+  inOrder(w1, ["Every planned day of week 1", "`block draft`", "planned count", "**Check the count**", "write it once more", "do not try again"], "setup week 1");
+  assert.match(steps("setup").get(6)!, /Leave out `sleep_target_min`/);
   assert.match(steps("block").get(10)!, /compare the count of written days with the drafted days/);
 });
 
-test("athlete/.safety-pending is committed: not gitignored, and CLAUDE.md says so", () => {
-  const r = spawnSync("git", ["check-ignore", "-q", "athlete/.safety-pending"], { cwd: REPO });
-  assert.equal(r.status, 1, ".gitignore must not cover athlete/.safety-pending");
-  assert.match(claudeMd, /`athlete\/\.safety-pending` is committed/);
-  // The entry is a built-ins bootstrap; the commit check itself is in the body module.
-  const hook = readFileSync(join(REPO, ".claude/hooks/commit-check.body.ts"), "utf8");
-  assert.match(hook, /athlete\/\.safety-pending is committed like the other athlete files/);
+test("athlete/.urgent-stop is committed: not gitignored, and CLAUDE.md says so", () => {
+  const r = spawnSync("git", ["check-ignore", "-q", "athlete/.urgent-stop"], { cwd: REPO });
+  assert.equal(r.status, 1, ".gitignore must not cover athlete/.urgent-stop");
+  assert.match(claudeMd, /`athlete\/\.urgent-stop` is committed and pushed at once/);
 });
 
 // ---------- one adjustment kind a day, red days and the unattended block end ----------
 
 test("today step 8: no load progression on a day a proposal changed", () => {
   const loads = steps("today").get(8)!;
-  assert.match(loads, /Skip it when step 3 applied a proposal with a write for today/);
-  assert.match(skill("today").body, /An applied proposal for today is today's adjustment/);
+  assert.match(loads, /Skip it when step 3 changed today/);
+  assert.match(skill("today").body, /A proposal the athlete accepts for today is today's adjustment/);
 });
 
 test("today acts on the engine's patterns: a note for one day, a trim on the short pattern, recovery on aversion", () => {
@@ -428,44 +444,20 @@ test("check-in asks the optional want-to-train item with options and passes it t
   assert.match(steps("check-in").get(5)!, /\[--want-to-train <n>\]/);
 });
 
-test("week proposes a program change only on the deload signal: interactive asks, unattended opens a proposal PR", () => {
+test("week proposes a program change only on the deload signal: interactive asks, unattended logs it for the live session", () => {
   const review = steps("week").get(6)!;
   assert.match(review, /node engine\/cli\.ts readiness --date <today>/);
   assert.match(review, /`deload_signal: true`/);
   assert.match(review, /\*\*Interactive:\*\*[^\n]*Ask "A\) make next week a deload week, B\) plan a new block, C\) keep the plan"/);
-  assert.match(review, /\*\*Unattended:\*\* never write it\. Make a `new_block` proposal for an early deload, with no Tally write[^\n]*`block` skill's Unattended steps 4 to 9/);
-  assert.doesNotMatch(review, /3 or more days in the last 7 show all 3 categories/);
+  assert.match(review, /\*\*Unattended:\*\* never write it\. Plan the week as usual and write one log line: "- proposal for the next live session: early deload/);
 });
 
-test("an unattended block end drafts the block and opens a new_block proposal PR, with no Tally write", () => {
+test("an unattended block end writes one log line for the live session, with no Tally write and no block change", () => {
   const week4 = steps("week").get(4)!;
   assert.match(week4, /interactive, run the `block` skill/);
   assert.match(week4, /Unattended, follow the `block` skill's Unattended section/);
-  assert.doesNotMatch(week4, /commit, push and stop\. A new block needs/);
   const un = section(skill("block").body, "Unattended")!;
-  inOrder(
-    un,
-    [
-      "node engine/cli.ts hold status",
-      "node engine/cli.ts ids next --kind block",
-      "node engine/cli.ts block draft",
-      "`audit` skill",
-      "get_planned_workout",
-      '"kind": "new_block"',
-      "`base`",
-      "node engine/cli.ts proposals create",
-      "git switch -c proposal/<id>",
-      "node engine/cli.ts block write",
-      "athlete/block.yaml",
-      "node engine/cli.ts proposals approve-copy <id>",
-      "node engine/cli.ts push",
-      "node engine/cli.ts proposals open-pr <id>",
-      "git switch main",
-      "a new block is due: proposal <id>",
-    ],
-    "block Unattended",
-  );
-  assert.match(un, /No Tally write/);
+  inOrder(un, ["writes no Tally day and does not change `athlete/block.yaml`", '"- proposal for the next live session: a new block is due', "node engine/cli.ts push"], "block Unattended");
   assert.match(steps("block").get(1)!, /Unattended: follow the Unattended section/);
 });
 
@@ -478,22 +470,18 @@ test("launch review finding 5: today writes generic logger notes by default; det
   for (const g of ["Readiness note", "Adjusted for recovery", "Recovery day", "Rest day: see your coach repo", "Load progression"]) assert.ok(notes.includes(g), g);
   assert.match(notes, /Never put symptoms, body regions, pain scores, readiness values/);
   assert.match(notes, /consent\.logger_health_notes: true/);
-  // The decision step no longer puts the detailed reasons into Tally without consent.
   assert.doesNotMatch(today.body, /The reason line is `\[coach\] <decision_reasons>/);
-  assert.doesNotMatch(today.body, /`annotate` \(the hold reason\)/);
   assert.doesNotMatch(today.body, /the reason with its rule IDs in `notes`/);
-  const md = readFileSync(join(REPO, "CLAUDE.md"), "utf8");
-  assert.match(md, /generic note/);
-  assert.match(md, /consent\.logger_health_notes: true/);
+  assert.match(claudeMd, /generic note/);
+  assert.match(claudeMd, /consent\.logger_health_notes: true/);
 });
 
-test("launch review finding 5: setup's consent text is accurate and asks separately for detailed logger notes", () => {
-  const setup = skills.find((s) => s.name === "setup")!;
-  assert.doesNotMatch(setup.text, /no health data/i, "the old consent text said Tally gets no health data");
-  assert.match(setup.text, /Tally: your plans, your workout history, and a short coach note/);
-  assert.match(setup.text, /Detailed notes in Tally:[^\n]*A\) no, keep the notes generic \(recommended\), B\) yes/);
-  assert.match(setup.text, /consent\.logger_health_notes: false` \(A\) or `true` \(B\)/);
-  assert.match(readFileSync(join(REPO, "coach.example.yaml"), "utf8"), /logger_health_notes: false/);
+test("launch review finding 5 (v0.2): setup's one data question says Tally notes can hold readiness and pain scores; generic notes stay one click away", () => {
+  const plans = steps("setup").get(5)!;
+  assert.doesNotMatch(skill("setup").text, /no health data/i, "the old consent text said Tally gets no health data");
+  assert.match(plans, /"Your data goes to Anthropic \(Claude\), GitHub \(this private repo\) and Tally \(plans, history and coach notes, which can include readiness and pain scores\)\. OK\?"/);
+  assert.match(plans, /"Show details"[\s\S]*"Yes, but keep Tally notes generic"[\s\S]*`consent\.logger_health_notes: false`/);
+  assert.match(readFileSync(join(REPO, "coach.example.yaml"), "utf8"), /logger_health_notes: true/);
 });
 
 test("launch review finding 8: the README claims a timestamp only where the source pins one", () => {
@@ -501,14 +489,13 @@ test("launch review finding 8: the README claims a timestamp only where the sour
   assert.doesNotMatch(readme, /a link and a timestamp for each sourced rule/);
   assert.match(readme, /with a timestamp where the source pins one; rules marked approximate cite the episode only/);
   assert.match(readme, /Rules marked `policy` are the pack's own choices/);
-  // The premise: some sourced rules are approximate.
   assert.match(readFileSync(join(REPO, "methods/nine-adaptations/rules.yaml"), "utf8"), /precision: approximate/);
 });
 
-// ---------- eval re-run addendum B and C ----------
+// ---------- agents in the foreground; clickable questions ----------
 
 test("B1: every agent call in the skills runs in the foreground with run_in_background: false", () => {
-  const call = /\b(run|hand off to|hand any current pain to)\b[^\n]*the `(safety|method-expert|analyst)` agent/i;
+  const call = /\b(run|hand off to)\b[^\n]*the `(method-expert|analyst)` agent/i;
   let count = 0;
   for (const s of skills) {
     for (const line of s.text.split("\n").filter((l) => call.test(l))) {
@@ -516,96 +503,382 @@ test("B1: every agent call in the skills runs in the foreground with run_in_back
       assert.match(line, /`run_in_background: false`/, `${s.name}: ${line.trim()}`);
     }
   }
-  assert.ok(count >= 10, `every agent call is checked (found ${count})`);
-  assert.match(skills.find((s) => s.name === "audit")!.text, /Run the `method-expert` agent in the foreground \(`run_in_background: false`/);
-  assert.match(claudeMd, /`run_in_background: false`/);
-  assert.match(claudeMd, /Every other agent call runs in the foreground too/);
+  assert.ok(count >= 1, `every agent call is checked (found ${count})`);
+  assert.match(skills.find((s) => s.name === "audit")!.text, /run the `method-expert` agent in the foreground \(`run_in_background: false`/i);
+  assert.match(claudeMd, /Run every agent in the foreground \(`run_in_background: false`\)/);
 });
 
-test("C: the safety agent ends with a copy-exactly question block, and every hand-off pastes it as a quoted block", () => {
-  const agent = readFileSync(join(REPO, ".claude/agents/safety.md"), "utf8");
-  const output = agent.slice(agent.indexOf("## Output"));
-  assert.match(output, /end your output with this marked block/);
-  assert.match(output, /Questions for the athlete \(copy exactly\):\n1\. <question> <options/);
-  assert.match(output, /pastes the block word for word, as a quoted block, and does not reword it/);
-  const handoff = /(run|hand off to|hand any current pain to)[^\n]*the `safety` agent/i;
-  for (const d of [...skills.map((s) => ({ name: s.name, text: s.text })), { name: "CLAUDE.md", text: claudeMd }]) {
-    for (const line of d.text.split("\n").filter((l) => handoff.test(l) && /questions|word for word/.test(l))) {
-      if (/urgent-care text/.test(line)) continue;
-      assert.match(line, /paste its "Questions for the athlete \(copy exactly\):" block to the user word for word, as a quoted block: do not reword it, and add nothing that changes its meaning/, `${d.name}: ${line.trim()}`);
-    }
-  }
-  assert.match(claudeMd, /paste its "Questions for the athlete \(copy exactly\):" block/);
+test("clickable questions: AskUserQuestion when it is there, lettered text options without it", () => {
+  assert.match(claudeMd, /Use AskUserQuestion for clickable options when it is available; otherwise write the options as text\./);
+  const health = steps("setup").get(4)!;
+  inOrder(health, ["one AskUserQuestion call", "`multiSelect: true`", '"Is anything limiting your training now?"', '"Other" takes another region', "run the `safety` skill"], "setup health check");
+  assert.match(skill("setup").body, /Without AskUserQuestion \(print mode\)[^\n]*ask the same questions as text with lettered options/);
 });
 
-// ---------- P1 fix 3: clickable answers ----------
+// ---------- V1b fix round ----------
 
-test("P1 fix 3: the safety agent adds a questions JSON block after the copy-exactly block", () => {
-  const agent = readFileSync(join(REPO, ".claude/agents/safety.md"), "utf8");
-  const output = section(agent.slice(agent.indexOf("---\n", 4) + 4), "Output")!;
-  assert.ok(output.indexOf("Questions for the athlete (copy exactly):") < output.indexOf("fenced JSON block"), "the JSON block comes after the copy-exactly block");
-  for (const f of ["`id`", "`text`", "`options`", "`multi`", "`type`", "`choice`", "`score`", "at most 4", "give each letter that applies", "A per-side score is two questions, one for each side"]) {
-    assert.ok(output.includes(f), `the Output section names ${f}`);
+test("V1b fix 7: update restarts right after update --yes and runs nothing else; the rest runs in the new session", () => {
+  const st = steps("update");
+  assert.match(st.get(4)!, /node engine\/cli\.ts update --yes --to <to>/);
+  const restart = st.get(5)!;
+  assert.match(restart, /\*\*Restart first\*\* \(`restart_claude_code: true`\)\. Right after `update --yes`/);
+  assert.match(restart, /Run nothing else in this session: no `npm ci`, no hook install, no `config-check`, no tests, no push\. Step 6 runs in the new session\./);
+  for (const cmd of ["npm ci`.", "install-git-hooks", "config-check", "npm test", "node engine/cli.ts push"]) assert.ok(!restart.includes(`Run \`${cmd}`), `step 5 runs no ${cmd}`);
+  inOrder(st.get(6)!, ["In the new session after a restart", "Run `npm ci`", "node engine/cli.ts install-git-hooks", "node engine/cli.ts config-check", "Run `npm test`", "node engine/cli.ts push", "old hold or safety-check files"], "update step 6");
+  assert.match(st.get(1)!, /"Finish the update" after a restart: go straight to step 6/);
+  assert.match(String(skill("update").front.description), /"finish the update"/);
+});
+
+test("V1b fix 10: the safety screen with two regions: two handling questions, one shared multi-select side question, one warning-sign question", () => {
+  const ask = steps("safety").get(2)!;
+  inOrder(ask, ["**One handling question per region**", "**One side question, shared,**", "**One warning-sign question:**"], "safety step 2");
+  assert.match(ask, /Two regions: "Which side\?" \(`multiSelect: true`\) with "<Region A>: left", "<Region A>: right", "<Region B>: left", "<Region B>: right"; both sides of a region means both of its options are chosen\./);
+  assert.match(ask, /One region: "<Region>: which side\?" with "Left", "Right", "Both"/);
+  assert.match(ask, /Two regions are 4 questions at most: two handling questions, one side question, one warning-sign question\./);
+  assert.doesNotMatch(ask, /"<Region>: which side\?" with "Left", "Right", "Both", only when/, "no side question per region");
+});
+
+test("V1b fix 11: method asks one approval for the whole reviewed pack and ordinary fixes; audit and explain use their agents only for a long read", () => {
+  const method = skill("method");
+  assert.match(steps("method").get(5)!, /Ask once: "Write the whole pack\? A\) yes, B\) change it, C\) no"\. This one yes covers every file of the reviewed pack\./);
+  assert.match(steps("method").get(6)!, /Do not ask again per file\./);
+  assert.match(steps("method").get(7)!, /Fix every error yourself \(an ordinary fix/);
+  assert.doesNotMatch(method.text, /each after its own yes|write it after a yes|The guard asks/);
+  const audit = steps("audit").get(4)!;
+  assert.match(audit, /Read `methods\/<method>\/rules\.yaml`/);
+  assert.match(audit, /Optional, for a long read \(a whole block, or a new pack\): run the `method-expert` agent/);
+  assert.match(String(skill("audit").front.description), /the method-expert agent only for a long read/);
+  assert.match(steps("explain").get(7)!, /The analyst agent is optional, for a long read/);
+  assert.doesNotMatch(skill("explain").text, /Use the analyst agent for any number/);
+});
+
+// ---------- V2: setup v2 and Tally optional (docs/build/briefs/V2-setup-v2.md) ----------
+
+// ---------- the setup screens: walk the scripted answer paths (V2b fix 5) ----------
+
+type ScreenRow = { name: string; when: string; calls: number };
+
+/** The rows of setup's "## Screens" table. */
+function screenTable(): ScreenRow[] {
+  const sec = section(skill("setup").body, "Screens")!;
+  return sec
+    .split("\n")
+    .filter((l) => /^\| [A-Z]/.test(l) && !l.startsWith("| Screen |"))
+    .map((l) => l.split("|").map((c) => c.trim()))
+    .map((c) => ({ name: c[1], when: c[2], calls: Number(c[3]) }));
+}
+
+/** A scripted path: the facts and the athlete's answers that decide which screens appear. */
+type Path = { tally: boolean; tallySessions: number; painNotes: boolean; region: boolean; details: boolean; change: boolean; dayExists: boolean; history: "tally" | "csv" | "skip" | "summary" };
+
+/** Which screens a path meets, from each row's "Asked when" text; an unknown condition fails the test. */
+function screensFor(p: Path): string[] {
+  return screenTable()
+    .filter((r) => {
+      switch (r.when) {
+        case "always":
+          return true;
+        case "the Tally history has pain notes":
+          return p.tally && p.painNotes;
+        case "the athlete chooses a region in the health check":
+          return p.region;
+        case 'the athlete chooses "Show details"':
+          return p.details;
+        case 'the athlete chooses "Change something"':
+          return p.change;
+        case "a Tally day already exists on a week-1 date":
+          return p.tally && p.dayExists;
+        default:
+          throw new Error(`setup screen ${r.name}: unknown condition "${r.when}"`);
+      }
+    })
+    .flatMap((r) => Array(r.calls).fill(r.name));
+}
+
+const BASE_PATH: Path = { tally: false, tallySessions: 0, painNotes: false, region: false, details: false, change: false, dayExists: false, history: "skip" };
+
+test("V2b fix 5: setup reaches week 1 in at most 5 AskUserQuestion calls on the scripted paths: Tally, files, files with a CSV", () => {
+  const paths: Record<string, Path> = {
+    tally: { ...BASE_PATH, tally: true, tallySessions: 12, history: "tally" },
+    "tally with little history": { ...BASE_PATH, tally: true, tallySessions: 1, history: "skip" },
+    files: { ...BASE_PATH },
+    "files with a CSV": { ...BASE_PATH, history: "csv" },
+  };
+  for (const [name, p] of Object.entries(paths)) {
+    const calls = screensFor(p);
+    assert.deepEqual(calls, ["Basics", "Goal", "Health check", "Plans and data", "Week 1 approval"], name);
+    assert.ok(calls.length <= 5, `${name}: ${calls.length} calls`);
   }
-  // The example parses, and each question fits AskUserQuestion.
-  const example = /```json\n([\s\S]*?)\n```/.exec(output);
-  assert.ok(example, "an example JSON block");
-  const qs = JSON.parse(example[1]).questions as { id: string; header: string; text: string; options: string[]; multi: boolean; type: string }[];
-  assert.ok(qs.length > 0);
+  // The optional paths the athlete chooses add one screen each, and the skill says so.
+  assert.equal(screensFor({ ...BASE_PATH, details: true }).length, 6);
+  assert.equal(screensFor({ ...BASE_PATH, change: true }).length, 6);
+  assert.match(skill("setup").body, /"Show details", "I'll type a short summary", "Change something" and a limiting region are optional paths the athlete chooses/);
+  // Every screen in the table is tagged in the steps, every tag is in the table, and every question with options sits in a tagged step.
+  const st = section(skill("setup").body, "Steps")!;
+  const tags = [...st.matchAll(/screen: ([A-Z][A-Za-z0-9 ]+?)\)/g)].map((m) => m[1]);
+  assert.deepEqual([...new Set(tags)].sort(), screenTable().map((r) => r.name).sort());
+  for (const [n, text] of steps("setup")) {
+    if (/"[^"]+\?" with "/.test(text)) assert.match(text, /screen: /, `setup step ${n} asks a question but names no screen`);
+  }
+  for (const n of [1, 6, 8]) assert.match(steps("setup").get(n)!.split("\n")[0], /\(no question/, `step ${n} asks nothing`);
+  // The history question is part of the Plans and data screen, not a screen of its own.
+  const plans = steps("setup").get(5)!;
+  assert.match(plans.split("\n")[0], /one AskUserQuestion call, at most four questions; screen: Plans and data/);
+  assert.match(plans, /\*\*The history question\*\*, only when no Tally server answered or the Tally history has fewer than 2 sessions/);
+  assert.doesNotMatch(steps("setup").get(7)!, /"Do you have a record of your recent training\?"/);
+  assert.match(steps("setup").get(1)!, /\*\*The Tally history\.\*\*[^\n]*`get_workout_history`/);
+  assert.match(skill("setup").body, /Never ask for typed text\. Every question has options/);
+  assert.match(steps("setup").get(6)!, /`athlete\.name` from `setup-check` `name`[^\n]*`athlete\.timezone` from `timezone`/);
+});
+
+test("V2 setup basics and goal: units (prefilled from Tally), days, session length, equipment; the goal; the coach picks the weekdays", () => {
+  const basics = steps("setup").get(2)!;
+  for (const q of ['"Which units do you lift in?" with "lbs", "kg"', '"How many days a week can you train?" with "3", "4", "5"', '"How long is a session?"', '"What equipment do you have?"']) assert.ok(basics.includes(q), q);
+  assert.match(basics, /Leave it out when Tally knows the unit \(`weightUnitSource` is `settings` or `history`\)/);
+  const goal = steps("setup").get(3)!;
+  assert.match(goal, /"What is your main goal\?" with "All-around", "Strength", "Size", "Endurance"\. "Other" takes general health/);
+  assert.match(goal, /You pick the weekdays; ask nothing\.[^\n]*They show in the week 1 table/);
+});
+
+test("V2b fix 7: the health screen: three PAR-Q+ questions with None of these plus the regions; dizziness is not fainting", () => {
+  const h = steps("setup").get(4)!;
+  assert.match(h.split("\n")[0], /one AskUserQuestion call, four questions, each `multiSelect: true`; screen: Health check/);
+  const line = (q: string) => h.split("\n").find((l) => l.includes(q))!;
+  const qs = ['"Heart: do any of these apply?"', '"Dizziness or fainting: do any of these apply?"', '"Other health: do any of these apply?"'].map(line);
   for (const q of qs) {
-    assert.ok(q.options.length >= 2 && q.options.length <= 4, `${q.id}: 2 to 4 options`);
-    assert.ok(q.header.length <= 12, `${q.id}: header of 12 characters or less`);
-    assert.ok(["choice", "score"].includes(q.type) && typeof q.multi === "boolean" && q.text.endsWith("?"));
-    if (q.type === "score") assert.deepEqual(q.options, ["0 to 3", "4 to 6", "7 to 10"]);
+    assert.ok(q, "each PAR-Q+ question");
+    assert.match(q, /"None of these"\.$/, "each ends with None of these");
+    const n = (q.match(/"[^"]+"/g) ?? []).length - 1;
+    assert.ok(n >= 2 && n <= 4, `2 to 4 options (AskUserQuestion allows 4): ${n}`);
   }
-  // Every Ask question has options, so it can be clicked.
-  const ask = section(agent.slice(agent.indexOf("---\n", 4) + 4), "Ask")!;
-  for (const line of ask.split("\n").filter((l) => /^\d+\. /.test(l))) assert.match(line, /Options:|A\) /, `the question has options: ${line}`);
+  const all = qs.join("\n");
+  // The seven PAR-Q+ items, one option each.
+  for (const item of [/"A clinician said I have a heart condition or high blood pressure"/, /"Chest pain at rest, in daily life or when I exercise"/, /"Dizziness that makes me lose balance"/, /"Fainting in the past year"/, /"Another long-term condition"/, /"Prescribed medicine for a long-term condition"/, /"A bone, joint or soft-tissue problem that more activity could make worse"/, /"A clinician said I should only exercise with medical supervision"/]) assert.match(all, item);
+  assert.match(h, /"Is anything limiting your training now\?" with "Shoulder", "Low back", "Knee", "None"/);
+  // Only chest pain or fainting stops; dizziness gets the clearance sentence.
+  assert.match(h, /\*\*Chest pain or fainting\*\* \(only these two\)/);
+  inOrder(h, ["**Chest pain or fainting**", "`URGENT_CARE_TEXT`", 'node engine/cli.ts urgent set --term "chest pain" --source answer', "stop setup"], "urgent");
+  assert.doesNotMatch(h.split("\n").find((l) => l.includes("**Chest pain or fainting**"))!, /dizz/i);
+  assert.match(h, /\*\*Any other yes\*\* \(dizziness included; not "None of these"\): say once, "Get clearance from a clinician before you train hard\. I record what you report\."[^\n]*Setup goes on\./);
+  assert.match(h, /\*\*A region\*\*[^\n]*run the `safety` skill/);
+  assert.match(h, /Never ask for medication names/);
 });
 
-test("P1 fix 3: CLAUDE.md asks with AskUserQuestion (exact text and labels, at most 4 per call) and pastes the block without it", () => {
-  for (const s of [
-    "ask its questions with the AskUserQuestion tool, from its `questions` JSON block",
-    "at most 4 questions per call",
-    "the exact `text` as the question and the exact `options` as the labels",
-    "`multi: true` sets `multiSelect: true`",
-    "Do not reword them",
-    "A `score` question offers its bands (`0 to 3`, `4 to 6`, `7 to 10`)",
-    'the user can type an exact number through "Other"',
-    "when a band answer leaves a rule open, ask for the exact number",
-    "When AskUserQuestion is not available or fails (a print-mode run), paste its",
-  ]) {
-    assert.ok(claudeMd.includes(s), `CLAUDE.md says ${JSON.stringify(s)}`);
+test("V2 setup: no step numbers, template syntax, rule IDs or code paths in quoted athlete text", () => {
+  const steps_ = section(skill("setup").body, "Steps")!;
+  const quoted = [...steps_.matchAll(/"([^"\n]+)"/g)].map((m) => m[1]).filter((q) => q.includes(" ") || /^[A-Z]/.test(q));
+  assert.ok(quoted.length > 30, `the quoted athlete text was found (${quoted.length})`);
+  for (const q of quoted) {
+    assert.doesNotMatch(q, /[<>{}]|\$\{|\bstep \d|\bscreen \d|\bpart \d/i, `template syntax or a step number: "${q}"`);
+    assert.doesNotMatch(q, /\b[A-Z]{2}-[A-Z]{2,5}-\d{3}\b|\bL-\d{3}\b/, `a rule or limit ID: "${q}"`);
+    assert.doesNotMatch(q, /\b(engine|adapters|\.claude|methods|templates|athlete)\/|\.(ts|yaml|json)\b|`/, `a code path: "${q}"`);
   }
-  // Every skill hand-off that relays questions uses AskUserQuestion first, the pasted block as the fallback.
-  const handoff = /(run|hand off to|hand any current pain to)[^\n]*the `safety` agent/i;
-  let count = 0;
+  assert.match(skill("setup").body, /Athlete-facing text never shows template syntax, step numbers, rule IDs or code paths\./);
+  assert.match(section(skill("setup").body, "Resume")!, /"I have your basics and your goal\. Next: a short health check\."/);
+});
+
+test("V2b fix 6: plans and data: Tally without a logger question; else the connected tools by name (Files first, 4 options at most); allow-server for the chosen tool; the Tally account question bounded", () => {
+  const p = steps("setup").get(5)!;
+  assert.match(steps("setup").get(1)!, /\*\*Find other tools\.\*\*[^\n]*connected MCP servers that are not Tally[^\n]*Keep at most two, by their plain names\./);
+  assert.match(p, /\*\*Where plans go\*\*, only when no Tally server answered: "Where should your plans go\?" with "Files in this repo \(Recommended\)" first[^\n]*then "Tally"[^\n]*then each connected tool found in step 1 by its plain name, for example "Google Sheets"[^\n]*Four options at most\./);
+  assert.doesNotMatch(p, /"A tool you already use"/);
+  assert.match(p, /A connected tool: run `node engine\/cli\.ts allow-server --server <server>` for it, then `logger: other`/);
+  assert.match(p, /"Which Tally account holds your training\?" with at most four options, one per server, newest last session first/);
+  assert.match(p, /\*\*The data question\*\*, always\./);
+  assert.match(p, /"Yes", "Show details"/);
+  assert.match(p, /Tally, but no server answered: `logger: files` for now\./);
+  assert.match(p, /say "I can't reach that tool from here, so your plans go in a spreadsheet file in this repo for now\." and use `logger: files`\./);
+  // The history question: the found CSV files by name, a summary, skip.
+  assert.match(p, /"Do you have a record of your recent training\?" with one option per file from `history-files` \(at most two[^\n]*then "I'll type a short summary", then "Skip"\. "Other" takes a path/);
+  assert.match(steps("setup").get(1)!, /node engine\/cli\.ts history-files/);
+  assert.match(p, /A file: read it with the Read tool[^\n]*Do not keep a copy of the file\./);
+  assert.match(steps("setup").get(1)!, /node engine\/cli\.ts allow-server --server <server>` first \(then its tools need no permission prompt\), then call its `get_training_context`/);
+});
+
+test("V2 setup week 1: one method line; the week as a table; write it", () => {
+  const w = steps("setup").get(7)!;
+  assert.match(w, /"The coach plans from one method: fitness as nine qualities \(strength, size, endurance and others\), from Andy Galpin's public teaching\. You chose strength, so that gets the most sets\."/);
+  assert.match(w, /\*\*The table\.\*\* Show week 1 in one table/);
+  assert.match(w, /"Week 1 is ready\. Write it\?" with "Write it to Tally" \(with Tally\), "Write it to a spreadsheet file" \(with files\)[^\n]*"Change something"/);
+  assert.match(w, /\*\*Files:\*\*[^\n]*node engine\/cli\.ts plans write --input \.tmp\/coach\/week1\.json[^\n]*"Week 1 is in plans\/2026-W43\.csv in this folder\./);
+  assert.match(w, /\*\*Tally:\*\*[^\n]*`plan_workout_day` with `ifAbsent: true`[^\n]*`expectedVersion` and `replace: true`/);
+  assert.match(w, /\*\*Another tool:\*\*[^\n]*following its own instructions[^\n]*node engine\/cli\.ts logger set files/);
+  assert.match(steps("setup").get(8)!, /End with one line: "Later you can add recovery data \(Oura or Apple Health\), daily and weekly automation, injury history or assessments\. Just ask\."/);
+});
+
+test("V2 setup keeps Resume, and moved recovery data and automation out", () => {
+  const resume = section(skill("setup").body, "Resume")!;
+  assert.match(resume, /`athlete\/log\/setup\.md`/);
+  assert.match(resume, /`setup: <part> done <YYYY-MM-DD HH:MM> \(<answers>\)`/);
+  assert.match(resume, /skip every part already done/);
+  for (const part of ["checks", "basics", "goal", "health", "plans", "files", "week1", "finish"]) {
+    assert.match(section(skill("setup").body, "Steps")!, new RegExp(`setup: ${part} (done|stopped)`), part);
+  }
+  const setupText = skill("setup").text;
+  for (const gone of [/RemoteTrigger/, /install-launchd/, /oura\/auth\.ts/, /oura\/fetch\.ts/, /routine-body/]) assert.doesNotMatch(setupText, gone, `${gone} moved to a deferred skill`);
+});
+
+test("V2 deferred skills: recovery-data, automation and injury-history are short and self-contained", () => {
+  for (const name of ["recovery-data", "automation", "injury-history"]) {
+    const s = skill(name);
+    assert.ok(s.text.split("\n").length < 60, `${name} is short (${s.text.split("\n").length} lines)`);
+    for (const sec of ["Steps", "Writes", "Unattended"]) assert.ok(section(s.body, sec), `${name}: ## ${sec}`);
+    assert.match(section(s.body, "Unattended")!, /Never in an unattended run/);
+    assert.match(String(s.front.description), /Interactive only\./);
+  }
+  const rd = section(skill("recovery-data").body, "Steps")!;
+  assert.match(rd, /"Which recovery data do you have\?" with "Oura ring", "Apple Watch or another Apple Health device", "None: chat check-ins only"/);
+  assert.match(rd, /`! node adapters\/signals\/oura\/auth\.ts`/, "the athlete runs the Oura sign-in in the prompt");
+  assert.match(rd, /node adapters\/signals\/oura\/fetch\.ts --days 50/);
+  assert.match(rd, /apple-health-shortcut\/SHORTCUT\.md/);
+  const au = section(skill("automation").body, "Steps")!;
+  assert.match(au, /"How should the daily and weekly runs start\?" with "Cloud routines"[^\n]*"This Mac"[^\n]*"By hand"/);
+  assert.match(au, /With `logger: files` or `other`, say: "The scheduled runs need Tally for now\./);
+  for (const line of au.split("\n").filter((l) => /set `automation\.mode: (cloud|mac)`/.test(l))) assert.match(line, /success/);
+  const ih = section(skill("injury-history").body, "Steps")!;
+  assert.match(ih, /"Which regions had an injury or pain in the past year\?"/);
+  assert.match(ih, /\*\*Still bothers:\*\* run the `safety` skill/);
+  assert.match(ih, /\*\*Healed:\*\*[^\n]*no limit/);
+});
+
+test("V2 logger sweep: every skill that reads or writes plans follows coach.yaml logger; CLAUDE.md maps each job", () => {
+  for (const name of ["today", "week", "block", "audit", "explain", "check-in", "log"]) {
+    assert.match(skill(name).text, /`coach\.yaml logger`/, `${name} reads the logger`);
+  }
+  for (const name of ["today", "week", "block", "audit", "explain", "check-in"]) {
+    const where = section(skill(name).body, "Where plans live");
+    assert.ok(where, `${name}: a Where plans live section`);
+    assert.match(where, /CLAUDE\.md "Where plans live"/, `${name} points to the map`);
+  }
+  for (const name of ["today", "week", "block", "setup"]) assert.match(skill(name).text, /node engine\/cli\.ts plans write --input/, `${name} writes plans to files`);
+  for (const name of ["today", "week", "audit", "explain", "log"]) assert.match(skill(name).text, /node engine\/cli\.ts plans read --week/, `${name} reads plans from files`);
+  for (const name of ["today", "week", "block"]) assert.match(section(skill(name).body, "Writes")!, /`plans\/<YYYY>-W<ww>\.csv`, only through `node engine\/cli\.ts plans write`/, `${name}: Writes names the files`);
+  for (const name of ["today", "week", "block"]) assert.match(section(skill(name).body, "Where plans live")!, /`logger: other`[^\n]*by its own instructions/, `${name}: logger other`);
+  const where = section(`\n${claudeMd}`, "Where plans live")!;
+  assert.match(where, /\| Job \| `tally` \| `files` \(`plans\/<YYYY>-W<ww>\.csv`\) \| `other` \(a tool the athlete connected\) \|/);
+  for (const job of ["Read a planned day or week", "Read the logged history", "Write or change a day", "The athlete logs a session"]) assert.ok(where.includes(job), job);
+  assert.match(where, /With `other`, the urgent gate cannot see that tool's writes: under the urgent stop, write nothing to it\./);
+  assert.match(where, /With `other`, when the tool does not answer, say so in one line, run `node engine\/cli\.ts logger set files`, and use `files` from then on/);
+});
+
+test("V2 log skill: a chat report fills the done columns with one engine command; Tally users log in the app", () => {
+  const st = section(skill("log").body, "Steps")!;
+  assert.match(st, /`tally`: say "Log your sets in Tally at the gym; I read them from there\." Stop\./);
+  assert.match(st, /"Did all sets"[^\n]*`node engine\/cli\.ts plans done --date <date> --as-planned`/);
+  assert.match(st, /node engine\/cli\.ts plans done --date <date> --exercise "<name>" --sets <n> --reps <r> --load <x>/);
+  assert.match(st, /add `--felt "<their words, short>"`/);
+  assert.match(st, /\*\*Urgent and pain first\.\*\*/);
+  assert.match(String(skill("check-in").text), /run the `log` skill/);
+});
+
+test("V2 Tally mention: today, week and log run tally-mention in a live session and say its text once; never unattended", () => {
+  for (const name of ["today", "week", "log"]) {
+    assert.match(skill(name).text, /node engine\/cli\.ts tally-mention/, name);
+    assert.match(skill(name).text, /`mention: true`, say its `text` once/, name);
+  }
+  assert.match(section(skill("today").body, "Unattended")!, /Never run `tally-mention`/);
+  assert.match(claudeMd, /run `node engine\/cli\.ts tally-mention` in a live session/);
+});
+
+test("V2 worktrees: setup fast-forwards main at the end; update runs on the main checkout, then fast-forwards the branch, then the restart", () => {
+  const fin = steps("setup").get(8)!;
+  inOrder(fin, ["**Worktree**", "node engine/cli.ts worktree ff-main", "node engine/cli.ts push --branch main"], "setup finish");
+  assert.match(steps("setup").get(1)!, /\*\*Worktree\.\*\* When `worktree\.worktree` is true and `worktree\.branch` is not `main`, work on this branch\./);
+  const up = steps("update");
+  inOrder(up.get(1)!, ["node engine/cli.ts worktree status", "node engine/cli.ts commit --message", "node engine/cli.ts worktree ff-main", "node engine/cli.ts worktree main-checkout", "`main_checked_out_at`", ".tmp/coach/main-checkout", "--root <path>", "node engine/cli.ts update --check --root <path>"], "update check");
+  assert.doesNotMatch(up.get(1)!, /<main_checkout>/, "V2b fix 8: not the main checkout's folder, which may hold another branch");
+  inOrder(up.get(4)!, ["node engine/cli.ts update --yes --to <to>", "add `--root <path>`", "node engine/cli.ts worktree ff-branch", "node engine/cli.ts worktree remove-temp"], "update yes");
+  assert.match(up.get(5)!, /Right after `update --yes` \(in a worktree, right after `worktree ff-branch`\)/);
+  assert.match(up.get(6)!, /node engine\/cli\.ts push --branch main/);
+});
+
+/** True when one allow rule covers the command (a `*` matches any text, as in Claude Code's Bash rules). */
+function allowed(cmd: string, rules: string[]): boolean {
+  return rules.some((r) => {
+    const m = /^Bash\((.*)\)$/.exec(r);
+    if (!m) return false;
+    const re = new RegExp(`^${m[1].split("*").map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".*")}$`);
+    return re.test(cmd) || re.test(`${cmd} x`);
+  });
+}
+
+test("V2 allow rules: every engine and adapter command the everyday skills run is covered, so default mode does not prompt", () => {
+  const rules: string[] = JSON.parse(readFileSync(join(REPO, ".claude/settings.json"), "utf8")).permissions.allow;
+  // Rare, one-time flows that may prompt once: automation's routine and launchd installs, the method lint, an explicit help call.
+  const EXEMPT = /^node engine\/cli\.ts (routine-body|install-launchd|launchd-plist)\b/;
+  const missing: string[] = [];
   for (const s of skills) {
-    for (const line of s.text.split("\n").filter((l) => handoff.test(l) && /Questions for the athlete/.test(l))) {
-      count++;
-      assert.match(line, /ask its questions with the AskUserQuestion tool \(CLAUDE\.md hard rule 1\); without that tool, paste its "Questions for the athlete \(copy exactly\):" block/, `${s.name}: ${line.trim()}`);
+    for (const m of s.text.matchAll(/`(node (?:engine\/cli\.ts|adapters\/[\w/.-]+\.ts)[^`]*)`/g)) {
+      const cmd = m[1].replace(/<[^>]+>/g, "x").replace(/\|[a-z-]+/g, "").trim();
+      if (EXEMPT.test(cmd) || cmd.startsWith("! ")) continue;
+      if (/oura\/auth\.ts/.test(cmd)) continue; // the athlete runs the sign-in in the prompt
+      if (!allowed(cmd, rules)) missing.push(`${s.name}: ${m[1]}`);
     }
   }
-  assert.ok(count >= 8, `every hand-off is checked (found ${count})`);
+  assert.deepEqual(missing, []);
+  for (const r of ["Bash(node engine/cli.ts update --yes --to *)", "Bash(node engine/cli.ts update --check --root *)", "Bash(git pull --rebase)", "Edit(athlete/**)", "Write(plans/**)", "Write(coach.yaml)"]) assert.ok(rules.includes(r), r);
 });
 
-test("P1 fix 3: setup asks the injury regions with AskUserQuestion, multiSelect, then side and movements per region", () => {
-  const interview = steps("setup").get(5)!;
-  inOrder(interview, ["Injuries and pain now or in the past year", "AskUserQuestion, `multiSelect: true`", '"Other" takes a region not listed', "for each chosen region", "which side?", "which movements hurt?", "Without AskUserQuestion"], "setup step 5");
+test("V2b fix 4: the fallback from another tool switches coach.yaml logger to files, in one line to the athlete", () => {
+  const log = steps("log").get(5)!;
+  inOrder(log, ["When it does not answer, fall back to files", '"I can\'t reach your tool, so I\'m keeping your plans in a spreadsheet file in this repo from now on."', "node engine/cli.ts logger set files", "plans done"], "log fallback");
+  for (const name of ["today", "week", "block"]) assert.match(section(skill(name).body, "Where plans live")!, /When it does not answer, say so in one line, run `node engine\/cli\.ts logger set files`/, name);
+  assert.match(steps("setup").get(7)!, /When the tool stops answering, say so in one line, run `node engine\/cli\.ts logger set files`/);
+  assert.match(claudeMd, /With `other`, the engine reads no Tally cache/);
 });
 
-// ---------- P2 item 8 (eval G6): a denied AskUserQuestion is not a declined athlete ----------
-
-test("P2 item 8: an AskUserQuestion call with no answers means the athlete was not asked, in CLAUDE.md and every hand-off", () => {
-  const rule = "An AskUserQuestion call that returns no answers (denied, failed or not available) means the athlete was not asked; paste the copy-exactly block in the same reply";
-  const hardRule1 = claudeMd.split("\n").find((l) => l.startsWith("1. **Safety first.**")) ?? "";
-  assert.ok(hardRule1.includes(rule), "CLAUDE.md hard rule 1 states the rule");
+test("V2b fix 9: every skill that commits stops on a failed commit and says it in one line", () => {
   let count = 0;
   for (const s of skills) {
-    for (const line of s.text.split("\n").filter((l) => l.includes("AskUserQuestion"))) {
+    for (const line of s.text.split("\n").filter((l) => /node engine\/cli\.ts commit --message/.test(l))) {
       count++;
-      assert.ok(line.includes(rule), `${s.name}: ${line.trim().slice(0, 120)}`);
+      assert.match(line, /[Aa] nonzero exit: stop, and say in one line that the commit failed and why/, `${s.name}: ${line.trim().slice(0, 120)}`);
     }
   }
-  assert.ok(count >= 9, `every hand-off line is checked (found ${count})`);
+  assert.ok(count >= 12, `every commit line was checked (${count})`);
+  assert.match(claudeMd, /a nonzero exit is a failed commit: stop and say so in one line/);
+});
+
+test("V2b fix 10: today, week and log run tally-mention before the commit, then pull and push", () => {
+  for (const name of ["today", "week", "log"]) {
+    inOrder(section(skill(name).body, "Steps")!, ["node engine/cli.ts tally-mention", "node engine/cli.ts commit --message", "git pull --rebase", "node engine/cli.ts push"], name);
+  }
+});
+
+test("V3b fix 2: setup names the Write or Edit tool next to every file it writes, and forbids composed commands", () => {
+  const t = skill("setup").text;
+  assert.match(t, /\*\*No permission prompts\.\*\* Write and append files with the Write or Edit tool/);
+  for (const w of ["`;`", "`&&`", "pipes", "redirects", "`echo`", "`head`", "`grep`", "`node -e`", "never run `mkdir`"]) assert.ok(t.includes(w), w);
+  const appends = [...t.matchAll(/Append `setup: [^`]*`([^\n]*)/g)];
+  assert.ok(appends.length >= 8);
+  for (const m of appends) assert.match(m[1], /^ to `athlete\/log\/setup\.md` \(Edit tool\)/, m[0]);
+  assert.match(t, /Fill `athlete\/brief\.md` from the answers, with the Write tool/);
+  assert.match(t, /Write `coach\.yaml` last, with the Write tool/);
+  for (const f of ["draft.json", "loads.json", "week1.json"]) assert.match(t, new RegExp(`write \`\\.tmp/coach/${f.replace(".", "\\.")}\` with the Write tool`), f);
+  assert.match(t, /Keep its printed output \(no redirect\)/);
+});
+
+test("V3b fix 3: the safety skill changes the conflicting days without a second screen", () => {
+  const t = skill("safety").text;
+  const step5 = steps("safety").get(5)!;
+  assert.doesNotMatch(t, /Change those days now\?/);
+  assert.match(step5, /Plan around it, without asking/);
+  assert.match(step5, /ask no second question/);
+  assert.match(step5, /Under the urgent stop, change nothing/);
+  assert.match(step5, /`source` is `mcp` and `userModified` is false/);
+  assert.match(step5, /A day the athlete built or edited in the app: leave it, and say so in one line/);
+  assert.match(step5, /Say what changed in one line/);
+  assert.match(step5, /node engine\/cli\.ts limits check --input \.tmp\/coach\/week\.json/);
+});
+
+test("V3b fix 4: final messages are plain: no file paths, block, limit or rule ids", () => {
+  const style = readFileSync(join(REPO, "CLAUDE.md"), "utf8");
+  assert.match(style, /\*\*Final messages are plain\.\*\* What the athlete reads at the end of a skill has no file paths, no block, limit or rule ids, and no command names/);
+  assert.match(style, /"No limits yet\." instead of "`athlete\/limits\.yaml` has no limits"/);
+  assert.doesNotMatch(style, /Give the number, the reason and the rule ID\./);
+  const setup = skill("setup").text;
+  assert.match(setup, /\*\*The final message is plain\*\*[^\n]*no file paths, no block, limit or rule ids/);
+  assert.doesNotMatch(steps("today").get(10)!, /and the rule IDs/);
+  assert.match(steps("week").get(13)!, /plain words \(no rule IDs or file paths/);
+  assert.doesNotMatch(skill("safety").text, /\(L-0\d\d\)/);
 });

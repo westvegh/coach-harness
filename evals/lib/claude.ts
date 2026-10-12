@@ -94,6 +94,8 @@ export type ClaudeRun = {
   aborted: string | null;
   events: unknown[];
   stderr: string;
+  /** The session id from the init event (a follow-up turn resumes it). */
+  sessionId: string | null;
 };
 
 export type ClaudeOptions = {
@@ -112,6 +114,10 @@ export type ClaudeOptions = {
    * permission mode default. Without it: dontAsk, so every "ask" is a denial.
    */
   approver?: boolean;
+  /** A settings file passed with --settings (the scripted-answer hook). */
+  settings?: string;
+  /** A session id to resume (a follow-up turn of the same conversation). */
+  resume?: string;
   /** For tests: the command to run instead of `claude`. */
   command?: string[];
 };
@@ -133,8 +139,10 @@ export function claudeArgs(o: ClaudeOptions): string[] {
     o.mcpConfig,
     "--setting-sources",
     "project,local",
-    "--allowedTools",
-    ...o.allowedTools,
+    ...(o.settings ? ["--settings", o.settings] : []),
+    ...(o.resume ? ["--resume", o.resume] : []),
+    // The permission proxy passes no allowed tools: only the project's own allow rules apply.
+    ...(o.allowedTools.length ? ["--allowedTools", ...o.allowedTools] : []),
     "--disallowedTools",
     ...DISALLOWED,
   ];
@@ -165,7 +173,7 @@ export function runClaude(o: ClaudeOptions): Promise<ClaudeRun> {
   const started = Date.now();
   return new Promise((resolve) => {
     const child = spawn(cmd, [...pre, ...claudeArgs(o)], { cwd: o.cwd, env: childEnv(o), stdio: ["ignore", "pipe", "pipe"] });
-    const run: ClaudeRun = { tools: [], text: "", messages: [], isError: false, turns: null, costUsd: null, durationMs: 0, exitCode: null, aborted: null, events: [], stderr: "" };
+    const run: ClaudeRun = { tools: [], text: "", messages: [], isError: false, turns: null, costUsd: null, durationMs: 0, exitCode: null, aborted: null, events: [], stderr: "", sessionId: null };
     const byId = new Map<string, ToolUse>();
     let buf = "";
     let first = true;
@@ -183,6 +191,7 @@ export function runClaude(o: ClaudeOptions): Promise<ClaudeRun> {
         // Hook events (SessionStart) come before the init event; anything else is an abort.
         if (isHookEvent(ev)) return;
         first = false;
+        if (typeof ev?.session_id === "string") run.sessionId = ev.session_id;
         const why = preflight(ev, o.approver ? [MOCK_SERVER, APPROVER_SERVER] : [MOCK_SERVER]);
         if (why) return abort(`preflight: ${why}`);
       }

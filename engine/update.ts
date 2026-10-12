@@ -8,7 +8,8 @@ import { execFileSync } from "node:child_process";
 import { lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync, chmodSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { CoachError } from "./errors.ts";
-import { unattendedMarker } from "./hold.ts";
+import { unattendedMarker } from "./mode.ts";
+import { guardStubHooks, mergeUrgentGate } from "./settings-gate.ts";
 import { blobId, MANIFEST, manifestJson, parseTreeRules, validateManifest, type Manifest } from "./manifest.ts";
 
 export type Entry = { mode: string; blob: string };
@@ -479,6 +480,10 @@ export type ApplyResult = {
   npm_ci_needed: boolean;
   reinstall_git_hooks: boolean;
   restart_claude_code: boolean;
+  /** The template's urgent-gate entry was merged into the athlete's own .claude/settings.json. */
+  settings_merged: boolean;
+  /** Hooks in .claude/settings.local.json that point at the v0.1 guard stubs (harmless; reported). */
+  local_guard_hooks: string[];
 };
 
 const MANUAL_FIX = "To undo by hand, run `git reset --hard && git clean -fd` in a terminal outside Claude Code.";
@@ -513,6 +518,29 @@ export function applyUpdate(opts: UpdateOptions): ApplyResult {
     if (blobId(b, algo(e.blob)) !== e.blob) throw new CoachError("UPDATE_REFUSED", `${w}: the fetched bytes do not match the manifest`);
     bytes.set(w, b);
   }
+
+  // The urgent gate must stay registered (contracts §24): when the athlete keeps a
+  // customized .claude/settings.json, the template's urgent-gate entry is merged into it.
+  let settingsMerged = false;
+  const SETTINGS = ".claude/settings.json";
+  if (files[SETTINGS]) {
+    const templateSettings = (bytes.get(SETTINGS) ?? gitBytes(root, ["cat-file", "blob", files[SETTINGS].blob])).toString("utf8");
+    const effective = bytes.get(SETTINGS)?.toString("utf8") ?? (existsSync(join(root, SETTINGS)) ? readFileSync(join(root, SETTINGS), "utf8") : "{}");
+    let merged: string | null;
+    try {
+      merged = mergeUrgentGate(effective, templateSettings);
+    } catch (e) {
+      throw new CoachError("UPDATE_REFUSED", `cannot merge the urgent-gate hook into ${SETTINGS}: ${(e as Error).message}`);
+    }
+    if (merged !== null) {
+      bytes.set(SETTINGS, Buffer.from(merged));
+      if (!writes.includes(SETTINGS)) writes.push(SETTINGS);
+      writes.sort();
+      settingsMerged = true;
+    }
+  }
+  const localSettings = join(root, ".claude/settings.local.json");
+  const localGuardHooks = guardStubHooks(existsSync(localSettings) ? readFileSync(localSettings, "utf8") : null);
 
   // Hook safety: every hook entry file the settings name must exist after the update.
   const deletes = new Set(p.plan.delete);
@@ -606,6 +634,8 @@ export function applyUpdate(opts: UpdateOptions): ApplyResult {
     npm_ci_needed: changed.includes("package-lock.json"),
     reinstall_git_hooks: changed.some((c) => c.startsWith("git-hooks/")),
     restart_claude_code: changed.some((c) => c.startsWith(".claude/")),
+    settings_merged: settingsMerged,
+    local_guard_hooks: localGuardHooks,
   };
 }
 

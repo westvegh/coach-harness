@@ -12,7 +12,7 @@ The view comes from Dr. Andy Galpin's public teaching, mainly his six-part guest
 
 - Adults who want all-round fitness: strong, muscular enough, fit for hard efforts and for long easy ones.
 - People who train 3 to 5 days a week, with or without a coach.
-- It is not a sport-specific peaking plan, a rehabilitation program or a medical protocol. Pain, injury and health conditions belong with a clinician. The harness's safety path stops training writes when pain is reported.
+- It is not a sport-specific peaking plan, a rehabilitation program or a medical protocol. Pain, injury and health conditions belong with a clinician. The coach loads a painful region only as the athlete chooses, and the harness stops all training changes on urgent warning signs.
 
 ## How to use it
 

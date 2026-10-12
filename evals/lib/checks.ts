@@ -1,6 +1,12 @@
 // Pure helpers for scenario checks: they read RunArtifacts and never the wording of the
 // model's answer, only the state it left behind.
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { parse } from "yaml";
+import { call as mockCall, readState, versionOf, writeState, type MockState } from "../mock-tally/client.ts";
+import { parseCsv } from "../../engine/plans-files.ts";
 import { loadTaxonomy, classify } from "../../engine/taxonomy.ts";
 import type { Taxonomy } from "../../engine/types.ts";
 import { REPO } from "./instance.ts";
@@ -93,4 +99,125 @@ export function patternsOf(e: { exerciseId?: string; name?: string }) {
 /** Files created or changed during the run under a folder. */
 export function changedUnder(a: RunArtifacts, prefix: string): string[] {
   return Object.keys(a.after).filter((p) => p.startsWith(prefix) && a.after[p] !== null && a.after[p] !== a.before[p] && !p.endsWith(".gitkeep"));
+}
+
+// ---------------------------------------------------------------------------
+// v0.2 friction and limits helpers.
+// ---------------------------------------------------------------------------
+
+/** The AskUserQuestion screens of a run (or of tool uses from `fromTool` on). */
+export function screens(a: RunArtifacts): NonNullable<RunArtifacts["screens"]> {
+  return a.screens ?? [];
+}
+
+/** The AskUserQuestion calls the model made, with their index in a.tools. */
+export function askCalls(a: RunArtifacts): { i: number; t: ToolUse }[] {
+  return a.tools.map((t, i) => ({ i, t })).filter(({ t }) => t.name === "AskUserQuestion");
+}
+
+/** The first tool use that changed a file (Write, Edit or a Bash command naming it), or -1. */
+export function firstWriteTo(a: RunArtifacts, rel: string): number {
+  const name = rel.split("/").pop()!;
+  return a.tools.findIndex((t) => {
+    const i = t.input ?? {};
+    if (["Write", "Edit", "MultiEdit"].includes(t.name)) return typeof i.file_path === "string" && i.file_path.endsWith(rel);
+    return t.name === "Bash" && typeof i.command === "string" && i.command.includes(name) && /(>|\btee\b|\bcp\b|\bmv\b|\bsed\b|writeFile)/.test(i.command);
+  });
+}
+
+/** Agent or Task calls (v0.2 flows run no subagent). */
+export const agentCalls = (a: RunArtifacts) => a.tools.filter((t) => t.name === "Agent" || t.name === "Task");
+
+/**
+ * A command the coach asked the athlete to type: a `! <cmd>` line, or "type|paste|enter|run
+ * this" followed by a node, npm or git command in backticks.
+ */
+export function typedCommandAsked(text: string): string | null {
+  const m = /(^|\n)\s*!\s*(node|npm|git)\b[^\n]*/.exec(text) ?? /\b(type|paste|enter|run this|run the command|you run|please run|you can run|you need to run)\b[^\n]{0,80}`[^`]*\b(node|npm|git)\b[^`]*`/i.exec(text);
+  return m ? m[0].trim() : null;
+}
+
+/** A mock Tally row as an engine DayPlan (lbs unless the row says otherwise). */
+export function mockDayPlan(date: string, row: any): any {
+  const ex = (row?.exercises ?? []).map((e: any) => ({
+    exerciseId: typeof e.exerciseId === "string" ? e.exerciseId : null,
+    name: String(e.name ?? ""),
+    muscle: e.muscle ?? null,
+    unit: e.weightUnit ?? row.weight_unit ?? "lbs",
+    sets: Array.from({ length: Number(e.suggestedSets ?? 0) }, () => ({ reps: e.suggestedReps ?? null, ...(typeof e.suggestedWeight === "number" ? { weight: e.suggestedWeight } : {}) })),
+  }));
+  return { date, dayName: row?.day_name, status: row?.status === "skipped" ? "skipped" : "planned", source: row?.source ?? "mcp", userModified: !!row?.user_modified, exercises: ex };
+}
+
+export type LimitFinding = { limit: string; region: string; rule: string; kind: string; date?: string; exercise?: string; detail: string };
+
+/**
+ * Runs `node engine/cli.ts limits check` (the repo's engine) on the given days against the
+ * given limits.yaml text. Returns its findings.
+ */
+export function limitsCheck(days: unknown[], limitsYaml: string): { ok: boolean; findings: LimitFinding[] } {
+  const dir = mkdtempSync(join(tmpdir(), "coach-limits-check-"));
+  try {
+    writeFileSync(join(dir, "days.json"), JSON.stringify({ days }));
+    writeFileSync(join(dir, "limits.yaml"), limitsYaml);
+    const out = execFileSync(process.execPath, [join(REPO, "engine/cli.ts"), "limits", "check", "--input", join(dir, "days.json"), "--file", join(dir, "limits.yaml"), "--root", REPO], { encoding: "utf8" });
+    return JSON.parse(out);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** The rows of a plans/ week file (header names as keys). */
+export function parseCsvRows(text: string): Record<string, string>[] {
+  const rows = parseCsv(text);
+  const [head, ...rest] = rows;
+  if (!head) return [];
+  return rest.map((cells) => Object.fromEntries(head.map((h, i) => [h.replace(/^﻿/, ""), cells[i] ?? ""])));
+}
+
+/** The assistant text of turn `n` (0 is the prompt), from the turn records. */
+export function turnText(a: RunArtifacts, n: number): string {
+  const t = a.turns ?? [];
+  const msgs = a.messages ?? [];
+  const from = t[n]?.firstMessage ?? 0;
+  const to = t[n + 1]?.firstMessage ?? msgs.length;
+  return msgs.slice(from, to).map((m) => m.text).join("\n");
+}
+
+/**
+ * Replays the run's successful Tally writes, in order, on the seeded mock state (offline:
+ * one mock process per call). Each `expectedVersion` is replaced with the replayed row's
+ * current version, since versions carry the original write times. Returns the stored days
+ * after each write, so a check can judge every intermediate state, not only the last one,
+ * and `mismatch` when the replay does not end where the run did.
+ */
+export function replayWrites(a: RunArtifacts): { steps: { call: number; tool: string; days: Record<string, any> }[]; errors: string[]; mismatch: string[] } {
+  const dir = mkdtempSync(join(tmpdir(), "coach-replay-"));
+  const state = join(dir, "state.json");
+  const steps: { call: number; tool: string; days: Record<string, any> }[] = [];
+  const errors: string[] = [];
+  try {
+    writeState(state, { ...a.seed, calls: [], operations: [] } as MockState);
+    const opts = { state, t2: true };
+    a.mock.calls.forEach((c, i) => {
+      if (!MUTATIONS.includes(c.tool) || !wroteSomething(c)) return;
+      const args = JSON.parse(JSON.stringify(c.args ?? {}));
+      const rows = readState(state).days;
+      const fix = (o: any) => {
+        if (o && typeof o === "object" && "expectedVersion" in o && rows[o.date]) o.expectedVersion = versionOf({ id: rows[o.date].id, updated_at: rows[o.date].updated_at });
+      };
+      fix(args);
+      if (Array.isArray(args.days)) args.days.forEach(fix);
+      const r = mockCall(opts, c.tool, args);
+      if (r.isError) errors.push(`call ${i} ${c.tool} ${String(args.date ?? "")}: ${r.text.slice(0, 160)}`);
+      steps.push({ call: i, tool: c.tool, days: readState(state).days });
+    });
+    const final = readState(state).days;
+    const shapeOf = (d: any) => JSON.stringify((d?.exercises ?? []).map((e: any) => [e.name, e.suggestedSets, e.suggestedWeight ?? null]));
+    const dates = new Set([...Object.keys(final), ...Object.keys(a.mock.days)]);
+    const mismatch = [...dates].filter((d) => shapeOf(final[d]) !== shapeOf((a.mock.days as Record<string, any>)[d]));
+    return { steps, errors, mismatch };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }

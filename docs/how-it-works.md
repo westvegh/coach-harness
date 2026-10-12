@@ -1,13 +1,13 @@
 # How it works
 
-coach-harness turns Claude Code into a strength and conditioning coach. Claude plans your training from a method pack, changes each day's session from your recovery data, and writes the plan to the app where you log your sets. Code, not the model, makes every number and checks every write.
+coach-harness turns Claude Code into a strength and conditioning coach. Claude plans your training from a method pack, follows your limits, changes each day's session from your recovery data, and writes the plan where you keep it: a spreadsheet file in your repo, Tally on your iPhone, or a tool you already use. The engine makes every number. Code enforces two things only: the urgent stop and privacy. The coach's judgment, guided by the method pack and the skills, does the rest, and git records every change.
 
 This page explains the parts. The exact formats are in [contracts.md](contracts.md).
 
 ## The loop
 
 ```
-recovery signals ─► readiness ─► method rules ─► change ─► guard ─► logger (your phone)
+recovery signals ─► readiness ─► method rules ─► change ─► limits ─► your plans
      ▲                                                                   │
      └──────────────── logged sessions (performance) ◄───────────────────┘
 ```
@@ -15,8 +15,8 @@ recovery signals ─► readiness ─► method rules ─► change ─► guard
 1. **Signals.** Recovery data comes in each morning: sleep, HRV and resting heart rate from a wearable, and a short check-in from you.
 2. **Readiness.** The engine scores three categories: wearable, subjective and performance.
 3. **Method rules.** The method pack says what to do with that score: keep the session, add a note, trim it, or swap to a recovery day.
-4. **Guard.** Before any write, the guard rebuilds the result and checks it against your limits and the method's hard rules.
-5. **Logger.** The plan goes to the app on your phone. You log your sets there. Your logged sessions become the performance signal for the next day.
+4. **Limits.** The coach reads `athlete/limits.yaml` before every plan and checks the planned week with `node engine/cli.ts limits check`. It fixes every conflict before it writes.
+5. **Your plans.** The plan goes where your plans live (see "Where plans live"). You log your sets there, or tell the coach in chat. Your logged sessions become the performance signal for the next day.
 
 Your history stays in files in your own private git repository.
 
@@ -76,35 +76,37 @@ The engine classifies every change to a day (`engine/classify.ts`). The model's 
 - **Small changes** apply on their own: a trim, a recovery swap, a load step inside the cap, a move inside the week, a note, a session from the current block.
 - **Big changes** need you: a new exercise, more volume than planned, a change to a day you built or edited yourself, a change to your limits, a new block or a new method.
 
-In a live session, the coach asks you. In a scheduled run, it opens a pull request in your repo. Merging the pull request is the approval.
+In a live session, the coach asks you, with clickable options. A scheduled run makes no big change: it writes one line in your athlete log ("proposal for the next live session: …"), and the coach offers it the next time you talk to it.
 
-### The guard
+### What code enforces, and what it does not
 
-Claude Code hooks in `.claude/hooks/` run on every tool call that matters. The guard fails closed: any error, missing file or timeout blocks the write.
+Code enforces two rules. Nothing else blocks the coach.
 
-Before every write to your logger, the guard:
+1. **The urgent stop.** When you name an urgent warning sign (chest pain, fainting, new numbness or weakness, and the other terms in `engine/safety-terms.yaml`), the message hook writes `athlete/.urgent-stop` and commits it, and the coach pushes it next (a cloud run sees it after that push). While the stop exists, code blocks: every MCP tool, on any server, whose name ends in `plan_workout_day`, `plan_workout_range`, `update_planned_workout`, `move_planned_workout`, `skip_planned_workout`, `delete_planned_workout`, `update_user_profile` or `update_training_limits`; Edit, Write and MultiEdit under `plans/`; and `plans write` and `plans done`. Code also refuses `urgent clear` in a scheduled run and without a reason. The rest is the coach's instruction only: no change in a tool you connected yourself, no plan change through the shell, and asking you before `urgent clear`. Only your answer in a live session should clear it: "A clinician has seen me about it" or "It was a false alarm".
+2. **Privacy.** A git pre-push hook refuses a push when the remote repository is public or its visibility cannot be checked. `node engine/cli.ts push` checks the same before it pushes.
 
-1. checks that the affected days were read in this session in the last 15 minutes, and that the write carries the version it read;
-2. rebuilds the day and the week as they will be after the write;
-3. checks the result against safety holds, your limits, the method's hard rules (for example the volume cap and the top-set cap) and the change class.
+Code does not check your plans. The coach follows your limits and the method's rules because `CLAUDE.md`, the skills and the method pack tell it to, and the `audit` skill reports any conflict. The coach can still misread a limit. The evals in `evals/` measure how often it follows them, and git and your logger show every change.
 
-The guard also protects key files from edits by the model: your limits, the hold file, the method pack, the engine, the adapters and the hooks. You change those files yourself, or the coach proposes the change and asks you.
+### Where plans live
 
-### The logger
+`coach.yaml logger` says where your plans live:
 
-A logger adapter (`adapters/loggers/<name>/`) connects the coach to the app that holds your plan and your workout log. It lists the app's tools and has one rebuild function per write tool, so the guard can compute the result before the write. [Tally](tally.md) is the reference logger.
+- **`files`** (the default without Tally): one spreadsheet file per week, `plans/<YYYY>-W<ww>.csv`, in your private repo. The coach fills the plan columns. You fill the `done_` columns in Numbers, Excel or Google Sheets, or you tell the coach in chat ("did all sets, last set of squats felt heavy") and it fills them.
+- **`tally`**: [Tally](tally.md) on your iPhone, through its MCP tools. You log sets at the gym, and the coach reads them back.
+- **`other`**: a tool you already use and connected to Claude Code (for example Google Sheets or Notion). The coach follows that tool's own instructions. When the tool does not answer, the coach uses files.
+
+You can switch at any time ("move my plans to Tally"). With files, the coach mentions Tally once, after the third session you log by hand, and never again.
 
 ### Memory
 
 Your athlete files live in `athlete/` in your private repo:
 
 - `brief.md`: your goals, history, schedule and equipment;
-- `limits.yaml`: your injury limits;
+- `limits.yaml`: your limits (a ban, or a cap on sets or load, for a body region);
 - `block.yaml`: the current training block;
-- `log/YYYY-MM.md`: one entry for each change, with the readiness, the rule IDs and the result;
-- `proposals/`: big changes that wait for your yes.
+- `log/YYYY-MM.md`: one entry for each change, with the readiness, the rule IDs and the result, and any proposal for the next live session.
 
-The coach commits after each change. Git is the record.
+With `logger: files`, your weekly plans are in `plans/`. The coach commits after each change, and a Stop hook commits any changed file under `athlete/`, `plans/` and `coach.yaml` that is left. So git records every change to `athlete/`, `plans/` and `coach.yaml`. With Tally, each write gets a summary line in the athlete log; the Tally day itself is not in git. A change in another tool you connected is not recorded in git.
 
 ## Updates
 
@@ -112,13 +114,15 @@ Your repo is a copy of the template with no link back to it. Each release ships 
 
 ## Safety
 
-A hook reads every message you send. When it finds a pain word or an urgent warning sign, it pauses training changes until you answer a few questions. A hold for a body region blocks only the exercises that load that region. A hold with no region allows only notes, rest and recovery work. Scheduled runs can never clear a hold.
+When you mention pain or an injury, the coach asks one screen of clickable questions: how to handle the region (train normally, go light and build back, or avoid loading it for now), the side, and a short warning-sign check. It writes the limit you chose. When you say it is better, it asks one question and removes or loosens the limit.
+
+A hook reads every message you send for urgent warning signs only. An urgent sign starts the urgent stop (see above). A scheduled run can never clear it.
 
 The coach is not medical advice. See [safety-and-privacy.md](safety-and-privacy.md).
 
 ## Automation
 
-You choose one of three modes during setup:
+After setup, say "automate it" to choose one of three modes:
 
 | Mode | What runs | Notes |
 |---|---|---|
@@ -126,4 +130,6 @@ You choose one of three modes during setup:
 | Mac | launchd runs `claude -p` on your Mac each morning and on Sunday. | Needed for Oura. The Mac must be awake. |
 | Cloud | Claude Code cloud routines run each morning and on Sunday. | Needs a Claude plan with routines. Reads Apple Health through the Shortcut file. |
 
-A scheduled run is unattended: it asks no questions, makes only small changes, and opens a pull request for big ones. The daily run checks today's session once in a morning window. The weekly run plans next week. The details are in `automation/routine.md` (cloud) and `automation/launchd/README.md` (Mac).
+The scheduled runs need Tally for now. With `logger: files` or `other`, run the coach by hand: "how should I train today?" each morning and "plan next week" on Sunday.
+
+A scheduled run is unattended: it asks no questions, makes only small changes, and writes each big change as a log line for the next live session. The daily run checks today's session once in a morning window. The weekly run plans next week. The details are in `automation/routine.md` (cloud) and `automation/launchd/README.md` (Mac).

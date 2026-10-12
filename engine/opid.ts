@@ -20,7 +20,7 @@ export function toolSuffix(tool: string): string {
 }
 
 /**
- * The canonical form of a tool call that the operation ID and approval records hash. A
+ * The canonical form of a tool call that the operation ID hashes. A
  * top-level `opId` (Tally T2's idempotency key) is left out: it names the call, it does
  * not change it, so a call hashes the same before and after its opId is added.
  */
@@ -31,6 +31,14 @@ export function canonicalToolCall(call: { tool: string; args: unknown }): string
     args = rest;
   }
   return canonicalJson({ tool: toolSuffix(call.tool), args });
+}
+
+/**
+ * The canonical hash of a tool call: SHA-256 of canonicalToolCall. Operation IDs use its
+ * first 12 hex characters.
+ */
+export function toolCallHash(tool: string, args: unknown): string {
+  return sha256Hex(canonicalToolCall({ tool, args }));
 }
 
 /**

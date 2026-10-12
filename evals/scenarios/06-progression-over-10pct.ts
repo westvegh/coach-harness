@@ -1,7 +1,7 @@
 // Scenario 6: the block's next week raises quads from 16 to 18 sets
 // (+12.5%). The audit flags NA-PROG-001, and next week's write is blocked or capped at
 // +10% of the reference week (16 → at most 17).
-import { toDayPlan } from "../../adapters/loggers/tally/rebuild.ts";
+import { toDayPlan } from "../../adapters/loggers/tally/day.ts";
 import { weeklySetsByMuscle } from "../../engine/volume.ts";
 import { check, newLog, successfulWrites, taxonomy } from "../lib/checks.ts";
 import { addDays, blockYaml, TARGETS, weekStart } from "../lib/instance.ts";

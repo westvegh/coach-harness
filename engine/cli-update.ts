@@ -7,7 +7,7 @@ import { execFileSync } from "node:child_process";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { CoachError } from "./errors.ts";
-import { unattendedMarker } from "./hold.ts";
+import { unattendedMarker } from "./mode.ts";
 import { isGithubSource, MANIFEST } from "./manifest.ts";
 
 function out(value: unknown): void {
@@ -67,18 +67,27 @@ export async function cmdUpdate(argv: string[]): Promise<number> {
   return 0;
 }
 
-/** Loads coach.yaml with this engine (run it in a new process after an update). */
+/**
+ * Loads coach.yaml with this engine (run it in a new process after an update), and checks
+ * that .claude/settings.json registers the urgent gate with onFailure: block. Hooks in
+ * .claude/settings.local.json that point at the v0.1 guard stubs are reported as notes.
+ */
 export async function cmdConfigCheck(argv: string[]): Promise<number> {
   const { values } = parseArgs({ args: argv, strict: true, options: { root: { type: "string" } } });
   const root = resolve(values.root ?? ".");
-  const { loadConfig } = await import("./config.ts");
+  const [{ loadConfig }, { guardStubHooks, urgentGateProblems }, { existsSync, readFileSync }] = await Promise.all([import("./config.ts"), import("./settings-gate.ts"), import("node:fs")]);
+  const read = (rel: string) => (existsSync(join(root, rel)) ? readFileSync(join(root, rel), "utf8") : null);
+  const problems: string[] = [];
+  let message: string | undefined;
   try {
     loadConfig(join(root, "coach.yaml"));
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    out({ ok: false, problems: msg.split("\n").map((l) => l.replace(/^\s*-\s*/, "").trim()).filter((l) => l !== "" && !/is invalid:$/.test(l)), message: msg });
-    return 1;
+    message = e instanceof Error ? e.message : String(e);
+    problems.push(...message.split("\n").map((l) => l.replace(/^\s*-\s*/, "").trim()).filter((l) => l !== "" && !/is invalid:$/.test(l)));
   }
-  out({ ok: true, problems: [] });
-  return 0;
+  problems.push(...urgentGateProblems(read(".claude/settings.json")));
+  const local = guardStubHooks(read(".claude/settings.local.json"));
+  const notes = local.length ? [`.claude/settings.local.json still runs the v0.1 guard stubs (harmless; they allow everything): ${local.join(", ")}`] : [];
+  out({ ok: problems.length === 0, problems, notes, ...(message ? { message } : {}) });
+  return problems.length === 0 ? 0 : 1;
 }

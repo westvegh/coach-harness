@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// Hook latency bench (docs/contracts.md §20 item 27). Spawns each guard hook as Claude Code does (`node
+// Hook latency bench (docs/contracts.md §20 item 27). Spawns each hook as Claude Code does (`node
 // <hook>.ts`, JSON on stdin) and prints the median wall time of N runs per case, against
-// the targets. Usage:
+// the targets. v0.2: the urgent gate on every Edit, Write and plan write, the v0.1 guard
+// stubs, session-context and safety-detect. Usage:
 //   node scripts/bench-hooks.mjs [--repo <checkout>] [--runs 10] [--check]
 // --repo runs the hooks of another checkout (with its own node_modules), for a
 // before/after comparison. --check exits 1 when a target is missed.
@@ -25,14 +26,13 @@ function git(dir, ...args) {
   execFileSync("git", args, { cwd: dir, stdio: "ignore", env: { ...process.env, GIT_AUTHOR_NAME: "b", GIT_AUTHOR_EMAIL: "b@b", GIT_COMMITTER_NAME: "b", GIT_COMMITTER_EMAIL: "b@b" } });
 }
 
-/** A temporary instance: with `coach`, coach.yaml, limits, hold, methods, a snapshot and a git repo. */
+/** A temporary instance: with `coach`, coach.yaml, limits, methods, a snapshot and a git repo. */
 function instance(coach) {
   const dir = mkdtempSync(join(tmpdir(), "coach-bench-"));
   mkdirSync(join(dir, "athlete"), { recursive: true });
   if (coach) {
     cpSync(join(HERE, "coach.example.yaml"), join(dir, "coach.yaml"));
     cpSync(join(HERE, "templates/athlete/limits.yaml"), join(dir, "athlete/limits.yaml"));
-    cpSync(join(HERE, "templates/athlete/hold.yaml"), join(dir, "athlete/hold.yaml"));
     cpSync(join(HERE, "methods"), join(dir, "methods"), { recursive: true });
   }
   writeFileSync(join(dir, ".gitignore"), "athlete/.cache/\n");
@@ -55,38 +55,33 @@ function median(xs) {
   return s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2;
 }
 
-const UNATTENDED = { COACH_UNATTENDED: "1" };
 const bare = instance(false);
 // The floor for a hook: settings.json runs `node <hook>.ts`, and any .ts file loads Node's
 // type stripper (about 35 ms) before a line runs.
 const floorTs = join(bare, "floor.ts");
 writeFileSync(floorTs, "const x: number = 0;\nexport { x };\n");
 const athlete = instance(true);
-// The same instance with an active regional hold, for the session-start row (P3).
-const held = instance(true);
-writeFileSync(join(held, "athlete/hold.yaml"), "active: true\nset_at: '2026-10-13T08:00:00-07:00'\nreason: bench fixture\nregions: [left-shoulder]\nset_by: safety-agent\n");
+// The same instance under an urgent stop.
+const stopped = instance(true);
+writeFileSync(join(stopped, "athlete/.urgent-stop"), JSON.stringify({ version: 1, at: NOW, terms: ["chest pain"], sources: ["chat"] }));
 const trim = { date: D, expectedVersion: v(`r-${D}`, "t0"), operations: [{ op: "modify", target: { exerciseId: "Barbell_Bench_Press" }, fields: { suggestedSets: 2 } }] };
 const tallyWrite = { session_id: SESSION, hook_event_name: "PreToolUse", tool_name: "mcp__claude_ai_Tally_Workout__update_planned_workout", tool_input: trim, tool_use_id: "toolu_bench" };
 const edit = (root) => ({ session_id: SESSION, tool_name: "Edit", tool_input: { file_path: join(root, "docs/notes.md"), old_string: "a", new_string: "b" } });
-const bash = (command) => ({ session_id: SESSION, tool_name: "Bash", tool_input: { command } });
+
+const prompt = (root, text) => ({ session_id: SESSION, hook_event_name: "UserPromptSubmit", cwd: root, prompt: text });
 
 const cases = [
   { name: "bare node start", args: ["-e", ""], input: "", root: bare, target: null },
   { name: "one-line .ts file (the floor for a .ts hook)", args: [floorTs], input: "", root: bare, target: null },
-  { name: "guard-files Edit, no coach.yaml", hook: "guard-files", input: edit(bare), root: bare, target: 60 },
-  { name: "guard-writes Tally write, no coach.yaml", hook: "guard-writes", input: tallyWrite, root: bare, target: 60 },
-  { name: "guard-files Edit (unprotected), coach.yaml", hook: "guard-files", input: edit(athlete), root: athlete, target: 80 },
-  { name: "guard-files Bash (unprotected), coach.yaml", hook: "guard-files", input: bash("npm test"), root: athlete, target: 80 },
-  { name: "guard-files Edit athlete/limits.yaml, coach.yaml", hook: "guard-files", input: { ...edit(athlete), tool_input: { file_path: join(athlete, "athlete/limits.yaml"), old_string: "a", new_string: "b" } }, root: athlete, target: null },
-  { name: "guard-writes Tally write, coach.yaml", hook: "guard-writes", input: tallyWrite, root: athlete, target: 200 },
-  { name: "session-context, no hold", hook: "session-context", input: { session_id: SESSION }, root: athlete, target: null },
-  { name: "session-context, regional hold", hook: "session-context", input: { session_id: SESSION }, root: held, target: null },
-  // Unattended (COACH_UNATTENDED=1, as a launchd run): the fast path never decides, so these
-  // take the engine path.
-  { name: "unattended: Edit athlete/log/x.md", hook: "guard-files", input: { session_id: SESSION, tool_name: "Edit", tool_input: { file_path: join(athlete, "athlete/log/x.md"), old_string: "a", new_string: "b" } }, root: athlete, target: null, env: UNATTENDED },
-  { name: "unattended: Write .tmp/coach/x.json", hook: "guard-files", input: { session_id: SESSION, tool_name: "Write", tool_input: { file_path: join(athlete, ".tmp/coach/x.json"), content: "{}" } }, root: athlete, target: null, env: UNATTENDED },
-  { name: "unattended: Bash node engine/cli.ts mode", hook: "guard-files", input: bash("node engine/cli.ts mode"), root: athlete, target: null, env: UNATTENDED },
-  { name: "unattended: Bash git switch main", hook: "guard-files", input: bash("git switch main"), root: athlete, target: null, env: UNATTENDED },
+  { name: "urgent-gate Edit, no stop", hook: "urgent-gate", input: edit(athlete), root: athlete, target: 80 },
+  { name: "urgent-gate Tally write, no stop", hook: "urgent-gate", input: tallyWrite, root: athlete, target: 80 },
+  { name: "urgent-gate Tally write, urgent stop (deny)", hook: "urgent-gate", input: tallyWrite, root: stopped, target: 80 },
+  { name: "urgent-gate Edit plans/, urgent stop (deny)", hook: "urgent-gate", input: { ...edit(stopped), tool_input: { file_path: join(stopped, "plans/2026-W42.csv"), old_string: "a", new_string: "b" } }, root: stopped, target: 80 },
+  { name: "guard-files stub (v0.1 sessions only)", hook: "guard-files", input: edit(athlete), root: athlete, target: 80 },
+  { name: "guard-writes stub (v0.1 sessions only)", hook: "guard-writes", input: tallyWrite, root: athlete, target: 80 },
+  { name: "session-context, no stop", hook: "session-context", input: { session_id: SESSION }, root: athlete, target: null },
+  { name: "session-context, urgent stop", hook: "session-context", input: { session_id: SESSION }, root: stopped, target: null },
+  { name: "safety-detect, no urgent term", hook: "safety-detect", input: prompt(bare, "my knee is sore, how should I train?"), root: bare, target: null },
 ];
 
 console.log(`hooks: ${REPO}/.claude/hooks  runs: ${RUNS}  node ${process.version}`);
@@ -110,5 +105,5 @@ for (const c of cases) {
 }
 rmSync(bare, { recursive: true, force: true });
 rmSync(athlete, { recursive: true, force: true });
-rmSync(held, { recursive: true, force: true });
+rmSync(stopped, { recursive: true, force: true });
 if (values.check && missed > 0) process.exitCode = 1;

@@ -18,7 +18,7 @@ methods/<pack>/
   sources.md           table of public sources: key | title | URL | date | notes
 ```
 
-`methods/**` is protected: the guard denies model edits to it. Change a pack in a reviewed commit.
+Change a pack in a reviewed commit, with the athlete's yes (the `method` skill).
 
 ## `rules.yaml`
 
@@ -29,7 +29,7 @@ rules:
   - id: NA-PROG-001                 # <PREFIX>-<AREA>-NNN, unique
     text: "Never raise weekly volume for a muscle by more than 10% over the reference week."
     kind: sourced                   # sourced: the source says it. policy: the pack's own choice.
-    severity: hard                  # hard: the guard denies. soft: the audit warns.
+    severity: hard                  # hard: the audit reports a hard finding. soft: a warning.
     source: { ref: E4, at: "01:36:25", precision: exact }   # required when kind is sourced
     check: { type: weekly_volume_increase_max, value: 0.10 } # optional; only known types
     note: "Optional context for reviewers."

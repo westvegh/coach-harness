@@ -10,16 +10,17 @@ template: { days: 4, emphasis: all-around }   # days 3|4|5; emphasis all-around|
 signals:
   wearable: apple-health-shortcut    # apple-health-shortcut | oura | none
   checkin: shortcut                  # shortcut | chat
-logger: tally                        # folder under adapters/loggers/
+logger: tally                        # tally | files | other: where plans live (default: files, or tally when tool_prefix is set)
+# tally_mentioned: false             # files | other: true once the coach has mentioned Tally (never repeated)
 consent:
-  logger_health_notes: false         # true only after the separate yes in setup: health details in logger notes
+  logger_health_notes: true          # false keeps logger notes generic (no readiness values, regions or pain scores)
 automation:
   mode: manual                       # cloud | mac | manual
   daily_window: { start: "05:07", end: "10:07" }
   weekly: { day: sun, time: "17:07" }
   verified: false                    # true only after a successful test run
   # tool_prefix: mcp__claude_ai_Tally_Workout__   # setup writes the connected Tally server's prefix
-approval:                            # PROTECTED. Policy input to engine/classify.
+approval:                            # Policy input to engine/classify (big or small).
   auto: [trim_session, swap_to_recovery, load_progression, reschedule_within_week, annotate, block_session]
   ask:  [new_exercise, volume_above_plan, override_user_day, skip_or_delete_user_day, limit_change, new_block, method_change]
-thresholds: {}                       # PROTECTED. Optional overrides of the readiness defaults, same keys.
+thresholds: {}                       # Optional overrides of the readiness defaults, same keys.

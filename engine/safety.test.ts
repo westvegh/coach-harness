@@ -1,8 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { readFileSync } from "node:fs";
 import { parse } from "yaml";
 import { CoachError } from "./errors.ts";
 import {
@@ -10,17 +8,12 @@ import {
   detect,
   isMatch,
   loadSafetyTerms,
-  pendingTerms,
-  readPending,
-  recordSessionNotes,
   scanSessionNotes,
   TERMS_PATH,
   tokenize,
-  writePending,
+  urgentTermsOf,
 } from "./safety.ts";
 import type { NotesHistoryEntry } from "./safety.ts";
-
-const root = () => mkdtempSync(join(tmpdir(), "coach-safety-"));
 
 // ---------- the matcher ----------
 
@@ -138,8 +131,9 @@ test("tokenize removes apostrophes, splits clauses on sentence ends and 'but', n
 test("detect names terms, never the user's words", () => {
   const d = detect("my super-secret-word knee hurts");
   assert.deepEqual(d.pain, ["hurt"]);
-  assert.ok(!pendingTerms(d).some((t) => t.includes("secret")));
-  assert.deepEqual(pendingTerms(detect("chest pain, left knee hurts")), ["chest pain", "pain", "hurt", "region:chest", "region:left-knee"]);
+  assert.ok(![...d.urgent, ...d.pain, ...d.regions].some((t) => t.includes("secret")));
+  const both = detect("chest pain, left knee hurts");
+  assert.deepEqual([...both.urgent, ...both.pain, ...both.regions], ["chest pain", "pain", "hurt", "chest", "left-knee"]);
 });
 
 test("every region id exists in engine/movements.yaml, with left-/right- variants for sides", () => {
@@ -161,39 +155,6 @@ test("the shipped term list compiles, and bad lists are rejected", () => {
   assert.throws(() => compileTerms({ ...base, pain: ["pa!n"] }), /bad token/);
   assert.throws(() => compileTerms({ ...base, sides: ["tail"] }), /sides must list region ids/);
   assert.throws(() => compileTerms({ ...base, urgent: [{ term: "x", all: [], other: 1 }] }), CoachError);
-});
-
-// ---------- the pending file ----------
-
-test("writePending writes {at, terms, source} and keeps earlier terms", () => {
-  const dir = root();
-  const a = writePending(dir, { terms: ["hurt", "region:left-knee"], source: "prompt", now: "2026-10-12T07:00:00-07:00" });
-  assert.deepEqual(a, { at: "2026-10-12T07:00:00-07:00", terms: ["hurt", "region:left-knee"], source: "prompt" });
-  const b = writePending(dir, { terms: ["sharp", "hurt"], source: "session-notes", now: "2026-10-12T08:00:00-07:00" });
-  assert.deepEqual(b.terms, ["hurt", "region:left-knee", "sharp"]);
-  assert.deepEqual(readPending(dir), b);
-  assert.deepEqual(Object.keys(JSON.parse(readFileSync(join(dir, "athlete/.safety-pending"), "utf8"))).sort(), ["at", "source", "terms"]);
-});
-
-test("writePending replaces a malformed pending file with a valid one", () => {
-  const dir = root();
-  mkdirSync(join(dir, "athlete"));
-  writeFileSync(join(dir, "athlete/.safety-pending"), "{not json");
-  assert.throws(() => readPending(dir), /PENDING_INVALID|is invalid/);
-  writePending(dir, { terms: ["pain"], source: "prompt", now: "2026-10-12T07:00:00Z" });
-  assert.deepEqual(readPending(dir)?.terms, ["pain"]);
-});
-
-test("readPending rejects unknown keys, bad sources and bad instants", () => {
-  const dir = root();
-  mkdirSync(join(dir, "athlete"));
-  const put = (v: unknown) => writeFileSync(join(dir, "athlete/.safety-pending"), JSON.stringify(v));
-  put({ at: "2026-10-12T07:00:00Z", terms: [], source: "prompt", text: "my knee" });
-  assert.throws(() => readPending(dir), /text: unknown key/);
-  put({ at: "2026-10-12T07:00:00Z", terms: [], source: "chat" });
-  assert.throws(() => readPending(dir), /source: must be one of/);
-  put({ at: "yesterday", terms: [], source: "prompt" });
-  assert.throws(() => readPending(dir), CoachError);
 });
 
 // ---------- session notes ----------
@@ -234,14 +195,19 @@ test("a [coach:…] prefix does not hide the athlete's words on the same line", 
   assert.deepEqual(m[0].regions, ["knee"]);
 });
 
-test("recordSessionNotes writes the pending file with source session-notes, and nothing on no match", () => {
-  const dir = root();
-  assert.equal(recordSessionNotes(dir, []), null);
-  assert.equal(existsSync(join(dir, "athlete/.safety-pending")), false);
-  const p = recordSessionNotes(dir, scanSessionNotes(HISTORY), "2026-10-12T07:00:00-07:00");
-  assert.equal(p?.source, "session-notes");
-  assert.ok(p?.terms.includes("chest pain") && p.terms.includes("region:left-knee"));
-  assert.ok(!p?.terms.some((t) => t.includes("set 3")));
+test("the clearance skip: an urgent term in a note on or before its latest clearance is dropped; a later note stops again", () => {
+  const notes: NotesHistoryEntry[] = [
+    { date: "2026-10-08", notes: "chest tightness on the bike", exercises: [] },
+    { date: "2026-10-12", notes: "chest pain again on the bike", exercises: [] },
+  ];
+  assert.deepEqual(urgentTermsOf(scanSessionNotes(notes)), ["chest pain"]);
+  const cleared = new Map([["chest pain", "2026-10-10"]]);
+  const m = scanSessionNotes(notes, { cleared });
+  assert.deepEqual(m.map((x) => [x.date, x.urgent]), [["2026-10-12", ["chest pain"]]]);
+  // Cleared on the day of the last note: nothing urgent is left.
+  assert.deepEqual(urgentTermsOf(scanSessionNotes(notes, { cleared: new Map([["chest pain", "2026-10-12"]]) })), []);
+  // A clearance of another term does not skip this one.
+  assert.deepEqual(urgentTermsOf(scanSessionNotes(notes, { cleared: new Map([["fainting", "2026-10-12"]]) })), ["chest pain"]);
 });
 
 test("isMatch is true only for urgent or pain terms", () => {

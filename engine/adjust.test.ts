@@ -5,7 +5,7 @@ import { adjustDay, estimateMinutes } from "./adjust.ts";
 import { CoachError } from "./errors.ts";
 import { loadTemplates } from "./methods.ts";
 import { classify, normalizeName, regionMatches } from "./taxonomy.ts";
-import type { DayPlan, Hold, Limits, SetEntry, Taxonomy } from "./types.ts";
+import type { DayPlan, Limits, SetEntry, Taxonomy } from "./types.ts";
 import { loadTaxonomy } from "./taxonomy.ts";
 
 const tax = loadTaxonomy({ localPath: null });
@@ -31,12 +31,11 @@ const day: DayPlan = {
 };
 
 /** Every limit rule a day breaks: bans by pattern or name (allow beats patterns), caps by load and weekly sets. */
-function limitViolations(d: DayPlan, limits: Limits, t: Taxonomy, hold?: Hold): string[] {
+function limitViolations(d: DayPlan, limits: Limits, t: Taxonomy): string[] {
   const out: string[] = [];
   for (const ex of d.exercises) {
     const c = classify(ex, t);
     const n = normalizeName(ex.name);
-    if (hold?.active && hold.regions.some((r) => regionMatches(r, c.regions, t))) out.push(`${ex.name}: loads held region`);
     for (const l of limits.limits) {
       const named = l.exercises.some((e) => normalizeName(e) === n);
       const allowed = l.allow.some((a) => normalizeName(a) === n);
@@ -112,19 +111,20 @@ test("recovery: planned_minutes overrides the estimate; 0 gives a rest day", () 
   assert.equal(rest.dayName, "Rest");
 });
 
-test("recovery: a held or limited region is never loaded; a limit-named exercise is left out", () => {
+test("recovery: a limited region is never loaded; a limit-named exercise is left out", () => {
   const limits: Limits = {
     version: 1,
     pain_threshold: 4,
     limits: [
       { id: "L-001", region: "left-knee", rule: "ban", patterns: ["loaded_deep_knee_flexion"], exercises: ["Mobility Flow"], allow: [], source: "athlete", since: "2026-10-01" },
       { id: "L-002", region: "low-back", rule: "cap", patterns: ["hinge"], exercises: [], allow: [], max_sets_per_week: 6, source: "clinician-reported", since: "2026-10-01" },
+      { id: "L-003", region: "shoulder", rule: "ban", patterns: ["overhead_press"], exercises: [], allow: [], source: "athlete", since: "2026-10-01" },
+      { id: "L-004", region: "knee", rule: "ban", patterns: ["loaded_deep_knee_flexion"], exercises: [], allow: [], source: "athlete", since: "2026-10-01" },
     ],
   };
-  const hold: Hold = { active: true, set_at: "2026-10-12T07:00:00-07:00", reason: "pain", regions: ["shoulder", "knee"], set_by: "run" };
-  const { day: out } = adjustDay(day, "recovery", { tax, thresholds: {}, template, limits, hold });
+  const { day: out } = adjustDay(day, "recovery", { tax, thresholds: {}, template, limits });
   assert.deepEqual(out.exercises.map((e) => e.name), ["Zone 2 Cardio", "Box Breathing"]);
-  assert.deepEqual(limitViolations(out, limits, tax, hold), []);
+  assert.deepEqual(limitViolations(out, limits, tax), []);
 });
 
 test("the output passes the limit checks for an unchanged-limits case", () => {

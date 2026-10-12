@@ -4,7 +4,7 @@ import { CoachError } from "./errors.ts";
 import { DEFAULT_THRESHOLDS } from "./readiness.ts";
 import { classify, normalizeName, regionMatches } from "./taxonomy.ts";
 import type { Count, Template } from "./methods.ts";
-import type { DayPlan, ExerciseEntry, Hold, Limits, SetEntry, Taxonomy, Thresholds } from "./types.ts";
+import type { DayPlan, ExerciseEntry, Limits, SetEntry, Taxonomy, Thresholds } from "./types.ts";
 
 export type AdjustContext = {
   tax: Taxonomy;
@@ -12,8 +12,6 @@ export type AdjustContext = {
   /** The pack template; its recovery slots shape the recovery day. */
   template?: Template;
   limits: Limits;
-  /** An active hold's regions are never loaded by a recovery day. */
-  hold?: Hold | null;
   /** The planned session length in minutes. Default: estimated from the day (see estimateMinutes). */
   planned_minutes?: number;
 };
@@ -139,14 +137,14 @@ const fmtMin = (s: number) => `${Math.round((s / 60) * 10) / 10} min`;
  * Recovery: the day becomes the template's recovery slots (Zone 2 cardio, mobility,
  * breathing), with the same total duration as the planned session, to the second (§15). The longest slot takes what the others leave after their template
  * duration; when that is under 5 minutes, every slot scales in proportion. An exercise is
- * left out when it loads a limited or held region, or when a limit names it or one of its
+ * left out when it loads a limited region, or when a limit names it or one of its
  * patterns. A planned length of 0 gives a rest day (no exercises).
  */
 function recoveryDay(day: DayPlan, ctx: AdjustContext): AdjustResult {
   const planned = ctx.planned_minutes ?? estimateMinutes(day);
   if (!(Number.isFinite(planned) && planned >= 0)) throw new CoachError("BAD_INPUT", `planned_minutes must be a number of 0 or more`);
   const target = Math.round(planned * 60);
-  const blocked = [...ctx.limits.limits.map((l) => l.region), ...(ctx.hold?.active ? ctx.hold.regions : [])];
+  const blocked = ctx.limits.limits.map((l) => l.region);
   const slots = recoverySlots(ctx).filter((s) => {
     const name = RECOVERY_NAMES[s.pattern] ?? s.pattern.replace(/_/g, " ");
     const c = classify({ name }, ctx.tax);
@@ -154,7 +152,7 @@ function recoveryDay(day: DayPlan, ctx: AdjustContext): AdjustResult {
     if (blocked.some((r) => regionMatches(r, c.regions, ctx.tax))) return false;
     return !limitedByLimit(name, c.patterns, ctx.limits);
   });
-  if (slots.length === 0) throw new CoachError("NO_RECOVERY_SLOTS", "no recovery exercise passes the limits and the hold");
+  if (slots.length === 0) throw new CoachError("NO_RECOVERY_SLOTS", "no recovery exercise passes the limits");
 
   const { dayType: _dropped, ...base } = structuredClone(day);
   if (target === 0) {

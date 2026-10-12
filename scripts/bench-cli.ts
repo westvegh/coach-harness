@@ -29,32 +29,10 @@ const oura = Array.from({ length: 50 }, (_, i) => {
   return { date, source: "oura", observed_at: `${date}T06:30:00-07:00`, complete: true, sleep: { duration_min: 450 + (i % 7) * 5, start_at: `${prev}T23:00:00-07:00`, end_at: `${date}T06:30:00-07:00` }, hrv: { value_ms: 50 + (i % 5) * 2, method: "rmssd" }, rhr: { bpm: 54 + (i % 3) } };
 });
 writeFileSync(join(root, "athlete/.cache/signals/oura.json"), JSON.stringify(oura));
-// One proposal for `proposals check-applied`.
-const PROPOSAL = "P-20261014-reschedule_within_week-1";
-mkdirSync(join(root, "athlete/proposals"), { recursive: true });
-writeFileSync(
-  join(root, `athlete/proposals/${PROPOSAL}.yaml`),
-  [
-    `id: ${PROPOSAL}`,
-    "kind: reschedule_within_week",
-    "created_at: 2026-10-14T07:00:00-07:00",
-    "status: approved",
-    "summary: Move Thursday to Friday",
-    "base:",
-    '  "2026-10-15": null',
-    `limits_hash: "${"0".repeat(64)}"`,
-    "rule_ids: []",
-    "writes:",
-    "  - tool: move_planned_workout",
-    "    input: { fromDate: 2026-10-15, toDate: 2026-10-16, timezone: America/Los_Angeles }",
-    "",
-  ].join("\n"),
-);
-
 const CASES: [string, string[]][] = [
   ["--help", ["--help"]],
   ["mode", ["mode"]],
-  ["hold status", ["hold", "status", "--root", root]],
+  ["urgent status", ["urgent", "status", "--root", root]],
   ["limits-hash", ["limits-hash", "--root", root]],
   ["ids next", ["ids", "next", "--kind", "block", "--root", root]],
   ["weeks", ["weeks", "--from", "2026-10-05", "--to", "2026-10-18", "--root", root]],
@@ -63,7 +41,7 @@ const CASES: [string, string[]][] = [
   ["block draft", ["block", "draft", "--weeks", "6", "--root", root]],
   ["lint-methods", ["lint-methods", "--root", root]],
   ["oplog done", ["oplog", "done", "--date", "2026-10-15", "--kind", "trim_session", "--root", root]],
-  ["check-applied", ["proposals", "check-applied", "--id", PROPOSAL, "--now", "2026-10-14T07:00:00-07:00", "--root", root]],
+  ["limits schema", ["limits", "schema"]],
 ];
 
 const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];

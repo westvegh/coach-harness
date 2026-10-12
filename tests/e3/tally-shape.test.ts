@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { adjustDay } from "../../engine/adjust.ts";
 import { planToTallyDay, snapshotDayToPlan, tallyDayToPlan } from "../../engine/tally-shape.ts";
-import { toDayPlan } from "../../adapters/loggers/tally/rebuild.ts";
+import { toDayPlan } from "../../adapters/loggers/tally/day.ts";
 import { bench, curl, limits, plannedDay, row3, snapDay, snapshot, squat, tax, NOW, SESSION } from "../guard/fixtures.ts";
 import { cli, instance, writeJson } from "./helpers.ts";
 

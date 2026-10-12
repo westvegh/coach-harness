@@ -1,6 +1,6 @@
 // Shared scenario pieces: the persona setup, today's signals and the dispatch prompts.
 import { addDays, hrvAtZ, KNEE_LIMIT, offMornings, signalFile, tallyState, writeAthlete, type Checkin, type Limit } from "../lib/instance.ts";
-import type { SetupContext } from "../lib/types.ts";
+import type { AnswerRule, SetupContext } from "../lib/types.ts";
 import type { MockState } from "../mock-tally/client.ts";
 
 /** The routine prompt (contracts §14: prompts dispatch explicitly). */
@@ -33,3 +33,27 @@ export function persona(ctx: SetupContext, o: { limits?: Limit[]; today?: TodayS
 }
 
 export { addDays, KNEE_LIMIT };
+
+/** The safety skill's screen, scripted: a handling choice, the side, and no warning sign. */
+export function safetyAnswers(handling: RegExp, side = "^left$"): AnswerRule[] {
+  return [
+    { question: "how should the coach handle", answer: handling.source },
+    { question: "which side", answer: [side, "left"] },
+    { question: "any of these now", answer: ["^none"] },
+  ];
+}
+
+/**
+ * The athlete takes the plan as offered: yes to a write, and the first (recommended) option of
+ * any other choice the coach offers about the plan.
+ */
+export const ACCEPT_PLAN: AnswerRule[] = [
+  { question: "any of these now", answer: ["^none"] },
+  { question: "how did it feel", answer: ["same", "keep"] },
+  { question: "still bother", answer: ["^none"] },
+  { question: "deload|new block|keep the plan", answer: ["keep"] },
+  { question: "replace the day|override|user.?(built|edited)|you (built|edited)", answer: ["^yes", "^a\\b", "replace"] },
+  { question: "change those days|change .*(day|session)s?\\b.*\\bnow\\b", answer: ["^yes", "now"] },
+  { question: "proposal", answer: ["^yes", "accept", "apply"] },
+  { question: "write|apply|approve|go ahead|ok\\?|okay\\?|look (good|right)|swap|replace|instead|which (option|exercise|variation)|how should|what should", answer: ["^yes", "write", "apply", "approve", "recommended", "swap", "replace", "^a\\b", "."] },
+];

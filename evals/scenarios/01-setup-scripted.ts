@@ -29,10 +29,9 @@ export function bootstrapChecks(a: RunArtifacts): Check[] {
   const out: Check[] = [];
   const b = a.bootstrap;
   out.push(check("fresh copy: no node_modules and no coach.yaml before the run", !!b && !b.nodeModules && !b.coachYaml, JSON.stringify(b && { nodeModules: b.nodeModules, coachYaml: b.coachYaml })));
-  const edits = (b?.probes ?? []).filter((p) => p.hook === "guard-files.ts");
-  const writes = (b?.probes ?? []).filter((p) => p.hook === "guard-writes.ts");
-  out.push(check("probe: file edits are allowed before npm ci and coach.yaml", edits.length > 0 && edits.every((p) => p.decision === "allow"), edits.map((p) => `${p.tool} ${p.decision} ${p.stderr.trim()}`).join(" | ")));
-  out.push(check("probe: a Tally write is denied before npm ci and coach.yaml", writes.length > 0 && writes.every((p) => p.decision !== "allow"), writes.map((p) => `${p.decision} ${p.stderr.trim() || p.stdout.trim()}`).join(" | ")));
+  // v0.2: the urgent gate and the v0.1 guard stubs load with built-ins; with no urgent stop they allow every probe.
+  const probes = b?.probes ?? [];
+  out.push(check("probe: the PreToolUse hooks load before npm ci and allow every call (no urgent stop)", probes.length > 0 && probes.every((p) => p.decision === "allow"), probes.map((p) => `${p.hook} ${p.tool} ${p.decision} ${p.stderr.trim()}`).join(" | ")));
   const npm = a.tools.findIndex((t) => t.name === "Bash" && NPM_INSTALL.test(String(t.input?.command ?? "")));
   out.push(check("the model ran npm ci (setup step 2) and no hook denied it", npm !== -1 && !hookDenied(a.tools[npm]), npm === -1 ? "no npm ci or npm install call" : (a.tools[npm].result?.text ?? "").slice(-300)));
   const earlyEdits = (npm === -1 ? a.tools : a.tools.slice(0, npm)).filter((t) => ["Write", "Edit", "MultiEdit"].includes(t.name));
@@ -122,7 +121,7 @@ const scenario: Scenario = {
     } catch (e) {
       out.push(check("limits.yaml is valid and holds the knee limit", false, (e as Error).message.slice(0, 300)));
     }
-    out.push(check("hold.yaml and brief.md exist", a.after["athlete/hold.yaml"] != null && !!a.after["athlete/brief.md"] && /squat/i.test(a.after["athlete/brief.md"] ?? "")));
+    out.push(check("brief.md exists and names the squat", !!a.after["athlete/brief.md"] && /squat/i.test(a.after["athlete/brief.md"] ?? "")));
     let block: ReturnType<typeof validateBlock> | null = null;
     try {
       block = validateBlock(parseOr(a.after["athlete/block.yaml"]));

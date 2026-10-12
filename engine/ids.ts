@@ -1,17 +1,12 @@
 // The next free ID from the athlete's files (contracts §0 IDs).
 //   block:    B-NNN from athlete/block.yaml and athlete/blocks/*.yaml
 //   limit:    L-NNN from athlete/limits.yaml
-//   proposal: P-YYYYMMDD-<kind>-<n> from athlete/proposals/ (today in the athlete's timezone)
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { ALL_KINDS } from "./config.ts";
-import { localDate } from "./dates.ts";
 import { CoachError } from "./errors.ts";
-import { PROPOSALS_RELATIVE } from "./proposals.ts";
 import { isPlainObject, readYamlFile } from "./yaml-file.ts";
-import type { ChangeKind, Instant } from "./types.ts";
 
-export type IdKind = "block" | "limit" | "proposal";
+export type IdKind = "block" | "limit";
 export type NextId = { kind: IdKind; id: string; taken: string[] };
 
 const pad3 = (n: number) => String(n).padStart(3, "0");
@@ -27,7 +22,7 @@ function nextNumbered(prefix: string, taken: string[]): string {
   return `${prefix}-${pad3(max + 1)}`;
 }
 
-export function nextId(root: string, kind: IdKind, opts: { change?: string; now?: Instant; tz?: string } = {}): NextId {
+export function nextId(root: string, kind: IdKind): NextId {
   if (kind === "block") {
     const taken = idsIn(join(root, "athlete/block.yaml"), (r) => [isPlainObject(r) ? r.id : null]);
     const dir = join(root, "athlete/blocks");
@@ -46,16 +41,5 @@ export function nextId(root: string, kind: IdKind, opts: { change?: string; now?
       .sort();
     return { kind, id: nextNumbered("L", ids), taken: ids };
   }
-  if (kind === "proposal") {
-    const change = opts.change;
-    if (!change || !ALL_KINDS.includes(change as ChangeKind)) throw new CoachError("USAGE", `ids next --kind proposal needs --change <kind> (${ALL_KINDS.join(" | ")})`);
-    const day = localDate(opts.now ?? new Date().toISOString(), opts.tz ?? "UTC").replace(/-/g, "");
-    const prefix = `P-${day}-${change}-`;
-    const dir = join(root, PROPOSALS_RELATIVE);
-    const taken = existsSync(dir) ? readdirSync(dir).filter((f) => f.startsWith(prefix) && f.endsWith(".yaml")).map((f) => f.slice(0, -5)).sort() : [];
-    // The same rule as createProposal: one more than the highest number taken.
-    const n = taken.reduce((m, id) => Math.max(m, Number(id.slice(prefix.length)) || 0), 0) + 1;
-    return { kind, id: `${prefix}${n}`, taken };
-  }
-  throw new CoachError("USAGE", "ids next --kind must be block | limit | proposal");
+  throw new CoachError("USAGE", "ids next --kind must be block | limit");
 }

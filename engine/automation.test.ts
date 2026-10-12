@@ -12,6 +12,7 @@ const cfg = (tz = "America/Los_Angeles", over: Partial<CoachConfig["automation"]
   template: { days: 4, emphasis: "all-around" },
   signals: { wearable: "apple-health-shortcut", checkin: "shortcut" },
   logger: "tally",
+  tally_mentioned: false,
   consent: { logger_health_notes: false },
   automation: { mode: "cloud", daily_window: { start: "05:07", end: "10:07" }, weekly: { day: "sun", time: "17:07" }, verified: false, ...over },
   approval: { auto: ["trim_session"], ask: ["new_exercise"] },
@@ -105,9 +106,9 @@ test("routine body: allowed_tools is exact", () => {
 test("launch review finding 1: the unattended allowlist has no open Bash, Write or Edit", () => {
   for (const t of UNATTENDED_TOOLS) assert.ok(!["Bash", "Write", "Edit", "MultiEdit", "NotebookEdit"].includes(t), `${t} is open`);
   const bash = UNATTENDED_TOOLS.filter((t) => t.startsWith("Bash(")).map((t) => t.slice(5, -1));
-  assert.deepEqual(bash, ["node engine/cli.ts:*", "git status:*", "git diff:*", "git log:*", "git add:*", "git commit:*", "git pull:*", "git switch:*", "gh api:*", "date:*", "printenv CLAUDE_CODE_REMOTE"]);
+  assert.deepEqual(bash, ["node engine/cli.ts:*", "npm ci", "git status:*", "git diff:*", "git log:*", "git add:*", "git commit:*", "git pull:*", "git switch:*", "gh api:*", "date:*", "printenv CLAUDE_CODE_REMOTE"]);
   const files = UNATTENDED_TOOLS.filter((t) => /^(Edit|Write)\(/.test(t)).map((t) => t.replace(/^(Edit|Write)\((.*)\)$/, "$2"));
-  assert.deepEqual([...new Set(files)], ["athlete/log/**", "athlete/proposals/**", ".tmp/coach/**"]);
+  assert.deepEqual([...new Set(files)], ["athlete/log/**", ".tmp/coach/**"]);
   const plist = launchdPlist("daily", cfg(), "/home/alex/coach", CLAUDE);
   assert.doesNotMatch(plist, /<string>(Bash|Write|Edit)<\/string>/, "the plist has no open Bash, Write or Edit");
 });

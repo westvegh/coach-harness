@@ -7,17 +7,16 @@ import { blockSessionProblem } from "../../engine/classify.ts";
 import { loadTemplates, scaledSets } from "../../engine/methods.ts";
 import { allowedSets } from "../../engine/progression.ts";
 import { saveSnapshot } from "../../engine/snapshot.ts";
-import { planToTallyDay } from "../../engine/tally-shape.ts";
-import { guard, historyWeeks } from "../../engine/validate.ts";
+import { snapshotWeeks } from "../../engine/weeks.ts";
 import { weeklySetsByMuscle } from "../../engine/volume.ts";
-import { emptyDay, guardInput, NOW, rules, session, snapshot, tax, TODAY } from "../guard/fixtures.ts";
+import { emptyDay, NOW, rules, session, snapshot, tax, TODAY } from "../guard/fixtures.ts";
 import { cli, instance, REPO, writeJson } from "./helpers.ts";
 import type { Rules } from "../../engine/types.ts";
 
 const T = loadTemplates(join(REPO, "methods/nine-adaptations"));
 const CTX = { tax: tax(), rules: rules(), units: "lbs" as const, method: "nine-adaptations", today: "2026-10-14", emphasis: "all-around" as const, templateId: "4-day" };
 
-/** Named exercises for every 4-day slot, so the guard can classify them. */
+/** Named exercises for every 4-day slot, so the taxonomy can classify them. */
 const EXERCISES = {
   plyometric: { name: "Box Jump", exerciseId: "Box_Jump" },
   squat: { name: "Barbell Back Squat", exerciseId: "Barbell_Squat" },
@@ -95,7 +94,7 @@ test("build weeks step up within the volume cap; the deload keeps 70% of sets an
   assert.ok(d.rule_ids.length >= 2);
 });
 
-test("every drafted day passes the guard's block_session check, deload included, and counts as the draft says", () => {
+test("every drafted day passes the block_session check, deload included, and counts as the draft says", () => {
   const d = draftBlock(T["4-day"], 6, CTX, { start: "2026-10-19", id: "B-001", exercises: EXERCISES });
   for (const w of d.weeks) {
     for (const day of w.days) assert.equal(blockSessionProblem(day, { block: d.block, tax: tax(), rules: rules() }), null, `week ${w.week} ${day.date}`);
@@ -170,20 +169,7 @@ const HISTORY = [
 ];
 const histSnap = (days: Record<string, ReturnType<typeof emptyDay>> = {}) =>
   snapshot(days, { history: HISTORY, planned: { captured_at: NOW, from: TODAY, dates: {} } });
-const LOGS = historyWeeks(histSnap(), "lbs");
-
-/** Week 1 of a draft as one plan_workout_range call (T2: ifAbsent on every day). */
-const weekOneRange = (d: ReturnType<typeof draftBlock>) => ({
-  days: d.weeks[0].days.map((day) => {
-    const { weightUnit: _unit, ...tally } = planToTallyDay(day).day;
-    return { ...tally, ifAbsent: true };
-  }),
-});
-
-function validateWeekOne(d: ReturnType<typeof draftBlock>) {
-  const days = Object.fromEntries(Array.from({ length: 7 }, (_, i) => [`2026-10-${19 + i}`, emptyDay()]));
-  return guard(guardInput({ tool: "plan_workout_range", args: weekOneRange(d), snapshot: histSnap(days), block: d.block }));
-}
+const LOGS = snapshotWeeks(histSnap(), "lbs");
 
 test("week 1 of a new block is capped against the reference week (the scenario numbers: chest 9 vs 7, triceps 13 vs 7, shoulders 10 vs 6)", () => {
   const input = { start: "2026-10-19", id: "B-002", exercises: EXERCISES };
@@ -204,14 +190,6 @@ test("week 1 of a new block is capped against the reference week (the scenario n
   for (let i = 1; i < 5; i++) {
     for (const [m, n] of Object.entries(d.weeks[i].sets_by_muscle)) assert.ok(n <= allowedSets(d.weeks[i - 1].sets_by_muscle[m] ?? 0, 0.1), `week ${i + 1} ${m}`);
   }
-
-  // The guard: the uncapped week 1 is denied by NA-PROG-001; the capped week 1 is not.
-  const before = validateWeekOne(free);
-  assert.equal(before.decision, "deny");
-  assert.ok(before.reasons.some((r) => /chest: 9 sets .* against 7 in the reference week 2026-10-05/.test(r)), before.reasons.join("\n"));
-  const after = validateWeekOne(d);
-  assert.equal(after.decision, "allow", after.reasons.join("\n"));
-  assert.ok(!after.reasons.some((r) => /NA-PROG-001/.test(r)), after.reasons.join("\n"));
 });
 
 test("week 1 with no history, or no completed week, keeps the targets as given", () => {

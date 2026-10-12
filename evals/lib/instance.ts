@@ -28,6 +28,12 @@ export type Instance = {
   mcpConfig: string;
   baseSha: string;
   approverLog: string;
+  /** The scripted athlete (lib/answerer.mjs): its rules, its log and the --settings file that adds the hook. */
+  answersPath: string;
+  answerLog: string;
+  settingsPath: string;
+  /** An empty home for `history-files` (COACH_HISTORY_HOME), so no real file name reaches a run. */
+  historyHome: string;
 };
 
 export function git(root: string, ...args: string[]): string {
@@ -134,7 +140,7 @@ export function createInstance(opts: { fresh?: boolean; allowDirty?: boolean } =
   // A GitHub origin over SSH (git@github.com:eval-coach/athlete.git). core.sshCommand is a
   // fake ssh that serves it from a local bare repo, so nothing reaches github.com. Fetch,
   // push, `git remote get-url` and the pre-push hook all see the GitHub URL (no URL rewrite),
-  // so `node engine/cli.ts push`, its pre-push check and the approvals check work.
+  // so `node engine/cli.ts push` and its pre-push check work.
   const remote = join(dir, "remote.git");
   execFileSync("git", ["init", "-q", "--bare", "-b", "main", remote]);
   writeFileSync(join(bin, "fake-ssh"), fakeSsh(remote));
@@ -144,7 +150,25 @@ export function createInstance(opts: { fresh?: boolean; allowDirty?: boolean } =
   git(root, "push", "-q", "-u", "origin", "main");
   const approverLog = join(dir, "approver.jsonl");
   writeFileSync(approverLog, "");
-  return { dir, root, bin, statePath, ghLog, ghPulls, mcpConfig, baseSha: git(root, "rev-parse", "HEAD").trim(), approverLog };
+  const answersPath = join(dir, "answers.json");
+  writeFileSync(answersPath, "[]\n");
+  const answerLog = join(dir, "answers.jsonl");
+  writeFileSync(answerLog, "");
+  const settingsPath = join(dir, "eval-settings.json");
+  writeFileSync(settingsPath, JSON.stringify(answererSettings(), null, 2) + "\n");
+  const historyHome = join(dir, "home");
+  mkdirSync(join(historyHome, "Downloads"), { recursive: true });
+  mkdirSync(join(historyHome, "Desktop"), { recursive: true });
+  return { dir, root, bin, statePath, ghLog, ghPulls, mcpConfig, baseSha: git(root, "rev-parse", "HEAD").trim(), approverLog, answersPath, answerLog, settingsPath, historyHome };
+}
+
+/**
+ * The --settings file of a run: one PreToolUse hook on AskUserQuestion, the scripted athlete
+ * (lib/answerer.mjs). It reads EVAL_ANSWERS and writes EVAL_ANSWER_LOG (the runner sets both).
+ */
+export function answererSettings(): unknown {
+  const cmd = `${JSON.stringify(process.execPath)} ${JSON.stringify(join(REPO, "evals/lib/answerer.mjs"))}`;
+  return { hooks: { PreToolUse: [{ matcher: "^AskUserQuestion$", hooks: [{ type: "command", command: cmd, timeout: 10 }] }] } };
 }
 
 export type ApproverRule = { tool: string; input?: string; behavior: "allow" | "deny" };
@@ -158,12 +182,13 @@ export function adapterDeclaresT2(root: string): boolean {
   return caps.opId === true && caps.rangeCreateIfAbsent === true && caps.versionedSkipDelete === true;
 }
 
-/** `flags.t2` undefined: T2 follows the adapter. */
-export function mcpConfigWithFlags(inst: Instance, flags: { t2?: boolean; t3?: boolean }, approver?: ApproverRule[]): void {
+/** `flags.t2` undefined: T2 follows the adapter. `tally: false` leaves the mock out (no Tally server). */
+export function mcpConfigWithFlags(inst: Instance, flags: { t2?: boolean; t3?: boolean }, approver?: ApproverRule[], tally = true): void {
   const cfg = JSON.parse(readFileSync(inst.mcpConfig, "utf8"));
   const env = cfg.mcpServers[MOCK_SERVER].env;
   if (flags.t2 ?? adapterDeclaresT2(inst.root)) env.MOCK_T2 = "1";
   if (flags.t3) env.MOCK_T3 = "1";
+  if (!tally) delete cfg.mcpServers[MOCK_SERVER];
   if (approver) {
     cfg.mcpServers[APPROVER_SERVER] = {
       type: "stdio",
@@ -258,7 +283,8 @@ export function blockYaml(today: string, opts: { weeks?: BlockWeek[]; start?: st
   return lines.join("\n") + "\n";
 }
 
-export function coachYaml(opts: { checkin?: "shortcut" | "chat"; weekly?: { day: string; time: string } } = {}): string {
+export function coachYaml(opts: { checkin?: "shortcut" | "chat"; weekly?: { day: string; time: string }; logger?: "tally" | "files" } = {}): string {
+  if (opts.logger === "files") return coachYamlFiles(opts.checkin);
   return `version: 1
 athlete:
   name: Alex
@@ -275,6 +301,31 @@ automation:
   daily_window: { start: "00:00", end: "23:29" }
   weekly: { day: ${opts.weekly?.day ?? "sun"}, time: "${opts.weekly?.time ?? "17:07"}" }
   verified: true
+approval:
+  auto: [trim_session, swap_to_recovery, load_progression, reschedule_within_week, annotate, block_session]
+  ask:  [new_exercise, volume_above_plan, override_user_day, skip_or_delete_user_day, limit_change, new_block, method_change]
+thresholds: {}
+`;
+}
+
+/** Alex with `logger: files`: plans in plans/<YYYY>-W<ww>.csv, no Tally, manual runs. */
+function coachYamlFiles(checkin: "shortcut" | "chat" = "chat"): string {
+  return `version: 1
+athlete:
+  name: Alex
+  timezone: ${TZ}
+  units: lbs
+method: nine-adaptations
+template: { days: 4, emphasis: all-around }
+signals:
+  wearable: none
+  checkin: ${checkin}
+logger: files
+automation:
+  mode: manual
+  daily_window: { start: "05:07", end: "10:07" }
+  weekly: { day: sun, time: "17:07" }
+  verified: false
 approval:
   auto: [trim_session, swap_to_recovery, load_progression, reschedule_within_week, annotate, block_session]
   ask:  [new_exercise, volume_above_plan, override_user_day, skip_or_delete_user_day, limit_change, new_block, method_change]
@@ -484,16 +535,14 @@ export function tallyState(today: string, opts: { weekDays?: boolean } = {}): Mo
 export function writeAthlete(
   write: (rel: string, text: string) => void,
   today: string,
-  opts: { limits?: Limit[]; checkin?: "shortcut" | "chat"; weekly?: { day: string; time: string }; block?: string } = {},
+  opts: { limits?: Limit[]; checkin?: "shortcut" | "chat"; weekly?: { day: string; time: string }; block?: string; logger?: "tally" | "files" } = {},
 ): void {
-  write("coach.yaml", coachYaml({ checkin: opts.checkin, weekly: opts.weekly }));
+  write("coach.yaml", coachYaml({ checkin: opts.checkin, weekly: opts.weekly, logger: opts.logger }));
   write("athlete/brief.md", BRIEF);
   write("athlete/limits.yaml", limitsYaml(opts.limits ?? []));
-  write("athlete/hold.yaml", readFileSync(join(REPO, "templates/athlete/hold.yaml"), "utf8"));
   write("athlete/baselines.json", readFileSync(join(REPO, "templates/athlete/baselines.json"), "utf8"));
   write("athlete/block.yaml", opts.block ?? blockYaml(today));
   write("athlete/log/.gitkeep", "");
-  write("athlete/proposals/.gitkeep", "");
   baselineSignals(write, today);
 }
 

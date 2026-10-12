@@ -6,61 +6,75 @@ coach-harness plans and adjusts training. It is not a medical device, and it is 
 
 ## Safety
 
-### The safety detector
+Code enforces two rules: the urgent stop and privacy (see "The pre-push check"). Everything else in this section is the coach's judgment, guided by `CLAUDE.md`, the skills and the method pack. No hook checks a plan before it is written.
 
-A Claude Code hook (`.claude/hooks/safety-detect.ts`) reads every message you send before Claude sees it. It matches pain words, body regions and urgent warning signs from `engine/safety-terms.yaml`. The daily run also checks the notes you log with your sessions.
+### The urgent stop
 
-- **An urgent warning sign** (for example chest pain or fainting): the coach stops all training talk and shows urgent-care text. This is its own state: the guard then allows no exercise at all, not even a shorter session or a recovery workout. Only notes, rest days and skips pass.
-- **A pain word:** the hook writes `athlete/.safety-pending`. While that file exists, the guard blocks every training write except rest and recovery. The `safety` agent asks you a few short questions first.
+A Claude Code hook (`.claude/hooks/safety-detect.ts`) reads every message you send before Claude sees it. It looks for urgent warning signs only: chest pain, fainting, new numbness or weakness, severe shortness of breath, a sudden severe headache and the other urgent terms in `engine/safety-terms.yaml`. It also matches a term that you negate ("no chest pain"): a false alarm costs one question.
 
-A false alarm costs one question. The matcher can miss a paraphrase, so the daily check-in also asks about pain directly. The exact texts the coach shows are in [safety.md](safety.md).
+Four routes start the stop: a chat message (the hook), a check-in that names an urgent sign, a logged note with an urgent term (the daily and weekly runs scan your notes), and anything else the coach recognizes, for example an answer in setup's health check (`node engine/cli.ts urgent set`).
 
-Only the matched terms (for example `hurt` and `region:left-knee`) are stored. Your message text is never stored.
+When the stop starts:
 
-### Holds
+- The coach gives the urgent-care text first ([safety.md](safety.md)) and makes no training change.
+- `athlete/.urgent-stop` is written and committed. It holds the term names, the sources and a time. It never holds your words. The message hook writes and commits it, and the coach pushes it next with `node engine/cli.ts push`; the other routes (`urgent set`, the check-in, the note scan) also push it themselves. A cloud run sees the stop only after that push.
 
-A hold pauses training changes. What it blocks depends on the hold:
+**What code blocks while the stop exists:**
 
-- **A regional hold** (it names regions, for example `left-shoulder` and `right-shoulder`) blocks every exercise that loads a held region, and every exercise the coach cannot classify. Other exercises follow the normal rules: your limits, the method rules, the volume and progression checks. Conditioning that loads no named region (a bike, intervals) passes only as recovery work that adds nothing.
-- **A hold with no regions** (for example dizziness or illness) allows only notes, rest or recovery work.
-- **An unanswered safety check** (`athlete/.safety-pending`) works like a hold with no regions, because the regions are not known yet.
+- every MCP tool, on any server, whose name ends in `plan_workout_day`, `plan_workout_range`, `update_planned_workout`, `move_planned_workout`, `skip_planned_workout`, `delete_planned_workout`, `update_user_profile` or `update_training_limits` (a PreToolUse hook, `.claude/hooks/urgent-gate.ts`; it blocks when it fails, so an error cannot let a write through);
+- Edit, Write and MultiEdit of any file under `plans/` (the same hook);
+- `node engine/cli.ts plans write` and `plans done` (they refuse);
+- `node engine/cli.ts urgent clear` in a scheduled run, or without `--reason clinician` or `--reason false-alarm` (it refuses).
 
-Under every hold, a shorter session (fewer sets, the same or less load) and a skip also pass.
+**What is the coach's instruction only:** the urgent-care text; no change in a tool you connected yourself (`logger: other`: the hook cannot know that tool's names); no plan change through the shell (a shell command that writes under `plans/` is not checked); and asking you before it runs `urgent clear`.
 
-When you accept new limits for the held regions in the same live session, the safety agent asks one question: add the limits and end the hold. After your yes, the limits are written first, and then `hold clear --released-by-limits` ends the hold. It refuses when a held region has no limit. The limits keep protecting the region. A hold with no regions, or an urgent hold, is never ended this way.
+Only your answer in a live session should clear the stop. The coach asks one question: "A clinician has seen me about it", "It was a false alarm" or "Not yet". The first two run `node engine/cli.ts urgent clear --reason clinician` or `--reason false-alarm`, which append a record (date, terms, sources, reason; no symptom text) to `athlete/log/urgent-clearances.jsonl` and delete the stop. "Not yet" keeps it. The command cannot tell whether you answered: that is the coach's instruction. A scheduled run cannot clear it.
 
-An **urgent hold** is stricter. The safety agent sets it (`hold set --urgent`) for an urgent warning sign, and a hold whose reason names an urgent sign counts too. Under an urgent hold, or while a pending safety check holds an urgent term, the guard denies every exercise prescription. Only a note on an unchanged day, a rest day or a skip passes. `hold status` prints `urgent: true`.
+### Pain and injuries
 
-- **Setting a hold is always allowed,** in every mode, because it makes training safer.
-- **Clearing a hold needs your yes, in a live session.** A scheduled run can never clear a hold.
-- When you report what a clinician told you, the coach records it as `clinician-reported`. It never claims to verify it.
+When you mention pain or an injury, the coach (the `safety` skill) asks one screen of clickable questions:
 
-Run `node engine/cli.ts hold status` to see the hold and any pending safety check.
+- how to handle the region: "It's fine now: train normally", "Go light and build back slowly", or "Avoid loading it for now";
+- which side, when the region has sides;
+- "Any of these now?": new numbness or weakness, swelling with heat or redness, cannot bear weight, or none. A warning sign starts the urgent stop.
+
+Then it writes the limit you chose: no limit (a log line), a cap on weekly sets that builds back each week when the region feels fine, or a ban on the movements that load the region. When you say the region is better, it asks one question: remove the limit, loosen it, or keep it.
+
+The coach never diagnoses, never names a likely cause, and says once per conversation: "See a clinician for new pain, pain that gets worse, or pain that does not settle." In a scheduled run it asks nothing: it avoids loading the region that day, leaves a note, and asks at the next live session.
+
+When you report what a clinician told you, the coach records it as `clinician-reported`. It never claims to verify it.
 
 ### Your limits
 
-Your injury limits live in `athlete/limits.yaml`. A limit can ban a movement pattern or an exercise, or cap the load or the weekly sets. The guard checks every write against every limit. An exercise that the engine cannot classify is blocked while any limit is active, so a new exercise name cannot slip past a ban.
+Your limits live in `athlete/limits.yaml`. A limit can ban a movement pattern or an exercise, or cap the weekly sets or the load for a body region. The coach reads the file before every plan and checks each planned week with `node engine/cli.ts limits check`, which reports a banned exercise, a weekly set count over a cap, a set over a load cap, and any exercise the engine cannot classify. The coach fixes each finding before it writes. The `audit` skill runs the same check on request.
 
-The model cannot edit `athlete/limits.yaml`. The same protection covers the other evidence that authorizes training: `athlete/block.yaml` (the approved block) and `athlete/signals/` (your check-ins and health data). The block changes only through setup or the block skill with your yes, or when you merge a proposal. On a proposal branch, the guard still reads the block on `main`. Signal files come only from your Shortcut and from trusted engine commands, and `checkin` never runs in a scheduled run. To change a limit, say so (the `limits` skill), and the coach shows the exact change and writes it only after your yes.
+This is guidance, not a gate. The coach can misread a limit, and no hook stops that write. Two things make a mistake visible: git records every plan change, and your logger shows the plan. The evals in `evals/` measure it: three limit shapes (a ban, a weekly set cap and a load cap), ten planned weeks each.
+
+The coach changes a limit only when you ask (the `limits` skill, or the `safety` skill for a new or better region), and commits the change. A scheduled run never changes a limit.
 
 ## Where your data lives
 
 | Data | Where it lives | Who can read it |
 |---|---|---|
-| Your brief, limits, block, log and proposals (`athlete/`) | Your private GitHub repository | You and GitHub |
+| Your brief, limits, block and log (`athlete/`) | Your private GitHub repository | You and GitHub |
+| Your weekly plans and logged sets, with `logger: files` (`plans/`) | Your private GitHub repository | You and GitHub |
 | Apple Health data (sleep, HRV, resting heart rate) and check-ins from the Shortcut | `athlete/signals/` in your private repo. Your own Shortcut sends it with your own GitHub token. | You and GitHub |
 | Oura data | `athlete/.cache/` on your Mac (not committed) | You |
 | Oura app credentials and tokens | The macOS Keychain on your Mac | You |
-| Your plan, your workout log and a short coach note on each changed day | Your logger app (for example Tally) | You and the logger |
+| Your plan, your workout log and a short coach note on each changed day, with `logger: tally` or `other` | Tally, or the tool you connected | You and that service |
 | Your conversations with the coach | Anthropic, as for any Claude Code session | You and Anthropic |
 
 The harness itself has no server. It sends nothing to the harness authors.
 
 ### Notes in your logger
 
-The coach writes a short note on a day it changes. By default the note is generic, for example "Adjusted for recovery" or "Rest day: see your coach repo". Symptoms, body regions, pain scores and readiness values (sleep, HRV, resting heart rate) stay in your private repo. Setup asks a separate question before the coach may write those details into logger notes; your answer is `consent.logger_health_notes` in `coach.yaml`.
+The coach writes a short note on a day it changes in Tally. **By default the note can include health details:** readiness values (sleep, HRV, resting heart rate), body regions and pain scores. To keep them out, choose "Show details" on setup's data question, then "Yes, but keep Tally notes generic". Then the notes stay generic, for example "Adjusted for recovery" or "Rest day: see your coach repo", and the details stay in your private repo. Your choice is `consent.logger_health_notes` in `coach.yaml` (`false` keeps the notes generic); change it there at any time.
 
-The setup skill names each recipient and asks for your consent to each one: Anthropic, GitHub, the logger, Oura (if you use it), and the Apple Health data that your Shortcut sends to your repo. It also checks that your repository is private.
+Setup asks one data question that names each recipient: Anthropic (Claude), GitHub (your private repo) and, with Tally, Tally ("plans, history and coach notes, which can include readiness and pain scores"). Oura and the Apple Health Shortcut are added later (the `recovery-data` skill), and that skill names them. Setup also checks that your repository is private before the first push.
+
+### What git records
+
+Git records every change to `athlete/`, `plans/` and `coach.yaml`: the coach commits after each change, and a Stop hook commits any changed file under those paths that is left. Each Tally write also gets a summary line in your athlete log (`athlete/log/`), which is committed; the Tally day itself is not in git. A change the coach makes in another tool you connected is not recorded.
 
 ### The Apple Health Shortcut
 
@@ -76,33 +90,30 @@ The Oura fetcher uses your own Oura API application. Its client ID, client secre
 |---|---|---|
 | Manual | Your computer, when you talk to the coach | Your conversation to Anthropic; plan reads and writes to your logger; commits to your private repo when you push. |
 | Mac | Your Mac, through launchd | The same as manual, plus Oura API calls from your Mac. The run uses your claude.ai login, not an API key. |
-| Cloud | Claude Code cloud routines | Anthropic clones your private repo into a cloud session. The run reads and writes your logger through its claude.ai connector only, then pushes commits and pull requests to your repo. |
+| Cloud | Claude Code cloud routines | Anthropic clones your private repo into a cloud session. The run reads and writes your logger through its claude.ai connector only, then pushes commits to your repo. |
 
 A cloud routine gets only the logger connector, not the other connectors on your account. Oura does not run in the cloud.
 
 ### What a scheduled run may do
 
-A scheduled run (Mac or cloud) has no one to ask, so it gets a narrow allowlist instead of open shell and file access:
+A scheduled run (Mac or cloud) has no one to answer a prompt, so it runs with `--permission-mode dontAsk` and a list of the tools it may use (`engine/automation.ts`, `UNATTENDED_TOOLS`):
 
-- **Shell:** only `node engine/cli.ts <command>`, `git status`, `diff`, `log`, `add`, `commit`, `pull` and `switch` (each with a short list of options; `switch` as a command of its own), `gh api` on your own repository (read, or open a pull request), `date +FORMAT` and `printenv CLAUDE_CODE_REMOTE`. Every word must be plain text: no `$`, backslash, `*`, `{ }` or `~`, so the shell has nothing to expand. Nothing runs in the background. `node engine/cli.ts checkin` and `install-launchd` never run unattended.
-- **Pushes:** only `node engine/cli.ts push`. It installs the pre-push hook, checks that your repository is private, and pushes only then. A raw `git push` is denied.
-- **Files:** Edit and Write only under `athlete/log/`, `athlete/proposals/` and `.tmp/coach/`.
+- **Shell:** `node engine/cli.ts <command>`, `git status`, `diff`, `log`, `add`, `commit`, `pull` and `switch`, `gh api`, `date` and `printenv CLAUDE_CODE_REMOTE`. Pushes go through `node engine/cli.ts push`, which checks that your repository is private first.
+- **Files:** Edit and Write under `athlete/log/` and `.tmp/coach/`. Plans are written through the engine (`plans write`) or the logger's tools.
 - **Logger tools:** the 11 Tally tools, under the exact names of the Tally server you connected. Before Mac automation is installed, a probe run proves those names.
 
-The runner's tool list (`engine/automation.ts`) sets this, and the file guard enforces it again: a command outside the list is denied even if the runner setting is looser.
+This list is what lets the run work. It is not a second gate: no hook checks it again. The scheduled runs need Tally for now.
 
-In every mode, a write to a file that node, npm, git or a hook could run needs your yes: `package.json`, `package-lock.json`, `.npmrc`, `*.js`, `*.cjs`, `*.mjs`, `*.ts`, `*.sh`, files under `node_modules/`, `.husky/`, `.git/` or `.github/workflows/`, and any file with an execute bit.
+### Permissions in a live session
 
-### The residual risk in a live session
-
-In a live (interactive) session, Claude Code asks you before each shell command that you have not allowed. The guard checks file writes and the shell commands that name protected files, but it cannot see what an arbitrary program does once it runs. If text in a logger note or a web page persuades the model to run a script, and you approve that command, the script can change any file in the repository, the engine included. Read each command before you approve it, and do not approve a command you do not understand. The logger's server-side limits (where available) and your git history are the backstops.
+`.claude/settings.json` allows the exact commands the coach runs in normal use (each engine command it needs, `npm ci`, the push and the update check), and file edits under `athlete/`, `plans/`, `coach.yaml` and `.tmp/coach/`. Claude Code asks you before any other shell command. No hook reads the commands you approve, so read each one before you approve it, and do not approve a command you do not understand. Text in a logger note or a web page could try to persuade the model to run something; the data sources are your own, and your git history is the record of every change.
 
 ## The pre-push check
 
-Setup installs a git `pre-push` hook (`git-hooks/pre-push`). Git does not clone the hooks folder, so a scheduled run pushes only through `node engine/cli.ts push`. That command installs the hook again, runs `node engine/cli.ts prepush-check` (the hook is installed and GitHub reports the repository as private), and pushes only when the check passes. A failed or public check means no push and a log entry; the guard denies a raw `git push` in a scheduled run. Before each push, the hook looks up the visibility of the destination repository on GitHub.
+Setup installs a git `pre-push` hook (`git-hooks/pre-push`). Git does not clone the hooks folder, so a scheduled run pushes only through `node engine/cli.ts push`. That command installs the hook again, runs `node engine/cli.ts prepush-check` (the hook is installed and GitHub reports the repository as private), and pushes only when the check passes. A failed or public check means no push and a log entry. A fresh clone has no git hook, so the session-start hook installs it when it is missing. Before each push, the hook looks up the visibility of the destination repository on GitHub.
 
 - If the lookup fails, the push is blocked.
-- If the destination is public and any commit in the push touches `athlete/`, the push is blocked.
+- If the destination is public and any commit in the push touches your athlete data, the push is blocked. Athlete data is `athlete/`, `plans/` (your weekly plans and logged sets) and `coach.yaml`.
 
 The hook checks each push only. If you later make the repository public in GitHub's settings, the hook cannot stop that. Keep your copy private. The session-start hook also warns when a tracked file holds a token or athlete data in the wrong place.
 

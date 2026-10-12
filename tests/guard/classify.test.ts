@@ -1,7 +1,7 @@
 // Change classification (contracts §6).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { toDayPlan } from "../../adapters/loggers/tally/rebuild.ts";
+import { toDayPlan } from "../../adapters/loggers/tally/day.ts";
 import { classifyChange, isUserDay, type ClassifyContext } from "../../engine/classify.ts";
 import type { DayPlan, LoggerExercise } from "../../engine/types.ts";
 import { bench, block, config, row3, rules, session, snapDay, squat, tax, TODAY } from "./fixtures.ts";

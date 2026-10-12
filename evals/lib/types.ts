@@ -24,6 +24,25 @@ export type SetupContext = {
   git(...args: string[]): string;
 };
 
+/** A scripted answer for AskUserQuestion (lib/answerer.mjs): regexes on the question text and an option label. */
+export type AnswerRule = { question: string; answer?: string | string[]; typed?: string };
+
+/** One AskUserQuestion call (a screen) as the scripted athlete answered it. */
+export type Screen = {
+  at: string;
+  questions: { question: string; header?: string; multiSelect: boolean; options: string[] }[];
+  answers: Record<string, string>;
+  unanswered: string[];
+  clicks: number;
+  typed: number;
+};
+
+/** A follow-up turn: a new `claude -p` on the same instance (`resume`: the same session). */
+export type Turn = { prompt: string | ((ctx: { today: string }) => string); resume?: boolean };
+
+/** Where each turn of a run starts, and the watched files after it. */
+export type TurnRecord = { firstTool: number; firstMessage: number; firstScreen: number; mockCalls: number; after: Record<string, string | null>; costUsd: number | null; exitCode?: number | null; isError?: boolean };
+
 export type ToolUse = { id: string; name: string; input: any; result?: { isError: boolean; text: string } };
 
 /** Everything a run leaves behind. Checks are pure functions of this. */
@@ -59,6 +78,14 @@ export type RunArtifacts = {
   prompts: { tool_name: string; input: any; behavior: string }[];
   /** Guard verdicts left on disk (a denied call is never consumed by log-writes). */
   verdicts: any[];
+  /** The AskUserQuestion screens the scripted athlete answered (scenarios with `answers`). */
+  screens?: Screen[];
+  /** One entry per turn (the prompt, then each follow-up). */
+  turns?: TurnRecord[];
+  /** The permission proxy (runner --proxy): default mode, only the project's allow rules. */
+  proxy?: boolean;
+  /** Proxy runs: false when Claude Code said the workspace was not trusted (its allow rules ignored). */
+  trusted?: boolean;
   /** The public export the instance was copied from (scripts/export-public.sh). */
   instance?: { exportSha: string; exportDirty: boolean; fresh: boolean };
   /** Fresh scenarios: the hook bootstrap probes run before the model (lib/probes.ts). */
@@ -85,6 +112,15 @@ export type Scenario = {
    * guard's "ask"). First match wins; no match is a "no".
    */
   approver?: ApproverRule[];
+  /**
+   * The scripted athlete's answers to AskUserQuestion (lib/answerer.mjs, a PreToolUse hook
+   * added with --settings). A question with no matching rule is denied and fails the run.
+   */
+  answers?: AnswerRule[];
+  /** Follow-up turns after the prompt. */
+  turns?: Turn[];
+  /** false: no Tally server at all (the mock is left out of the MCP config). */
+  tally?: boolean;
   /** Extra tools to allow (beyond the defaults). */
   allowedTools?: string[];
   /**

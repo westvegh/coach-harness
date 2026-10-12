@@ -1,6 +1,6 @@
-# Safety terms (contracts §10). PROTECTED. Read by engine/safety.ts `detect`.
+# Safety terms (contracts §10). Read by engine/safety.ts `detect`.
 #
-# Bias: catch too much. A false hold costs one tap to clear; a missed injury costs far more.
+# Bias: catch too much. An urgent false alarm costs one tap to clear; a missed warning sign costs far more.
 #
 # Matching works on normalized text: lowercase, apostrophes removed ("doesn't" → "doesnt"),
 # hyphens and slashes read as spaces ("pain-free" → "pain free"). Sentence ends (. ! ? ; and
@@ -115,7 +115,7 @@ urgent:
   - term: emergency
     all: ["emergency room|services|department"]
 
-# Pain and injury: run the safety agent first. Reduced by negations.
+# Pain and injury: reported by the note scan for the coach (the safety skill). Reduced by negations.
 pain:
   - pain|pains|painful
   - hurt|hurts|hurting|hurted
@@ -201,7 +201,7 @@ pain:
 #   - no gaps: only adjacent words, so "no improvement in pain" stays pain;
 #   - a negation does not apply when "not", "never", "isnt", "hardly" and similar come up to
 #     2 words before it, so "not pain-free" and "not quite pain free" stay pain;
-#   - "no knee pain" stays pain too (a region word breaks adjacency). A false hold is cheap.
+#   - "no knee pain" stays pain too (a region word breaks adjacency). A false match is cheap.
 negations:
   - no pain|pains|soreness|discomfort|swelling|aches|twinges
   - zero|0 pain|pains

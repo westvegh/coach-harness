@@ -1,5 +1,5 @@
-# PROTECTED. Injury limits, enforced in code by the guard (contracts §2).
-# Change this file only through the limits skill, with an interactive yes.
+# The athlete's limits (contracts §2). The coach follows them in every plan.
+# The coach changes this file when the athlete asks (the safety and limits skills).
 version: 1
-pain_threshold: 4                    # 0-10; check-in pain in a region at or above this blocks exercises that load it
+pain_threshold: 4                    # 0-10; check-in pain at or above this goes to the safety skill
 limits: []

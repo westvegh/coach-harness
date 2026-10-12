@@ -1,8 +1,9 @@
-// Spawn tests for the safety-detect hook (UserPromptSubmit) with stdin fixtures.
+// Spawn tests for the safety-detect hook (UserPromptSubmit) with stdin fixtures. v0.2: urgent
+// terms only; an urgent match writes athlete/.urgent-stop (committed in an athlete copy).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -23,108 +24,98 @@ function runHook(stdin: string, root: string, hook = HOOK) {
 const fixture = (prompt: unknown, root: string) =>
   JSON.stringify({ session_id: "s1", hook_event_name: "UserPromptSubmit", cwd: root, permission_mode: "default", prompt });
 const tempRoot = () => mkdtempSync(join(tmpdir(), "coach-hook-"));
-const pendingPath = (root: string) => join(root, "athlete/.safety-pending");
+const stopPath = (root: string) => join(root, "athlete/.urgent-stop");
 const context = (r: ReturnType<typeof runHook>) => r.json?.hookSpecificOutput?.additionalContext as string;
+const git = (dir: string, ...args: string[]) =>
+  execFileSync("git", args, { cwd: dir, encoding: "utf8", env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" } });
 
-test("urgent: writes the pending file and a context that starts with SAFETY FIRST (urgent)", () => {
+/** An athlete copy: coach.yaml and a git repo, so the hook commits the stop. */
+function athleteRoot(): string {
   const root = tempRoot();
-  const r = runHook(fixture("Tight chest and I nearly fainted on the bike", root), root);
-  assert.equal(r.code, 0);
-  assert.equal(r.json.hookSpecificOutput.hookEventName, "UserPromptSubmit");
-  assert.match(context(r), /^SAFETY FIRST \(urgent\)/);
-  assert.match(context(r), /Stop all training talk/);
-  assert.match(context(r), /emergency number/);
-  assert.match(context(r), /`safety` agent/);
-  const p = JSON.parse(readFileSync(pendingPath(root), "utf8"));
-  assert.equal(p.source, "prompt");
-  assert.ok(p.terms.includes("chest pain") && p.terms.includes("fainting"));
-  assert.deepEqual(Object.keys(p).sort(), ["at", "source", "terms"]);
-});
+  cpSync(join(REPO, "coach.example.yaml"), join(root, "coach.yaml"));
+  git(root, "init", "-q", "-b", "main");
+  git(root, "config", "user.name", "t");
+  git(root, "config", "user.email", "t@t");
+  git(root, "add", ".");
+  git(root, "commit", "-q", "-m", "init");
+  return root;
+}
 
-test("pain: writes the pending file and a SAFETY FIRST context that runs the safety agent first", () => {
-  const root = tempRoot();
-  const r = runHook(fixture("my left knee hurts after yesterday", root), root);
+test("urgent: writes the stop, commits it in an athlete copy, and a context with the urgent-care text and the push", () => {
+  const root = athleteRoot();
+  const r = runHook(fixture("I have chest pain and my left arm feels numb right now", root), root);
   assert.equal(r.code, 0);
-  assert.match(context(r), /^SAFETY FIRST\. /);
-  assert.doesNotMatch(context(r), /urgent/);
-  assert.match(context(r), /run the `safety` agent/);
-  const p = JSON.parse(readFileSync(pendingPath(root), "utf8"));
-  assert.deepEqual(p.terms, ["hurt", "region:left-knee"]);
+  assert.match(context(r), /^URGENT STOP\. The athlete's message matched urgent warning signs: chest pain, new numbness\./);
+  assert.match(context(r), /call your local emergency number/);
+  assert.match(context(r), /written and committed\. Push it now, before anything else: `node engine\/cli\.ts push`/);
+  const stop = JSON.parse(readFileSync(stopPath(root), "utf8"));
+  assert.deepEqual([stop.terms, stop.sources], [["chest pain", "new numbness"], ["chat"]]);
+  assert.equal(git(root, "log", "-1", "--format=%s").trim(), "urgent stop (chat)");
+  assert.deepEqual(git(root, "show", "--name-only", "--format=", "HEAD").trim().split("\n"), ["athlete/.urgent-stop"]);
 });
 
 test("the user's words are never stored", () => {
   const root = tempRoot();
-  runHook(fixture("my knee hurts since the zorblax incident", root), root);
-  assert.doesNotMatch(readFileSync(pendingPath(root), "utf8"), /zorblax|incident|since/);
+  runHook(fixture("my-secret-word: chest pain when I run", root), root);
+  assert.doesNotMatch(readFileSync(stopPath(root), "utf8"), /secret|run/);
 });
 
-test("negated pain: no output and no pending file", () => {
-  const root = tempRoot();
-  const r = runHook(fixture("no pain at all, the knee doesn't hurt anymore", root), root);
-  assert.equal(r.code, 0);
-  assert.equal(r.stdout, "");
-  assert.equal(existsSync(pendingPath(root)), false);
-});
-
-test("no match: no output and no pending file (including the routine prompt)", () => {
-  const root = tempRoot();
-  for (const prompt of ["what's on for today?", "Read .claude/skills/today/SKILL.md and follow it exactly. Unattended run."]) {
+test("ordinary pain makes no file and no output (the coach notices it without a word list)", () => {
+  for (const prompt of ["My left knee hurts today, a sharp pain when I bend it", "forget about the strain, it's better", "my back is acting up"]) {
+    const root = tempRoot();
     const r = runHook(fixture(prompt, root), root);
+    assert.equal(r.code, 0);
+    assert.equal(r.stdout, "", prompt);
+    assert.equal(existsSync(stopPath(root)), false, prompt);
+  }
+});
+
+test("negated urgent terms still count: a false alarm is cheap", () => {
+  const root = tempRoot();
+  const r = runHook(fixture("No chest pain at all today", root), root);
+  assert.match(context(r), /^URGENT STOP/);
+  assert.ok(existsSync(stopPath(root)));
+});
+
+test("no match: no output and no file (including the routine prompt); a missing prompt field is no match", () => {
+  const root = tempRoot();
+  for (const p of ["How should I train today?", "Read .claude/skills/today/SKILL.md and follow it exactly"]) {
+    const r = runHook(fixture(p, root), root);
     assert.equal(r.code, 0);
     assert.equal(r.stdout, "");
   }
-  assert.equal(existsSync(pendingPath(root)), false);
+  assert.equal(runHook(JSON.stringify({ session_id: "s1" }), root).stdout, "");
+  assert.equal(existsSync(stopPath(root)), false);
 });
 
-test("a missing prompt field is no match", () => {
+test("an existing stop keeps its terms (union); without coach.yaml nothing is committed", () => {
   const root = tempRoot();
-  const r = runHook(JSON.stringify({ hook_event_name: "UserPromptSubmit" }), root);
-  assert.equal(r.code, 0);
-  assert.equal(r.stdout, "");
+  runHook(fixture("I fainted at the gym", root), root);
+  const r = runHook(fixture("and now chest pain", root), root);
+  assert.deepEqual(JSON.parse(readFileSync(stopPath(root), "utf8")).terms, ["fainting", "chest pain"]);
+  assert.match(context(r), /not committed: no coach\.yaml yet/);
 });
 
-test("an existing pending file keeps its terms (union)", () => {
-  const root = tempRoot();
-  runHook(fixture("my shoulder hurts", root), root);
-  runHook(fixture("and my back went out", root), root);
-  const p = JSON.parse(readFileSync(pendingPath(root), "utf8"));
-  assert.ok(p.terms.includes("region:shoulder") && p.terms.includes("went out") && p.terms.includes("region:low-back"));
-});
-
-test("crash (malformed stdin): exit 0, a pending file with detector-error, and a SAFETY FIRST context", () => {
+test("crash (malformed stdin): exit 0, no file, a context that asks the coach to check for urgent signs", () => {
   const root = tempRoot();
   const r = runHook("{not json", root);
   assert.equal(r.code, 0);
-  assert.match(context(r), /^SAFETY FIRST\. The safety detector failed/);
-  assert.deepEqual(JSON.parse(readFileSync(pendingPath(root), "utf8")).terms, ["detector-error"]);
+  assert.equal(existsSync(stopPath(root)), false);
+  assert.match(context(r), /^SAFETY: the urgent warning-sign detector failed/);
+  assert.match(context(r), /urgent set --term <name> --source chat/);
 });
 
-test("pending file cannot be written: exit 0, the context still goes to Claude", () => {
+test("the stop cannot be written: exit 0, the context says how to set it", () => {
   const root = tempRoot();
-  writeFileSync(join(root, "athlete"), "a file where the athlete folder should be");
-  const r = runHook(fixture("my wrist hurts", root), root);
-  assert.equal(r.code, 0);
-  assert.match(context(r), /^SAFETY FIRST\. /);
-  assert.match(context(r), /could not be written/);
-});
-
-test("crash and the pending file cannot be written: exit 0, the message goes through", () => {
-  const root = tempRoot();
-  writeFileSync(join(root, "athlete"), "not a folder");
-  const r = runHook("{not json", root);
-  assert.equal(r.code, 0);
-  assert.match(context(r), /could not be written/);
-});
-
-test("if .claude/settings.json registers safety-detect, it uses onFailure continue and a timeout of 10 s or less", () => {
-  const path = join(REPO, ".claude/settings.json");
-  if (!existsSync(path)) return; // registered by the guard-hooks chunk (B)
-  const settings = JSON.parse(readFileSync(path, "utf8"));
-  const entries = (settings.hooks?.UserPromptSubmit ?? []).flatMap((m: any) => m.hooks ?? []);
-  const mine = entries.filter((h: any) => String(h.command ?? "").includes("safety-detect"));
-  assert.equal(mine.length, 1, "safety-detect must be registered once under UserPromptSubmit");
-  assert.equal(mine[0].onFailure, "continue");
-  assert.ok(typeof mine[0].timeout === "number" && mine[0].timeout <= 10);
+  mkdirSync(join(root, "athlete"));
+  chmodSync(join(root, "athlete"), 0o500);
+  try {
+    const r = runHook(fixture("chest pain", root), root);
+    assert.equal(r.code, 0);
+    assert.match(context(r), /could not be written .*urgent set --term "chest pain" --source chat/);
+  } finally {
+    chmodSync(join(root, "athlete"), 0o700);
+  }
 });
 
 // ---------- detector regressions ----------
@@ -134,14 +125,14 @@ for (const [prompt, urgent] of [
   ["Chest: pressure", true],
   ["My knee: sore", false],
   ["No improvement in pain", false],
-  ["The pain has not gone", false],
 ] as const) {
-  test(`detector: ${JSON.stringify(prompt)} writes the pending file and a SAFETY FIRST context`, () => {
+  test(`detector: ${JSON.stringify(prompt)} ${urgent ? "writes the stop" : "writes nothing"}`, () => {
     const root = tempRoot();
     const r = runHook(fixture(prompt, root), root);
     assert.equal(r.code, 0);
-    assert.match(context(r), urgent ? /^SAFETY FIRST \(urgent\)/ : /^SAFETY FIRST\. /);
-    assert.ok(existsSync(pendingPath(root)));
+    assert.equal(existsSync(stopPath(root)), urgent);
+    if (urgent) assert.match(context(r), /^URGENT STOP/);
+    else assert.equal(r.stdout, "");
   });
 }
 
@@ -154,33 +145,26 @@ function brokenRepo(kind: "missing-engine" | "broken-text"): string {
   if (kind === "broken-text") {
     mkdirSync(join(repo, "engine"));
     writeFileSync(join(repo, "engine/safety.ts"), "export const detect = () => ({ urgent: [], pain: [], regions: [] });\n");
+    writeFileSync(join(repo, "engine/urgent.ts"), "export const writeStop = () => ({});\n");
     writeFileSync(join(repo, "engine/safety-text.ts"), "throw new Error('cannot load');\n");
   }
   return repo;
 }
 
 for (const kind of ["missing-engine", "broken-text"] as const) {
-  test(`an engine import failure (${kind}) in an athlete instance still writes detector-error and exits 0`, () => {
+  test(`an engine import failure (${kind}) in an athlete copy exits 0 and asks the coach to check`, () => {
     const root = tempRoot();
     writeFileSync(join(root, "coach.yaml"), "version: 1\n");
-    const repo = brokenRepo(kind);
-    const r = runHook(fixture("chest pain, I nearly fainted", root), root, join(repo, ".claude/hooks/safety-detect.ts"));
+    const r = runHook(fixture("chest pain, I nearly fainted", root), root, join(brokenRepo(kind), ".claude/hooks/safety-detect.ts"));
     assert.equal(r.code, 0);
-    assert.match(context(r), /^SAFETY FIRST\. The safety detector failed/);
-    const p = JSON.parse(readFileSync(pendingPath(root), "utf8"));
-    assert.deepEqual([p.terms, p.source], [["detector-error"], "prompt"]);
-    assert.doesNotMatch(readFileSync(pendingPath(root), "utf8"), /fainted/);
+    assert.match(context(r), /^SAFETY: the urgent warning-sign detector failed/);
+    assert.equal(existsSync(stopPath(root)), false);
   });
-}
-
-for (const kind of ["missing-engine", "broken-text"] as const) {
-  test(`review finding 6: an engine import failure (${kind}) without coach.yaml writes no pending file`, () => {
+  test(`an engine import failure (${kind}) without coach.yaml says the detector could not run`, () => {
     const root = tempRoot();
-    const repo = brokenRepo(kind);
-    const r = runHook(fixture("chest pain, I nearly fainted", root), root, join(repo, ".claude/hooks/safety-detect.ts"));
+    const r = runHook(fixture("chest pain, I nearly fainted", root), root, join(brokenRepo(kind), ".claude/hooks/safety-detect.ts"));
     assert.equal(r.code, 0);
-    assert.equal(existsSync(pendingPath(root)), false, "no pending file before setup");
-    assert.equal(context(r), "SAFETY: the pain and red-flag detector could not run (packages are not installed). Ask about pain and red flags before any plan.");
+    assert.match(context(r), /^SAFETY: the urgent warning-sign detector could not run/);
   });
 }
 
@@ -191,28 +175,24 @@ const NOTIFICATION = [
   "<task-id>a7c1</task-id>",
   "<status>completed</status>",
   "<summary>Agent \"method-expert\" completed</summary>",
-  "<result>Goal: a pain-free left knee. L-001 caps knee pain loads; the chest and shoulder volume is fine.</result>",
+  "<result>Check for chest pain or fainting before hard intervals.</result>",
   "</task-notification>",
 ].join("\n");
 
-test("B2: a task notification that names pain and body regions writes no pending file", () => {
+test("B2: a task notification that names urgent terms writes no file", () => {
   const root = tempRoot();
   const r = runHook(fixture(NOTIFICATION, root), root);
   assert.equal(r.code, 0);
   assert.equal(r.stdout, "");
-  assert.equal(existsSync(pendingPath(root)), false);
-  // Two notifications in one prompt.
-  const two = runHook(fixture(`${NOTIFICATION}\n${NOTIFICATION}`, root), root);
-  assert.equal(two.stdout, "");
-  assert.equal(existsSync(pendingPath(root)), false);
+  assert.equal(existsSync(stopPath(root)), false);
+  assert.equal(runHook(fixture(`${NOTIFICATION}\n${NOTIFICATION}`, root), root).stdout, "");
 });
 
 test("B2: the athlete's own words still count, next to a notification or in an unclosed one", () => {
-  for (const prompt of ["My left knee has a sharp pain today", `${NOTIFICATION}\nMy left knee has a sharp pain today`, "<task-notification>My left knee has a sharp pain today"]) {
+  for (const prompt of ["I fainted at the gym", `${NOTIFICATION}\nI fainted at the gym`, "<task-notification>I fainted at the gym"]) {
     const root = tempRoot();
     const r = runHook(fixture(prompt, root), root);
-    assert.equal(r.code, 0);
-    assert.match(context(r), /^SAFETY FIRST/, prompt);
-    assert.ok(existsSync(pendingPath(root)), prompt);
+    assert.match(context(r), /^URGENT STOP/, prompt);
+    assert.ok(existsSync(stopPath(root)), prompt);
   }
 });

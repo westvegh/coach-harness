@@ -2,7 +2,7 @@
 
 Use Mac mode when the cloud cannot do the job. The main case is Oura: v1 reads Oura on the Mac, because a cloud run cannot reach it (see `../routine.md`).
 
-Set `automation.mode: mac` in `coach.yaml`.
+After setup, say "automate it" and choose "This Mac". The `automation` skill installs the two agents after your yes, and sets `automation.mode: mac` only after a test run succeeds. The scheduled runs read and write Tally; with `logger: files` or `other`, run the coach by hand.
 
 ## Install
 
@@ -28,8 +28,8 @@ env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN COACH_UNATTENDED=1 \
 ```
 
 - **`ANTHROPIC_API_KEY` and `ANTHROPIC_AUTH_TOKEN` are unset.** With an API key set, `claude -p` disables the claude.ai connectors (so Tally is gone) and bills usage to the API. Without them, the run uses your claude.ai login.
-- **`COACH_UNATTENDED=1`** puts the hooks in unattended mode. The guard then denies big changes, as in a cloud run.
-- **`--allowedTools`** is an exact, narrow list (`UNATTENDED_TOOLS` in `engine/automation.ts`): no open `Bash`, `Write` or `Edit`. Bash runs only the engine CLI (pushes go through `node engine/cli.ts push`), `git status|diff|log|add|commit|pull|switch`, `gh api` on this repository, `date` and `printenv CLAUDE_CODE_REMOTE`, with plain words only. `Edit` and `Write` reach only `athlete/log/**`, `athlete/proposals/**` and `.tmp/coach/**`. The file guard enforces the same list again.
+- **`COACH_UNATTENDED=1`** makes `node engine/cli.ts mode` report `unattended`. The skills then ask nothing and make no big change: a big change becomes a log line for the next live session, as in a cloud run. `urgent clear` refuses.
+- **`--allowedTools`** is an exact list (`UNATTENDED_TOOLS` in `engine/automation.ts`). The run cannot answer a permission prompt, so this list is what lets it work. Bash runs the engine CLI (pushes go through `node engine/cli.ts push`), `npm ci`, `git status|diff|log|add|commit|pull|switch`, `gh api`, `date` and `printenv CLAUDE_CODE_REMOTE`. `Edit` and `Write` reach `athlete/log/**` and `.tmp/coach/**`. No hook checks the list again; the urgent gate still denies every plan write while the urgent stop exists.
 - **The Tally tool names** use the prefix of the Tally server you connected (`mcp__tally__`, `mcp__Tally_Workout__` or `mcp__claude_ai_Tally_Workout__`). Setup records it in `coach.yaml` `automation.tool_prefix`; otherwise `install-launchd` finds it with `claude mcp list`. It writes it into the list and makes a probe run before it installs anything.
 
 ## Schedule

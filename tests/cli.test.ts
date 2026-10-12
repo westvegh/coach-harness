@@ -9,7 +9,7 @@ import { join } from "node:path";
 const REPO = new URL("..", import.meta.url).pathname;
 const CLI = join(REPO, "engine/cli.ts");
 
-// An attended run: the unattended markers would make `hold clear` fail.
+// An attended run: the unattended markers would change some commands.
 const ATTENDED = Object.fromEntries(Object.entries(process.env).filter(([k]) => k !== "CLAUDE_CODE_REMOTE" && k !== "COACH_UNATTENDED"));
 
 function cli(args: string[], cwd = REPO) {
@@ -82,30 +82,13 @@ test("limits-hash with --file and with the default path", () => {
   assert.equal(cli(["limits-hash", "--root", tempRoot()]).code, 1);
 });
 
-test("hold set, then clear needs approval (exit 3), then clear --approved", () => {
-  const dir = tempRoot();
-  const s = cli(["hold", "set", "--reason", "knee pain", "--regions", "left-knee", "--root", dir]);
-  assert.equal(s.code, 0, s.stderr);
-  assert.equal(s.json.hold.active, true);
-  assert.match(readFileSync(join(dir, "athlete/hold.yaml"), "utf8"), /active: true/);
-
-  const c = cli(["hold", "clear", "--root", dir]);
-  assert.equal(c.code, 3);
-  assert.equal(c.json.needs_approval, true);
-  assert.match(readFileSync(join(dir, "athlete/hold.yaml"), "utf8"), /active: true/);
-
-  const ok = cli(["hold", "clear", "--approved", "--root", dir]);
-  assert.equal(ok.code, 0, ok.stderr);
-  assert.equal(ok.json.hold.active, false);
-});
-
-test("node engine/hold.ts set works directly (the guard's allowed command)", () => {
-  const dir = tempRoot();
-  const r = spawnSync(process.execPath, [join(REPO, "engine/hold.ts"), "set", "--reason", "pain"], { cwd: dir, encoding: "utf8" });
-  assert.equal(r.status, 0, r.stderr);
-  assert.ok(existsSync(join(dir, "athlete/hold.yaml")));
-  const c = spawnSync(process.execPath, [join(REPO, "engine/hold.ts"), "clear"], { cwd: dir, encoding: "utf8", env: ATTENDED });
-  assert.equal(c.status, 3);
+test("the removed v0.1 commands are gone: hold, validate, proposals, block write", () => {
+  for (const args of [["hold", "status"], ["validate", "--tool", "x", "--args", "y"], ["proposals", "list"], ["block", "write", "--input", "x"]]) {
+    const r = cli(args);
+    assert.equal(r.code, 2, args.join(" "));
+    assert.equal(r.json.error.code, "USAGE", args.join(" "));
+  }
+  assert.equal(existsSync(join(REPO, "engine/hold.ts")), false);
 });
 
 test("snapshot show: missing, then present", () => {
@@ -131,14 +114,6 @@ test("errors: unknown command exits 2, bad input exits 1, both print JSON", () =
   assert.equal(b.json.error.code, "INPUT_ERROR");
 });
 
-test("A1: hold clear --approved fails in an unattended run (COACH_UNATTENDED=1)", () => {
-  const dir = tempRoot();
-  assert.equal(cli(["hold", "set", "--reason", "pain", "--root", dir]).code, 0);
-  const r = spawnSync(process.execPath, [CLI, "hold", "clear", "--approved", "--root", dir], { cwd: REPO, encoding: "utf8", env: { ...ATTENDED, COACH_UNATTENDED: "1" } });
-  assert.notEqual(r.status, 0);
-  assert.match(readFileSync(join(dir, "athlete/hold.yaml"), "utf8"), /active: true/);
-});
-
 test("A10: volume with a block needs target_week (no silent repeat of a deload week)", () => {
   const dir = tempRoot();
   const block = {
@@ -152,4 +127,15 @@ test("A10: volume with a block needs target_week (no silent repeat of a deload w
   const ok = cli(["volume", "--input", writeJson(dir, "v2.json", { block, logs, today: "2026-09-22", target_week: 3 }), "--root", dir]);
   assert.equal(ok.code, 0, ok.stderr);
   assert.equal(ok.json.targets.week, 3);
+});
+
+test("V3b fix 2: `help <command>` prints the usage of <command>, as `<command> --help` does; bare `help` lists them all", () => {
+  const run = (...a: string[]) => spawnSync(process.execPath, [join(REPO, "engine/cli.ts"), ...a], { encoding: "utf8" });
+  const viaHelp = JSON.parse(run("help", "loads").stdout);
+  assert.deepEqual(viaHelp, JSON.parse(run("loads", "--help").stdout));
+  assert.equal(JSON.parse(run("help", "block", "draft").stdout).command, "block");
+  assert.ok(JSON.parse(run("help").stdout).commands.loads);
+  const bad = run("help", "nope");
+  assert.notEqual(bad.status, 0);
+  assert.match(bad.stdout, /no help for/);
 });

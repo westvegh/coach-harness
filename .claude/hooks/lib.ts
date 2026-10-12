@@ -2,7 +2,7 @@
 // JSON from stdin. A guard hook that throws prints the reason to stderr and exits 2
 // (a block); settings.json also sets onFailure: "block" for the guard hooks.
 import { CoachError } from "../../engine/errors.ts";
-import { unattendedMarker } from "../../engine/hold.ts";
+import { unattendedMarker } from "../../engine/mode.ts";
 import { isPlainObject } from "../../engine/yaml-file.ts";
 import { readRawInput, stdinText } from "./bootstrap.ts";
 

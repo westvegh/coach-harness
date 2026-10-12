@@ -14,7 +14,7 @@ Each kind has weaknesses on its own. A low jump can mean the athlete did not try
 
 - **One morning is not a pattern.** A flag on a single day, in any category, earns a note and no change [NA-REC-008]. HRV often dips the morning after a hard session; that is the training stress doing its job. The pack looks at the trend, not the daily score.
 - **Three mornings in a row is a short pattern.** When HRV stays below, or resting heart rate stays above, the athlete's own band on 3 or more mornings in a row, reassess the load [NA-REC-009]. The harness holds load progression and lightens the session. It also asks about sleep, eating and drinking, without setting any targets. A morning with no reading is unknown: it is not counted as off, and it ends the run.
-- **The trim.** On the short pattern, the session keeps its exercises and loads and loses about 20% of its hard sets. If the check-in or performance is also red that day, the day becomes a recovery day of easy aerobic work, mobility and breathing [NA-REC-010]. The size and the escalation are this pack's choices, not the source's. Only one adjustment a day. Precedence: a safety hold, then a recovery day, then a trim, then normal progression.
+- **The trim.** On the short pattern, the session keeps its exercises and loads and loses about 20% of its hard sets. If the check-in or performance is also red that day, the day becomes a recovery day of easy aerobic work, mobility and breathing [NA-REC-010]. The size and the escalation are this pack's choices, not the source's. Only one adjustment a day. Precedence: the urgent stop, then a recovery day, then a trim, then normal progression.
 - **Not wanting to train is a signal.** Not wanting to train at all (aversion, not ordinary tiredness) is a reason to rest. The check-in asks "How much do you want to train today?" from 1 to 5. A 1 offers a recovery day; an unattended run makes the day a recovery day, because the safer change is always allowed [NA-REC-012].
 - **Low HRV plus short sleep is one category.** Both come from the wearable, so they count as one flag, not two.
 
@@ -41,4 +41,10 @@ Compare HRV only with the athlete's own baseline, never with other people. Devic
 
 ## Pain is not soreness
 
-Soreness is expected after new or hard work. Pain is different. Pain reported in a region stops loading of that region and goes to the harness's safety path. The pack never programs through pain [NA-REC-007]. The guard and the limits file enforce this, not the coaching prose.
+Soreness is expected after new or hard work. Pain is different. A painful region is loaded only as the athlete chose [NA-REC-007]:
+
+- **Avoid it for now:** no exercise that loads the region (a ban in the limits file).
+- **Go light and build back slowly:** a cap on sets or load that rises a step at a time while the region feels fine (a cap with `build_back`).
+- **It's fine now:** train normally; the coach notes it.
+
+The coach offers the choice kindly, puts the caution in the option text, and does not refuse to plan. It says once: see a clinician for new pain, pain that gets worse, or pain that does not settle. Urgent warning signs (chest pain, fainting, new numbness or weakness) are different: they stop all training changes until a clinician has seen the athlete or it was a false alarm.

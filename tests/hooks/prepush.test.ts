@@ -73,7 +73,7 @@ test("public destination: a pushed commit that touches athlete/ is denied; templ
   const head = git(dir, "rev-parse", "HEAD");
   const r = runHook(dir, bin, "public", URL_, `refs/heads/main ${head} refs/heads/main ${base}\n`);
   assert.equal(r.code, 1);
-  assert.match(r.stderr, /alex\/coach is PUBLIC and 1 pushed commit\(s\) touch athlete\//);
+  assert.match(r.stderr, /alex\/coach is PUBLIC and 1 pushed commit\(s\) touch athlete data/);
   // A new branch (remote sha zero): every commit not on the remote counts.
   assert.equal(runHook(dir, bin, "public", URL_, `refs/heads/main ${head} refs/heads/x ${ZERO}\n`).code, 1);
   // The same push to a private destination is fine.
@@ -131,7 +131,7 @@ test("cached origin refs do not hide commits from a public destination", () => {
   git(dir, "update-ref", "refs/remotes/origin/main", head);
   const r = runHook(dir, bin, "public", URL_, `refs/heads/main ${head} refs/heads/new ${ZERO}\n`);
   assert.equal(r.code, 1, r.stderr);
-  assert.match(r.stderr, /touch athlete\//);
+  assert.match(r.stderr, /touch athlete data/);
 });
 
 test("a non-ASCII athlete file name is caught (NUL-delimited paths)", () => {
@@ -145,7 +145,7 @@ test("a non-ASCII athlete file name is caught (NUL-delimited paths)", () => {
   const head = git(dir, "rev-parse", "HEAD");
   const r = runHook(dir, bin, "public", URL_, `refs/heads/main ${head} refs/heads/main ${base}\n`);
   assert.equal(r.code, 1, r.stderr);
-  assert.match(r.stderr, /1 pushed commit\(s\) touch athlete\//);
+  assert.match(r.stderr, /1 pushed commit\(s\) touch athlete data/);
 });
 
 // ---------- launch review finding 4: fresh clones have no hooks; prepush-check gates every automated push ----------
@@ -212,4 +212,34 @@ test("the routine prompt and the skills push only through node engine/cli.ts pus
   }
   assert.match(skill("setup"), /install-git-hooks[\s\S]*prepush-check[\s\S]*ok: true/);
   assert.match(readFileSync(join(REPO, "CLAUDE.md"), "utf8"), /`git pull --rebase`, then `node engine\/cli\.ts push`/);
+});
+
+test("V3b fix 1: a raw git push of a plans/ or a coach.yaml commit to a public destination is refused by the hook", () => {
+  for (const [path, text] of [["plans/2026-W43.csv", "date,day,exercise\n"], ["coach.yaml", "version: 1\n"]] as const) {
+    const dir = repo();
+    mkdirSync(join(dir, "engine"));
+    execFileSync("cp", [join(REPO, "engine/prepush.ts"), join(dir, "engine/prepush.ts")]);
+    git(dir, "add", ".");
+    git(dir, "commit", "-q", "-m", "engine");
+    assert.equal(spawnSync(process.execPath, [join(REPO, "engine/cli.ts"), "install-git-hooks", "--root", dir], { encoding: "utf8" }).status, 0);
+    // A GitHub URL served by a fake ssh from a local bare repo, as the evals do.
+    const bare = mkdtempSync(join(tmpdir(), "coach-bare-"));
+    git(bare, "init", "-q", "--bare", "-b", "main");
+    const ssh = join(bare, "fake-ssh");
+    writeFileSync(ssh, `#!/bin/sh\nfor last; do :; done\ncase "$last" in\n  "git-receive-pack 'alex/coach.git'") exec git receive-pack "${bare}" ;;\n  "git-upload-pack 'alex/coach.git'") exec git upload-pack "${bare}" ;;\nesac\nexit 1\n`);
+    chmodSync(ssh, 0o755);
+    git(dir, "config", "core.sshCommand", ssh);
+    git(dir, "remote", "add", "origin", "git@github.com:alex/coach.git");
+    mkdirSync(join(dir, path, ".."), { recursive: true });
+    writeFileSync(join(dir, path), text);
+    git(dir, "add", ".");
+    git(dir, "commit", "-q", "-m", `add ${path}`);
+    const env = { ...process.env, ...GIT_ENV, PATH: `${fakeGh()}:${process.env.PATH}`, FAKE_VIS: "public" };
+    const push = spawnSync("git", ["push", "origin", "main"], { cwd: dir, encoding: "utf8", env });
+    assert.notEqual(push.status, 0, `${path}: ${push.stderr}`);
+    assert.match(push.stderr, /PUBLIC and 1 pushed commit\(s\) touch athlete data/, path);
+    // The same push to a private destination goes through.
+    const ok = spawnSync("git", ["push", "origin", "main"], { cwd: dir, encoding: "utf8", env: { ...env, FAKE_VIS: "private" } });
+    assert.equal(ok.status, 0, `${path}: ${ok.stderr}`);
+  }
 });

@@ -1,7 +1,0 @@
-# PROTECTED. Training hold (contracts §10). Set it with `node engine/hold.ts set`.
-# Clearing it needs an interactive yes.
-active: false
-set_at: null
-reason: null
-regions: []
-set_by: null

@@ -1,4 +1,4 @@
-# Movement taxonomy (contracts §3). Ships with the harness; PROTECTED.
+# Movement taxonomy (contracts §3). Ships with the harness.
 # athlete/movements.local.yaml has the same shape and wins when both define an entry.
 #
 # regions:   body regions that limits and pain refer to. A side region (left-knee)

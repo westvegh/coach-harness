@@ -2,8 +2,9 @@
 //   node engine/prepush.ts <remote name> <remote url>   (stdin: git's ref lines)
 // - The destination's visibility comes from `gh api repos/<owner>/<repo>` (REST: GraphQL
 //   is blocked in Claude Code sessions, spike #14). A failed lookup denies the push.
-// - A public destination: any commit reachable from a pushed SHA that touches athlete/
-//   denies the push (nothing is excluded, paths are NUL-delimited).
+// - A public destination: any commit reachable from a pushed SHA that touches athlete data
+//   denies the push (nothing is excluded, paths are NUL-delimited). Athlete data is
+//   athlete/, plans/ (the weekly plans and logged sets with `logger: files`) and coach.yaml.
 //   (templates/athlete/ is outside athlete/ and is fine.)
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -44,11 +45,16 @@ export function pushedCommits(cwd: string, refLines: string): string[] {
   return [...out];
 }
 
-/** Paths under athlete/ that a commit touches. NUL-delimited, so no name is quoted. */
+/** Whether a repo path is athlete data: under athlete/ or plans/, or coach.yaml. */
+export function isAthleteData(p: string): boolean {
+  return p.startsWith("athlete/") || p.startsWith("plans/") || p === "coach.yaml";
+}
+
+/** Athlete-data paths that a commit touches. NUL-delimited, so no name is quoted. */
 export function athleteFiles(cwd: string, commit: string): string[] {
   return run("git", ["diff-tree", "-z", "--no-commit-id", "--name-only", "-r", "--root", "-m", commit], cwd)
     .split("\0")
-    .filter((p) => p.startsWith("athlete/"));
+    .filter(isAthleteData);
 }
 
 export function prePush(input: { cwd: string; remote: string; url: string; refLines: string; env?: NodeJS.ProcessEnv }): PushCheck {
@@ -69,9 +75,9 @@ export function prePush(input: { cwd: string; remote: string; url: string; refLi
   }
   const bad = commits.filter((c) => athleteFiles(input.cwd, c).length > 0);
   if (bad.length > 0) {
-    return { ok: false, reason: `${repo} is PUBLIC and ${bad.length} pushed commit(s) touch athlete/ (${bad.map((c) => c.slice(0, 8)).join(", ")}); push denied`, visibility, commits: bad };
+    return { ok: false, reason: `${repo} is PUBLIC and ${bad.length} pushed commit(s) touch athlete data: athlete/, plans/ or coach.yaml (${bad.map((c) => c.slice(0, 8)).join(", ")}); push denied`, visibility, commits: bad };
   }
-  return { ok: true, reason: `${repo} is public; no pushed commit touches athlete/`, visibility };
+  return { ok: true, reason: `${repo} is public; no pushed commit touches athlete data`, visibility };
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {

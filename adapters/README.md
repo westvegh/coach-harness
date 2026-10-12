@@ -7,4 +7,4 @@ An adapter connects coach-harness to an outside system:
 
 The guide to adding one is [docs/adding-a-logger-or-signal.md](../docs/adding-a-logger-or-signal.md). The formats are in [docs/contracts.md](../docs/contracts.md) (§5, §11, §12).
 
-`adapters/**` is protected in an athlete repo: the guard asks before the model edits it.
+Change an adapter in a reviewed commit.

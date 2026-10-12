@@ -3,7 +3,7 @@
 An adapter connects coach-harness to an outside system. There are 2 kinds:
 
 - **Signal adapters** (`adapters/signals/<name>/`) bring recovery data in: sleep, HRV, resting heart rate, a vendor score, and the daily check-in.
-- **Logger adapters** (`adapters/loggers/<name>/`) connect to the app that holds the training plan and the workout log. [Tally](tally.md) is the reference logger.
+- **Loggers** hold the training plan and the workout log. `coach.yaml logger` picks one: `files` (a spreadsheet per week in the repo), `tally` ([Tally](tally.md), through `adapters/loggers/tally/`) or `other` (a tool the athlete connected, with no adapter code).
 
 This page tells you how to add one, for example Whoop or Garmin as a signal source. The binding formats are in [contracts.md](contracts.md) (§5, §11, §12). If this page and the contracts disagree, the contracts win.
 
@@ -93,7 +93,7 @@ For both patterns:
 
 - Do not merge your data into another source's record. Two wearables give 2 records.
 - Set `hrv.method` correctly.
-- Add your source as a data recipient in `docs/safety-and-privacy.md` and in the consent step of the setup skill, and to `coach.yaml signals.wearable` if it is a wearable.
+- Add your source as a data recipient in `docs/safety-and-privacy.md` and in the `recovery-data` skill (it names each recipient when the athlete adds recovery data), and to `coach.yaml signals.wearable` if it is a wearable.
 
 ### Credentials
 
@@ -108,30 +108,38 @@ For both patterns:
 - The lock records the owner's pid and process start time. A lock whose owner is alive is never broken, however old it is. A dead owner's lock is broken only after a check that it is still the same lock. An empty or corrupt lock is broken after a 5-second grace period.
 - The OAuth flow uses PKCE (S256). Its callback server listens on `127.0.0.1` only. It refuses to start when another program listens on `[::1]` on the same port.
 
-## Logger adapters
+## Loggers
 
-A logger lives in `adapters/loggers/<name>/` and `coach.yaml` selects it with `logger: <name>`. It has:
+`coach.yaml logger` says where plans live (contracts §24). There are three values:
 
-- **`adapter.yaml`:**
-  - `name`;
-  - the tool map: which tool-name suffixes read the plan and the log, and which change them;
-  - `matcher`: the guard's regex for the write tools, and `capture_matcher`: the regex for the reads and writes whose responses update the snapshot;
-  - capabilities: `rangeCreateIfAbsent`, `versionedSkipDelete`, `opId`, `protectsUserDays`.
-- **`rebuild.ts`:** one function per write tool. Each takes the tool arguments and the snapshot, and returns the resulting `DayPlan[]` with the logger's own semantics (for example, a Tally move resets the status to planned). There is also `toDayPlan(snapshotDay)`.
+| Logger | Code | How the coach reads and writes |
+|---|---|---|
+| `files` | `engine/plans-files.ts`, `engine/cli-plans.ts` | `node engine/cli.ts plans write`, `plans read` and `plans done` on `plans/<YYYY>-W<ww>.csv` (contracts §12a). |
+| `tally` | `adapters/loggers/tally/` | The Tally MCP tools. |
+| `other` | none | The connected tool's own MCP tools, by that tool's own instructions. |
 
-The guard uses the rebuild functions to compute the result of a change before it is written. It then validates the result against the athlete's limits and the method's rules. The golden parity tests (`evals/golden/`) prove that each rebuild matches what the logger stores.
+The urgent stop covers each one: the urgent gate denies the plan-write tools of any MCP server (by name suffix) and every edit under `plans/`, and `plans write` and `plans done` refuse. With `other`, the gate cannot know the tool's names, so the coach's instructions carry the stop.
 
-The logger also gives the **performance** signal: logged sessions against the plan (`SessionPerf` in contracts §5). That signal comes from the logger, not from a signal adapter.
+### The Tally adapter
+
+- **`adapter.yaml`:** the name; the tool map (which tool-name suffixes read the plan and the log, and which change them); `matcher` (the regex of the write tools, for `log-writes`) and `capture_matcher` (the reads and writes whose responses update the snapshot cache, for `capture-reads`); the capabilities `rangeCreateIfAbsent`, `versionedSkipDelete`, `opId` and `protectsUserDays`.
+- **`day.ts`:** the mutation and read suffixes, and `toDayPlan`, which turns a stored Tally day into the engine's `DayPlan`.
+- **`version.ts`:** the row version Tally checks on each write.
+
+No code rebuilds or checks a write before it is sent (v0.2). The coach reads each day before it writes, passes the version it read, and reads the day back after.
+
+The logger also gives the **performance** signal: logged sessions against the plan (`SessionPerf` in contracts §5). With `files`, `engine/coach-snapshot.ts` builds the same snapshot from `plans/`, so the readiness, weeks, loads and block-draft tools need no logger-specific path.
 
 ### Add a new logger
 
-Tally is the only logger that ships, and parts of the engine still import it directly (`engine/logger.ts`, `engine/snapshot.ts`, `engine/loads.ts`). A second logger therefore needs engine changes as well as the adapter folder. The steps:
+Most tools need no code: connect the tool's MCP server to Claude Code, and choose "A tool you already use" in setup (`logger: other`). The coach follows the tool's own instructions.
 
-1. Make `adapters/loggers/<name>/adapter.yaml` and `rebuild.ts`. Copy the layout of `adapters/loggers/tally/`.
-2. Make the logger selectable in `engine/logger.ts`, and map its read responses into the snapshot shape (contracts §9, §20 item 1).
+A logger with its own adapter needs engine changes, because parts of the engine import Tally's shapes directly (`engine/logger.ts`, `engine/snapshot.ts`, `engine/loads.ts`). The steps:
+
+1. Make `adapters/loggers/<name>/adapter.yaml` and a `day.ts` with `toDayPlan`. Copy the layout of `adapters/loggers/tally/`.
+2. Make the logger selectable in `engine/logger.ts` and `engine/config.ts`, and map its read responses into the snapshot shape (contracts §9, §20 item 1).
 3. Put the same `matcher` and `capture_matcher` regexes in `.claude/settings.json`. A test keeps them equal to `adapter.yaml`.
-4. Add golden parity cases: a stored day, one write call, and the day the logger stores afterwards.
-5. Add the logger's tool names to the skills only through the tool map. Skills name tools by suffix.
-6. Keep every guard rule. A logger that cannot carry a version on each write must deny that write (fail closed), as Tally did before its safe-write API.
+4. Make sure the urgent gate's mutation suffixes (`.claude/hooks/urgent-list.ts`) cover every tool that changes a plan.
+5. Add the logger to the "Where plans live" table in `CLAUDE.md`. Skills name tools by suffix.
 
 Run `npm test` before you open the pull request.

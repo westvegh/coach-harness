@@ -49,8 +49,11 @@ export type CoachConfig = {
   method: string;
   template: { days: 3 | 4 | 5; emphasis: Emphasis };
   signals: { wearable: "apple-health-shortcut" | "oura" | "none"; checkin: "shortcut" | "chat" };
-  logger: string;
-  /** logger_health_notes: symptoms, regions, pain scores and readiness reasons may go into logger notes (launch review finding 5; default false). */
+  /** Where plans live (v0.2): Tally, the week files under plans/, or another tool the athlete connected. */
+  logger: "tally" | "files" | "other";
+  /** True once the coach has mentioned Tally to an athlete who logs by hand (never repeated). */
+  tally_mentioned: boolean;
+  /** logger_health_notes: symptoms, regions, pain scores and readiness reasons may go into logger notes (v0.2 default true; false keeps the notes generic). */
   consent: { logger_health_notes: boolean };
   automation: {
     mode: "cloud" | "mac" | "manual";
@@ -75,6 +78,8 @@ export type Limit = {
   allow: string[];
   max_load?: { value: number; unit: Units };
   max_sets_per_week?: number;
+  /** A cap that rises: the `week` skill asks once a week how the region felt and raises the cap when it felt fine. */
+  build_back?: boolean;
   note?: string;
   source: "athlete" | "clinician-reported";
   since: CalendarDate;
@@ -388,23 +393,18 @@ export type Snapshot = {
   /** The logger's weight unit for the athlete, and whether the logger knows it. */
   weightUnit?: Units;
   weightUnitSource?: string;
+  /** Files logger only: rows or cells the engine could not read; the history is then incomplete (V2b fix 1). */
+  warnings?: string[];
 };
 
-// ---------- §10 safety files ----------
+// ---------- §10 the urgent stop ----------
 
-export type SafetyPending = { at: Instant; terms: string[]; source: "prompt" | "session-notes" };
-
-export type Hold = {
-  active: boolean;
-  set_at: Instant | null;
-  reason: string | null;
-  regions: string[];
-  set_by: string | null;
-  /** An urgent warning sign (launch review finding 3): no exercise is prescribed, only notes, rest days and skips. */
-  urgent?: boolean;
-  cleared_at?: Instant;
-  cleared_by?: string;
-};
+/** athlete/.urgent-stop: term names, sources and the time only, never the athlete's words. */
+export type UrgentStop = { version: 1; at: Instant; terms: string[]; sources: UrgentSource[] };
+/** `legacy`: converted from a v0.1 urgent hold or pending file at the first v0.2 session. */
+export type UrgentSource = "chat" | "checkin" | "note" | "answer" | "legacy";
+/** One line of athlete/log/urgent-clearances.jsonl. */
+export type UrgentClearance = { date: CalendarDate; at: Instant; terms: string[]; sources: UrgentSource[]; reason: "clinician" | "false-alarm" };
 
 // ---------- §11 signals ----------
 

@@ -123,32 +123,10 @@ function fakeGh(): { env: NodeJS.ProcessEnv; log: string } {
   return { env: { PATH: `${bin}${delimiter}${process.env.PATH}` }, log };
 }
 
-test("proposals create, list, open-pr, approve-copy, mark-applied", () => {
-  const dir = root();
-  const g = (...a: string[]) => execFileSync("git", ["-C", dir, ...a], { stdio: "ignore" });
-  g("init", "-q", "-b", "main");
-  g("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "init");
-  const input = { kind: "new_exercise", summary: "Add split squats", writes: [{ tool: "mcp__tally__plan_workout_day", input: { date: "2026-10-14" } }], base: { "2026-10-14": "v1" }, rule_ids: [] };
-  const c = cli(["proposals", "create", "--root", dir, "--now", "2026-10-12T15:00:00Z", "--input", writeJson(dir, "p.json", input)]);
-  assert.equal(c.code, 0, c.stderr);
-  assert.equal(c.json.id, "P-20261012-new_exercise-1");
-  const id = c.json.id;
-  const l = cli(["proposals", "list", "--root", dir]);
-  assert.equal(l.json.proposals.length, 1);
-  assert.match(l.json.proposals[0].limits_hash, /^[0-9a-f]{64}$/, "limits_hash defaults to athlete/limits.yaml's");
-  assert.equal(cli(["proposals", "approve-copy", id, "--root", dir]).code, 1, "refused on main");
-  const gh = fakeGh();
-  const o = cli(["proposals", "open-pr", id, "--root", dir, "--repo", "alex/coach"], gh.env);
-  assert.equal(o.code, 0, o.stderr);
-  assert.equal(o.json.url, "https://github.com/alex/coach/pull/3");
-  assert.deepEqual(JSON.parse(readFileSync(gh.log, "utf8")).slice(0, 4), ["api", "-X", "POST", "repos/alex/coach/pulls"]);
-  g("checkout", "-q", "-b", `proposal/${id}`);
-  assert.equal(cli(["proposals", "approve-copy", id, "--root", dir]).code, 0);
-  assert.equal(cli(["proposals", "list", "--root", dir, "--status", "approved"]).json.proposals.length, 1);
-  const m = cli(["proposals", "mark-applied", id, "--root", dir, "--now", "2026-10-13T07:07:00-07:00", "--input", writeJson(dir, "res.json", [{ status: "written" }])]);
-  assert.equal(m.code, 0, m.stderr);
-  assert.equal(m.json.status, "applied");
-  assert.equal(cli(["proposals", "nope", "--root", dir]).code, 2);
+test("proposals are gone in v0.2: a change for the next live session is a plain line in the athlete log", () => {
+  const r = cli(["proposals", "list"]);
+  assert.equal(r.code, 2);
+  assert.equal(r.json.error.code, "USAGE");
 });
 
 test("routine-body: from the API's connection list, Tally only", () => {

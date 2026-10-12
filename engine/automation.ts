@@ -31,17 +31,20 @@ export const TALLY_TOOLS = [
 ] as const;
 
 /**
- * The narrow tool allowlist of an unattended run (contracts §23): no open Bash and no open
- * Write. Bash only for the engine CLI (pushes go through `node engine/cli.ts push`), the git
- * subcommands the skills use (no push), `gh api` and the date and mode probes; Edit and Write only for the log, proposals and the engine inputs.
- * The guard (engine/protect.ts unattendedBash, UNATTENDED_WRITE_DIRS) enforces the same
- * list again, so a looser runner setting opens nothing.
+ * The tools an unattended run may use (contracts §14, §15). A scheduled run has no one to
+ * answer a prompt (`--permission-mode dontAsk`), so this list is what lets it work, not a
+ * gate: v0.2 enforces only the urgent stop and privacy in code. Bash for the engine CLI
+ * (plans, commits and pushes go through it), `npm ci` (a cloud run starts from a fresh
+ * clone), the git subcommands the skills use, `gh api`
+ * and the date and mode probes; Edit and Write for the athlete log and the engine inputs. A
+ * change for the next live session is a log line, so there is no proposals folder.
  */
 export const UNATTENDED_TOOLS = [
   "Read",
   "Glob",
   "Grep",
   "Bash(node engine/cli.ts:*)",
+  "Bash(npm ci)",
   "Bash(git status:*)",
   "Bash(git diff:*)",
   "Bash(git log:*)",
@@ -54,8 +57,6 @@ export const UNATTENDED_TOOLS = [
   "Bash(printenv CLAUDE_CODE_REMOTE)",
   "Edit(athlete/log/**)",
   "Write(athlete/log/**)",
-  "Edit(athlete/proposals/**)",
-  "Write(athlete/proposals/**)",
   "Edit(.tmp/coach/**)",
   "Write(.tmp/coach/**)",
 ] as const;

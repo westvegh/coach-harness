@@ -9,12 +9,6 @@
 //   loads --input <file.json>        ({exercises, history?}; history defaults to the snapshot's)
 //   loads --from-snapshot <date>  |  loads < tally-day.json
 //   targets --input <file.json>      ({block, logs, today, target_week})
-//   proposals create --input <file.json>       (limits_hash defaults to athlete/limits.yaml's)
-//   proposals approve-copy <id>                (only on the branch proposal/<id>)
-//   proposals open-pr <id> [--repo owner/repo] [--branch proposal/<id>] [--base main]
-//   proposals list [--status proposed|approved|applied]
-//   proposals mark-applied <id> --input <results.json>
-//   proposals check-applied --id <id> [--input <results.json>] [--now <instant>]   (writes nothing)
 //   routine-body --kind daily|weekly --repo-url <https://github.com/o/r>
 //                (--discover | --connections <file.json> | --connector-uuid <uuid> [--connector-name Tally_Workout])
 //                [--environment-id env_…] [--model <id>] [--disabled] [--now <instant>]
@@ -36,7 +30,6 @@ import type { Connector, RoutineKind } from "./automation.ts";
 import type { SessionHistory } from "./loads.ts";
 import type { Template } from "./methods.ts";
 import type { OpKind } from "./opid.ts";
-import type { ProposalStatus } from "./proposals.ts";
 import type { Block, CoachConfig, DayPlan, Limits, Rules, Snapshot, Units, WeekLog } from "./types.ts";
 
 /** A plain object (not null, not an array). The same test as yaml-file.ts, without loading yaml. */
@@ -82,10 +75,6 @@ function args(argv: string[]) {
       id: { type: "string" },
       date: { type: "string" },
       kind: { type: "string" },
-      status: { type: "string" },
-      repo: { type: "string" },
-      branch: { type: "string" },
-      base: { type: "string" },
       "repo-url": { type: "string" },
       connections: { type: "string" },
       "connector-uuid": { type: "string" },
@@ -193,6 +182,15 @@ async function dayInput(a: Args, root: string, units: Units): Promise<DayInput> 
   const { loadSnapshot, snapshotProblems } = await import("./snapshot.ts");
   const date = a.values["from-snapshot"];
   if (date) {
+    // logger: files: the week files are the record and are always current (contracts §12a).
+    const { coachSnapshot, loggerOf, usesFiles } = await import("./coach-snapshot.ts");
+    if (loggerOf(root) === "other") throw new CoachError("NO_SNAPSHOT", "logger: other: the engine cannot read that tool; pass the day as --input <file.json> (or on stdin)");
+    if (usesFiles(root)) {
+      const snap = coachSnapshot(root, { now: a.values.now });
+      const sd = snap?.days[date];
+      if (!snap || !sd) throw new CoachError("NOT_PLANNED", `${date} has no planned day in plans/: write it with plans write first`);
+      return { inp: {}, day: snapshotDayToPlan(date, sd, units), tally: true, unit: tallyDayUnit(sd, units), snap };
+    }
     const snap = loadSnapshot(root);
     if (!snap) throw new CoachError("NO_SNAPSHOT", "no snapshot: read the day with get_planned_workout first");
     const sd = snap.days[date];
@@ -216,7 +214,7 @@ async function cmdAdjust(a: Args): Promise<number> {
   const root = rootOf(a);
   const cfg = await maybeConfig(root);
   const { inp, day, tally } = await dayInput(a, root, cfg?.athlete.units ?? "lbs");
-  const [{ adjustDay }, { loadTaxonomy }, { readHold }, { planToTallyDay }] = await Promise.all([import("./adjust.ts"), import("./taxonomy.ts"), import("./hold.ts"), import("./tally-shape.ts")]);
+  const [{ adjustDay }, { loadTaxonomy }, { planToTallyDay }] = await Promise.all([import("./adjust.ts"), import("./taxonomy.ts"), import("./tally-shape.ts")]);
   const decision = a.values.decision ?? inp.decision;
   const pm = a.values["planned-minutes"] !== undefined ? Number(a.values["planned-minutes"]) : inp.planned_minutes;
   const tax = loadTaxonomy({ root });
@@ -225,7 +223,6 @@ async function cmdAdjust(a: Args): Promise<number> {
     thresholds: { ...(cfg?.thresholds ?? {}) },
     template: await templateAt(root, cfg),
     limits: await limitsAt(root),
-    hold: readHold(root),
     ...(typeof pm === "number" ? { planned_minutes: pm } : {}),
   });
   if (!tally) {
@@ -245,7 +242,7 @@ async function cmdAdjust(a: Args): Promise<number> {
 async function cmdLoads(a: Args): Promise<number> {
   const root = rootOf(a);
   const cfg = await maybeConfig(root);
-  const [{ asTallyDay }, { loadSnapshot }, { suggestLoads }, { loadTaxonomy }] = await Promise.all([import("./tally-shape.ts"), import("./snapshot.ts"), import("./loads.ts"), import("./taxonomy.ts")]);
+  const [{ asTallyDay }, { suggestLoads }, { loadTaxonomy }] = await Promise.all([import("./tally-shape.ts"), import("./loads.ts"), import("./taxonomy.ts")]);
   let unit: Units = cfg?.athlete.units ?? "lbs";
   const raw = a.values["from-snapshot"] === undefined && a.values.input ? readJson(a.values.input) : undefined;
   let d: DayInput;
@@ -260,7 +257,7 @@ async function cmdLoads(a: Args): Promise<number> {
   const strictUnits = tallyDay !== null || history === undefined;
   if (!history) {
     // The snapshot already read for --from-snapshot is reused.
-    const snap = d.snap ?? loadSnapshot(root);
+    const snap = d.snap ?? (await import("./coach-snapshot.ts")).coachSnapshot(root, { now: a.values.now, cfg });
     history = snap?.history ?? [];
   }
   const exercises = tallyDay ? tallyDay.exercises : inp.exercises;
@@ -310,82 +307,6 @@ async function cmdTargets(a: Args): Promise<number> {
   const targets = nextWeekTargets(block, ref, await rulesAt(root, await maybeConfig(root)), { tax: loadTaxonomy({ root }), week: inp.target_week as number });
   out({ reference_week: ref?.week_start ?? null, targets });
   return 0;
-}
-
-/** owner/repo from --repo, else from the origin remote. */
-function ownerRepo(a: Args, root: string): { owner: string; repo: string } {
-  let spec = a.values.repo;
-  if (!spec) {
-    let url: string;
-    try {
-      url = execFileSync("git", ["-C", root, "remote", "get-url", "origin"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
-    } catch {
-      throw new CoachError("USAGE", "needs --repo owner/repo (no origin remote)");
-    }
-    const m = /github\.com[:/]([^/]+)\/([^/]+?)(\.git)?$/.exec(url);
-    if (!m) throw new CoachError("USAGE", `origin is not a GitHub repo: ${url}`);
-    spec = `${m[1]}/${m[2]}`;
-  }
-  const [owner, repo, ...rest] = spec.split("/");
-  if (!owner || !repo || rest.length > 0) throw new CoachError("USAGE", `--repo must be owner/repo, got ${spec}`);
-  return { owner, repo };
-}
-
-async function cmdProposals(a: Args): Promise<number> {
-  const root = rootOf(a);
-  const { approveOnBranch, createProposal, listProposals, markApplied, openProposalPR, proposalBranch, readProposal } = await import("./proposals.ts");
-  const [sub, id] = a.positionals;
-  switch (sub) {
-    case "create": {
-      const inp = input(a, "proposals create");
-      const lh = inp.limits_hash ?? (await import("./limits.ts")).limitsHash(join(root, "athlete/limits.yaml"));
-      out(createProposal({ ...(inp as Record<string, unknown>), limits_hash: lh } as never, { root, ...(a.values.now ? { now: a.values.now } : {}) }));
-      return 0;
-    }
-    case "approve-copy":
-      out(approveOnBranch(need(id, "a proposal id"), { root }));
-      return 0;
-    case "open-pr": {
-      const p = readProposal(need(id, "a proposal id"), root);
-      const { owner, repo } = ownerRepo(a, root);
-      out(openProposalPR(p, { owner, repo, branch: a.values.branch ?? proposalBranch(p.id), base: a.values.base ?? "main", root }));
-      return 0;
-    }
-    case "list": {
-      const st = a.values.status as ProposalStatus | undefined;
-      if (st && !["proposed", "approved", "applied"].includes(st)) throw new CoachError("USAGE", "--status must be proposed | approved | applied");
-      // whether the guard accepts each one as approved (contracts §17).
-      const scan = (await import("./approvals.ts")).loadApprovals(root);
-      const approved = new Set(scan.records.map((r) => r.proposal_id));
-      const rejected = new Map(scan.rejected.map((r) => [r.path, r.reason]));
-      out({
-        proposals: listProposals(root, st ? { status: st } : {}).map((p) => {
-          const why = rejected.get(`athlete/proposals/${p.id}.yaml`);
-          return { ...p, approved_on_main: approved.has(p.id), ...(why ? { not_approved_because: why } : {}) };
-        }),
-        warnings: scan.warnings,
-      });
-      return 0;
-    }
-    case "mark-applied": {
-      const results = readJson(need(a.values.input, "--input <results.json>"));
-      out(markApplied(need(id, "a proposal id"), results, { root, ...(a.values.now ? { now: a.values.now } : {}) }));
-      return 0;
-    }
-    // --- proposals check-applied: applied, partial or not-applied, from the results and a fresh read-back ---
-    case "check-applied": {
-      const p = readProposal(need(a.values.id, "--id <proposal id>"), root);
-      const raw = a.values.input ? readJson(a.values.input) : null;
-      const results = Array.isArray(raw) ? raw : isPlainObject(raw) && Array.isArray(raw.results) ? raw.results : null;
-      if (raw !== null && results === null) throw new CoachError("INPUT_ERROR", "--input must be a list of tool results, one per write (or {results: [...]})");
-      const [{ checkApplied }, { loadSnapshot }] = await Promise.all([import("./proposal-check.ts"), import("./snapshot.ts")]);
-      out(checkApplied(p, results, loadSnapshot(root), a.values.now ?? new Date().toISOString()));
-      return 0;
-    }
-    // --- end proposals check-applied ---
-    default:
-      throw new CoachError("USAGE", "usage: proposals create|approve-copy|open-pr|list|mark-applied|check-applied");
-  }
 }
 
 function kindOf(a: Args, allowBoth = false): RoutineKind[] {
@@ -472,7 +393,7 @@ async function cmdWindowCheck(a: Args): Promise<number> {
 /** Writes to ~/Library/LaunchAgents only with --yes; --load also runs launchctl bootstrap. */
 async function cmdInstallLaunchd(a: Args): Promise<number> {
   // Installing scheduled agents is the athlete's choice in a live session (contracts §23).
-  const marker = (await import("./hold.ts")).unattendedMarker(process.env);
+  const marker = (await import("./mode.ts")).unattendedMarker(process.env);
   if (marker) throw new CoachError("UNATTENDED", `install-launchd never runs unattended (${marker} is set)`);
   const root = rootOf(a);
   const cfg = await config(root);
@@ -534,8 +455,6 @@ export async function helpersCommand(cmd: string, argv: string[]): Promise<numbe
       return cmdLoads(a);
     case "targets":
       return cmdTargets(a);
-    case "proposals":
-      return cmdProposals(a);
     case "routine-body":
       return cmdRoutineBody(a);
     case "launchd-plist":

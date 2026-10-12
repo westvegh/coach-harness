@@ -1,21 +1,13 @@
-// Safety detector and safety files (contracts §10).
+// The safety term matcher (contracts §10).
 //
-// `detect` is trusted code: the `safety-detect` hook runs it on every user message, and the
-// `today` skill runs it on logged session notes (`scanSessionNotes`). On a match the caller
-// writes `athlete/.safety-pending`, which makes the guard deny training writes until the
-// user clears it interactively. Only matched term names are stored, never the user's text.
-//
-// The hold and the pending file's read and clear live in hold.ts; they are re-exported here
-// so that safety callers have one module.
-import { existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { parseInstant } from "./dates.ts";
+// `detect` is trusted code: the `safety-detect` hook runs it on every user message (urgent
+// terms only make it act), and the `today` and `week` skills run it on logged session notes
+// (`scanSessionNotes`). An urgent match writes the urgent stop (engine/urgent.ts). Pain
+// matches are reported for the coach's own judgment; no file is written for them. Only
+// matched term names are stored, never the user's text.
 import { CoachError } from "./errors.ts";
-import { PENDING_RELATIVE, readPending } from "./hold.ts";
 import { isPlainObject, readYamlFile } from "./yaml-file.ts";
-import type { CalendarDate, SafetyPending } from "./types.ts";
-
-export { clearHold, clearPending, readHold, readPending, setHold, validatePending, EXIT_NEEDS_APPROVAL, PENDING_RELATIVE } from "./hold.ts";
+import type { CalendarDate } from "./types.ts";
 
 export const TERMS_PATH = new URL("./safety-terms.yaml", import.meta.url).pathname;
 
@@ -261,55 +253,8 @@ export function detect(text: string, terms: SafetyTerms = loadSafetyTerms()): De
   return { urgent: [...urgent], pain: [...pain], regions: [...regionIds].sort() };
 }
 
-/** True when a hold reason names an urgent warning sign by the word "urgent". */
-export const URGENT_REASON = /\burgent\b/i;
-
-/**
- * True when a hold is urgent (contracts §23): the flag, the word "urgent" in its reason, or
- * an urgent safety term in its reason. setHold and the guard use this one test.
- */
-export function isUrgentHold(hold: { urgent?: boolean; reason?: string | null } | null | undefined, terms?: SafetyTerms): boolean {
-  if (!hold) return false;
-  if (hold.urgent === true) return true;
-  const reason = hold.reason ?? "";
-  return URGENT_REASON.test(reason) || detect(reason, terms ?? loadSafetyTerms()).urgent.length > 0;
-}
-
 export function isMatch(d: Detection): boolean {
   return d.urgent.length > 0 || d.pain.length > 0;
-}
-
-/** The terms stored in the pending file: term names and `region:<id>`. Never user text. */
-export function pendingTerms(d: Detection): string[] {
-  return [...d.urgent, ...d.pain, ...d.regions.map((r) => `region:${r}`)];
-}
-
-// ---------- the pending file ----------
-
-/**
- * Writes `athlete/.safety-pending`. Terms already pending are kept (union). A malformed
- * existing file is replaced: the new file is valid and still blocks training writes.
- */
-export function writePending(root: string, input: { terms: string[]; source: SafetyPending["source"]; now?: string }): SafetyPending {
-  const at = input.now ?? new Date().toISOString();
-  parseInstant(at, "now");
-  let prev: SafetyPending | null = null;
-  try {
-    prev = readPending(root);
-  } catch {
-    prev = null;
-  }
-  const pending: SafetyPending = { at, terms: [...new Set([...(prev?.terms ?? []), ...input.terms])], source: input.source };
-  const p = join(root, PENDING_RELATIVE);
-  mkdirSync(dirname(p), { recursive: true });
-  const tmp = `${p}.tmp-${process.pid}`;
-  writeFileSync(tmp, JSON.stringify(pending, null, 2) + "\n");
-  renameSync(tmp, p);
-  return pending;
-}
-
-export function pendingExists(root: string): boolean {
-  return existsSync(join(root, PENDING_RELATIVE));
 }
 
 // ---------- session notes ----------
@@ -326,31 +271,35 @@ export type NotesMatch = Detection & { date: CalendarDate; where: "session" | "e
 /**
  * Runs the matcher over logged session notes and exercise notes. Returns one match per note
  * with urgent or pain terms, oldest first. `since` (inclusive) limits the dates scanned.
+ * `cleared` maps an urgent term to the latest clearance date (engine/urgent.ts): an urgent
+ * term in a note dated on or before it is dropped, so a cleared event does not stop again.
  * Every word of a note is scanned, `[coach:…]` lines included: a text prefix cannot show who
  * wrote the rest of the line.
  */
-export function scanSessionNotes(history: NotesHistoryEntry[], opts: { since?: CalendarDate; terms?: SafetyTerms } = {}): NotesMatch[] {
+export function scanSessionNotes(history: NotesHistoryEntry[], opts: { since?: CalendarDate; terms?: SafetyTerms; cleared?: Map<string, CalendarDate> } = {}): NotesMatch[] {
   const terms = opts.terms ?? loadSafetyTerms();
   const out: NotesMatch[] = [];
   const sorted = [...(history ?? [])].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  const live = (d: Detection, date: CalendarDate): Detection => {
+    if (!opts.cleared) return d;
+    return { ...d, urgent: d.urgent.filter((t) => !(opts.cleared!.has(t) && date <= (opts.cleared!.get(t) as string))) };
+  };
   for (const s of sorted) {
     if (opts.since && s.date < opts.since) continue;
     if (typeof s.notes === "string") {
-      const d = detect(s.notes, terms);
+      const d = live(detect(s.notes, terms), s.date);
       if (isMatch(d)) out.push({ date: s.date, where: "session", ...d });
     }
     for (const ex of s.exercises ?? []) {
       if (typeof ex.notes !== "string") continue;
-      const d = detect(ex.notes, terms);
+      const d = live(detect(ex.notes, terms), s.date);
       if (isMatch(d)) out.push({ date: s.date, where: "exercise", exerciseId: ex.exerciseId ?? null, name: ex.name, ...d });
     }
   }
   return out;
 }
 
-/** Writes the pending file (`source: "session-notes"`) when any note matched. */
-export function recordSessionNotes(root: string, matches: NotesMatch[], now?: string): SafetyPending | null {
-  if (matches.length === 0) return null;
-  const terms = matches.flatMap((m) => pendingTerms(m));
-  return writePending(root, { terms, source: "session-notes", now });
+/** The urgent terms of the matches (for the urgent stop). */
+export function urgentTermsOf(matches: NotesMatch[]): string[] {
+  return [...new Set(matches.flatMap((m) => m.urgent))];
 }

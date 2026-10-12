@@ -73,14 +73,8 @@ test("ids next --kind limit reads athlete/limits.yaml", () => {
   assert.equal(cli(["ids", "next", "--kind", "limit", "--root", dir]).json.id, "L-013");
 });
 
-test("ids next --kind proposal uses today in the athlete's timezone and the change kind", () => {
+test("ids next: the proposal kind is gone (v0.2); an unknown kind exits 2", () => {
   const dir = instance();
-  // 02:00 UTC on the 15th is still the 14th in Los Angeles.
-  const now = "2026-10-15T02:00:00Z";
-  assert.equal(cli(["ids", "next", "--kind", "proposal", "--change", "new_exercise", "--now", now, "--root", dir]).json.id, "P-20261014-new_exercise-1");
-  mkdirSync(join(dir, "athlete/proposals"));
-  writeFileSync(join(dir, "athlete/proposals/P-20261014-new_exercise-2.yaml"), "id: x\n");
-  assert.equal(cli(["ids", "next", "--kind", "proposal", "--change", "new_exercise", "--now", now, "--root", dir]).json.id, "P-20261014-new_exercise-3");
   assert.equal(cli(["ids", "next", "--kind", "proposal", "--root", dir]).code, 2);
   assert.equal(cli(["ids", "next", "--kind", "plan", "--root", dir]).code, 2);
 });

@@ -3,7 +3,7 @@
 // in the athlete's timezone (contracts §0, §9), so a week is weekStart(date).
 import { addDays, isCalendarDate, weekStart } from "./dates.ts";
 import { CoachError } from "./errors.ts";
-import type { CalendarDate, DayLog, Snapshot, SnapshotSession, WeekLog } from "./types.ts";
+import type { CalendarDate, DayLog, Snapshot, SnapshotSession, Units, WeekLog } from "./types.ts";
 
 export type WeeksResult = {
   from: CalendarDate;
@@ -54,9 +54,34 @@ export function weeksFromSnapshot(snap: Snapshot | null, from: CalendarDate, to:
   if (!snap) warnings.push("no snapshot: every week is empty; read get_workout_history first");
   else if (!cov) warnings.push("no valid history read in this session: weeks may be missing sessions; read get_workout_history first");
   else {
-    if (!cov.complete) warnings.push("the history read is incomplete (more pages remain)");
+    // The files logger names what it could not read; Tally's read is incomplete while pages remain.
+    if (snap.warnings?.length) warnings.push(...snap.warnings.map((w) => `the plans files: ${w}`));
+    else if (!cov.complete) warnings.push("the history read is incomplete (more pages remain)");
     if (cov.since && cov.since > from) warnings.push(`the history read starts ${cov.since}, after --from ${from}: earlier sessions are unknown, not absent`);
     if (cov.until && cov.until < to) warnings.push(`the history read ends ${cov.until}, before --to ${to}: later sessions are unknown, not absent`);
   }
   return { from, to, logs, coverage: cov, warnings };
+}
+
+/**
+ * Every logged week in the snapshot history, Monday to Sunday, oldest first; each set
+ * keeps its session's unit (else `units`). `block draft` caps week 1 against these.
+ */
+export function snapshotWeeks(snap: Snapshot, units: Units): WeekLog[] {
+  const weeks = new Map<CalendarDate, WeekLog>();
+  for (const s of snap.history) {
+    const ws = weekStart(s.date);
+    if (!weeks.has(ws)) weeks.set(ws, { week_start: ws, days: [] });
+    weeks.get(ws)!.days.push({
+      date: s.date,
+      exercises: s.exercises.map((e) => ({
+        exerciseId: e.exerciseId || null,
+        name: e.name,
+        muscle: e.muscle || null,
+        unit: s.weightUnit ?? units,
+        sets: e.sets.map((x) => ({ weight: x.weight, reps: x.reps, rpe: x.rpe })),
+      })),
+    });
+  }
+  return [...weeks.values()].sort((a, b) => (a.week_start < b.week_start ? -1 : 1));
 }

@@ -1,35 +1,34 @@
 // safety-detect (UserPromptSubmit; docs/contracts.md §10 and §13).
 //
 // Runs the trusted matcher on the user's message (`prompt` in the hook input), without the
-// task notifications Claude Code passes through this event for background tasks:
-//   - urgent match → writes athlete/.safety-pending and adds a "SAFETY FIRST (urgent)" context;
-//   - pain match (not negated) → writes the pending file and adds a "SAFETY FIRST" context;
-//   - no match → no output.
-// Only matched term names are stored, never the message.
+// task notifications Claude Code passes through this event for background tasks. Only
+// urgent warning signs make it act (v0.2): the model notices ordinary pain without a word
+// list.
+//   - urgent match → writes athlete/.urgent-stop (term names, source and time, never the
+//     message), commits it in an athlete copy, and adds an "URGENT STOP" context that tells
+//     the coach to give the urgent-care text and push now with `node engine/cli.ts push`;
+//   - no urgent match → no output.
 //
 // Register it with `"onFailure": "continue"` and `"timeout": 10`: blocking a message on a hook
-// crash would lock the user out. The guard still denies training writes while a pending file
-// exists, so on any failure this hook writes a pending file if it can, and always exits 0.
+// crash would lock the user out. On a crash the context asks the coach to check the message
+// for urgent signs itself (and run `node engine/cli.ts urgent set` for one); it writes no file.
 //
 // This file is a bootstrap: it imports Node built-ins only. The engine modules load with a
 // dynamic import inside the try block, so a module that fails to load still reaches the
-// crash path and its `detector-error` pending file. Exception (docs/contracts.md
-// §20 item 27): when the engine cannot load and there is no coach.yaml (not set up, no
-// athlete), the hook writes no pending file and only asks Claude to check for pain by hand.
+// crash path.
 //
 //   { "type": "command", "command": "node .claude/hooks/safety-detect.ts", "timeout": 10, "onFailure": "continue" }
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import module from "node:module";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 
 type HookInput = { prompt?: unknown; cwd?: unknown };
-type Detection = { urgent: string[]; pain: string[]; regions: string[] };
 
-const PENDING_RELATIVE = "athlete/.safety-pending";
 const SAFETY_MODULE = new URL("../../engine/safety.ts", import.meta.url).href;
+const URGENT_MODULE = new URL("../../engine/urgent.ts", import.meta.url).href;
 const TEXT_MODULE = new URL("../../engine/safety-text.ts", import.meta.url).href;
 const NOT_LOADED =
-  "SAFETY: the pain and red-flag detector could not run (packages are not installed). Ask about pain and red flags before any plan.";
+  "SAFETY: the urgent warning-sign detector could not run (packages are not installed). Check the message for urgent warning signs (chest pain, fainting, new numbness or weakness) yourself before any plan.";
 
 function projectRoot(input: HookInput | null): string {
   const fromEnv = process.env.CLAUDE_PROJECT_DIR;
@@ -47,55 +46,6 @@ function message(e: unknown): string {
 }
 
 /**
- * The crash-path pending write, with built-ins only. Keeps the terms of a valid existing
- * pending file; replaces a malformed one. Returns an error message, or null on success.
- */
-function writeFallbackPending(root: string, terms: string[]): string | null {
-  try {
-    const p = join(root, PENDING_RELATIVE);
-    let prev: string[] = [];
-    if (existsSync(p)) {
-      try {
-        const old = JSON.parse(readFileSync(p, "utf8"));
-        if (Array.isArray(old?.terms)) prev = old.terms.filter((t: unknown) => typeof t === "string");
-      } catch {
-        prev = [];
-      }
-    }
-    mkdirSync(dirname(p), { recursive: true });
-    const tmp = `${p}.tmp-${process.pid}`;
-    writeFileSync(tmp, JSON.stringify({ at: new Date().toISOString(), terms: [...new Set([...prev, ...terms])], source: "prompt" }, null, 2) + "\n");
-    renameSync(tmp, p);
-    return null;
-  } catch (e) {
-    return message(e);
-  }
-}
-
-function contextFor(d: Detection, terms: string, texts: { URGENT_CARE_TEXT: string; PAIN_TEXT: string }, writeError: string | null): string {
-  const pendingLine = writeError
-    ? `The pending safety file could not be written (${writeError}). Treat this exactly as if it were pending.`
-    : "athlete/.safety-pending is written; training writes stay blocked until the user clears it interactively.";
-  if (d.urgent.length > 0) {
-    return [
-      `SAFETY FIRST (urgent). The user's message matched urgent warning signs: ${terms}.`,
-      "Stop all training talk now. Do not plan, adjust or write any training. Reply first with this urgent-care text, in your own warm words but keeping every instruction:",
-      texts.URGENT_CARE_TEXT,
-      "Then run the `safety` agent. Never diagnose. Never give medication, supplement, hormone or peptide advice.",
-      pendingLine,
-    ].join("\n");
-  }
-  return [
-    `SAFETY FIRST. The user's message matched pain or injury terms: ${terms}.`,
-    "Before anything else, run the `safety` agent. Make no training change until it has finished. Relay its questions to the user.",
-    "Pain guidance for the reply:",
-    texts.PAIN_TEXT,
-    "Never diagnose. Never give medication, supplement, hormone or peptide advice.",
-    pendingLine,
-  ].join("\n");
-}
-
-/**
  * The athlete's own words: the prompt without Claude Code's task notifications (the
  * <task-notification>…</task-notification> blocks it passes through UserPromptSubmit for
  * background-task results, such as an agent's report). Text outside a closed block is
@@ -105,6 +55,23 @@ function athleteWords(prompt: string): string {
   return prompt.replace(/<task-notification\b[^>]*>[\s\S]*?<\/task-notification>/g, " ");
 }
 
+type Recorded = { written: boolean; committed: boolean; error: string | null; commitNote: string | null };
+
+function contextFor(terms: string[], urgentCareText: string, r: Recorded): string {
+  const fileLine = !r.written
+    ? `athlete/.urgent-stop could not be written (${r.error}). Run \`node engine/cli.ts urgent set --term "${terms[0]}" --source chat\` now: it writes, commits and pushes the stop.`
+    : r.committed
+      ? "athlete/.urgent-stop is written and committed. Push it now, before anything else: `node engine/cli.ts push` (a cloud run must see it)."
+      : `athlete/.urgent-stop is written${r.commitNote ? ` (not committed: ${r.commitNote})` : ""}. Commit it and push it now: \`node engine/cli.ts commit --message "urgent stop"\`, then \`node engine/cli.ts push\`.`;
+  return [
+    `URGENT STOP. The athlete's message matched urgent warning signs: ${terms.join(", ")}.`,
+    "Make no training change: the urgent gate denies every plan write while the stop exists. Reply first with this urgent-care text, in your own warm words but keeping every instruction:",
+    urgentCareText,
+    fileLine,
+    "The stop clears only when the athlete says, in a live session, that a clinician has seen them or that it was a false alarm (the `safety` skill's clear question). Never diagnose. Never give medication, supplement, hormone or peptide advice.",
+  ].join("\n");
+}
+
 async function run(): Promise<void> {
   let input: HookInput | null = null;
   try {
@@ -112,6 +79,7 @@ async function run(): Promise<void> {
     const prompt = athleteWords(typeof input?.prompt === "string" ? input.prompt : "");
     if (prompt.trim() === "") return;
     let safety;
+    let urgent;
     let texts;
     try {
       try {
@@ -120,31 +88,37 @@ async function run(): Promise<void> {
         /* no cache: slower, same result */
       }
       safety = await import(SAFETY_MODULE);
+      urgent = await import(URGENT_MODULE);
       texts = await import(TEXT_MODULE);
     } catch (e) {
-      // Not set up: no athlete, so no pending file (it would block setup's first steps).
       if (!existsSync(join(projectRoot(input), "coach.yaml"))) return emit(NOT_LOADED);
       throw e;
     }
-    const d: Detection = safety.detect(prompt);
-    if (!safety.isMatch(d)) return;
-    const terms: string[] = safety.pendingTerms(d);
-    let writeError: string | null = null;
+    const terms: string[] = safety.detect(prompt).urgent;
+    if (terms.length === 0) return;
+    const root = projectRoot(input);
+    const r: Recorded = { written: false, committed: false, error: null, commitNote: null };
     try {
-      safety.writePending(projectRoot(input), { terms, source: "prompt" });
+      urgent.writeStop(root, { terms, source: "chat" });
+      r.written = true;
+      // Commit only in an athlete copy (coach.yaml): never in the template repo itself.
+      if (existsSync(join(root, "coach.yaml"))) {
+        // Every call reconciles: an earlier stop left uncommitted is committed now.
+        const c = urgent.commitPaths(root, [urgent.URGENT_RELATIVE], "urgent stop (chat)");
+        r.committed = c.committed;
+        r.commitNote = c.reason ?? null;
+      } else r.commitNote = "no coach.yaml yet";
     } catch (e) {
-      writeError = message(e);
+      r.error = message(e);
     }
-    emit(contextFor(d, terms.join(", "), texts, writeError));
+    emit(contextFor(terms, texts.URGENT_CARE_TEXT, r));
   } catch (e) {
-    // A crash must not block the message. Fail toward safety where possible.
-    const writeError = writeFallbackPending(projectRoot(input), ["detector-error"]);
+    // A crash must not block the message.
     try {
       emit(
         [
-          "SAFETY FIRST. The safety detector failed on this message, so it may have missed a pain or urgent term.",
-          "Before any training change, ask the user whether they have pain, an injury or any warning sign, and run the `safety` agent if they do.",
-          writeError ? `The pending safety file could not be written (${writeError}).` : "athlete/.safety-pending is written (term: detector-error).",
+          "SAFETY: the urgent warning-sign detector failed on this message, so it may have missed one.",
+          "Check the message yourself. For an urgent warning sign (chest pain, fainting, new numbness or weakness, severe shortness of breath, a sudden severe headache), give the urgent-care text and run `node engine/cli.ts urgent set --term <name> --source chat`.",
           `Detector error: ${message(e)}`,
         ].join("\n"),
       );

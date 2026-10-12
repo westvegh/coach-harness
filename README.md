@@ -1,8 +1,8 @@
 # coach-harness
 
-coach-harness turns Claude Code into your strength and conditioning coach: it plans your training from a cited method, adjusts each day from your recovery data, and enforces your injury limits in code.
+coach-harness turns Claude Code into your strength and conditioning coach. It plans your training from a cited method, follows your limits, stops on urgent warning signs, and records every change in git.
 
-**Status:** v0.1, an early release. Expect rough edges and breaking changes.
+**Status:** v0.2, an early release. Expect rough edges and breaking changes.
 
 > **Not medical advice.** The coach plans and adjusts training only. It does not diagnose or treat, and it gives no advice about medication or supplements. See [Safety and privacy](#safety-and-privacy).
 
@@ -12,12 +12,12 @@ People who train and who already use Claude Code. You should be comfortable with
 
 ## What you need
 
-- **Claude Code 2.1.295 or later.** The guard hooks fail closed only from that version. Check with `claude --version`.
+- **Claude Code 2.1.295 or later.** The urgent-stop hook blocks plan writes on failure only from that version. Check with `claude --version`.
 - **Node.js 22.18 or later** (the version is in `.nvmrc`). Check with `node --version`.
 - **A GitHub account and the GitHub CLI** (`gh`). Your coaching repository must be private.
-- **A training logger.** [Tally](docs/tally.md) on iPhone is the only logger included today. You can add another through an adapter: see [Adding a logger or a signal source](docs/adding-a-logger-or-signal.md).
+- **Optional: [Tally](docs/tally.md) on iPhone,** to log sets at the gym. Without it, your plans go in a weekly spreadsheet file in your repo, or in a tool you already use.
 - **Optional recovery data:** an Apple Watch through an iOS Shortcut that you build, or Oura on a Mac. Without them, the coach uses your check-ins and your logged sessions.
-- **For scheduled cloud runs (optional):** a Claude plan with Claude Code routines.
+- **For scheduled cloud runs (optional):** a Claude plan with Claude Code routines, and Tally.
 
 ## Quick start
 
@@ -38,23 +38,68 @@ People who train and who already use Claude Code. You should be comfortable with
 
 4. Say **"set me up"**.
 
-Setup takes about 30 minutes. The `setup` skill checks your tools, runs a short health screen, asks for your consent for each data recipient, interviews you, connects Tally and your recovery data, proposes your first training block, and writes week 1 after your yes. It also installs a git hook that blocks pushes of your athlete files to a public repository.
+## Setup: five screens of clickable questions
 
-After setup, talk to the coach in plain words: "how should I train today?", "check in", "plan next week", "my knee hurts".
+On the basic path, setup asks five screens of questions. You click your answers and type nothing.
+
+1. **Basics:** units, days a week, session length and equipment.
+2. **Goal:** all-around, strength, size or endurance.
+3. **Health check:** the PAR-Q+ questions, and anything that limits your training now.
+4. **Plans and data:** where your plans go, and the services that get your data.
+5. **Week 1:** the coach shows the week as a table. You click "Write it".
+
+When a Tally server is connected, the coach uses it without a question. Four optional paths add a screen or a typed answer, only when you choose them: "Show details" on the data question, "I'll type a short summary" for your training history, a body region that limits your training now, and "Change something" on week 1. In our evals, scripted answers on the basic path reached week 1 in 5 screens, with Tally and with plans in files.
+
+Setup also checks that your repository is private before the first push, and installs a git hook that refuses a push of your athlete files to a public repository.
+
+After setup, talk to the coach in plain words: "how should I train today?", "check in", "plan next week", "I did my workout", "my knee hurts". You can add recovery data, daily and weekly automation, injury history or assessments later. Just ask.
+
+## Where your plans go
+
+| Choice | How it works |
+|---|---|
+| **Files in this repo** (the default without Tally) | One spreadsheet file per week, `plans/<YYYY>-W<ww>.csv`. Fill in what you did in Numbers, Excel or Google Sheets, or tell the coach in chat ("did all sets, last set of squats felt heavy"). |
+| **Tally** | Plans go to the Tally app on your iPhone. You log sets at the gym, and the coach reads them back. |
+| **A tool you already use** | Plans go to a tool you connected to Claude Code, for example Google Sheets or Notion. |
+
+You can switch at any time: say "move my plans to Tally".
 
 ## How it works
 
 ```
-recovery signals ─► readiness ─► method rules ─► guard ─► Tally (your phone)
+recovery signals ─► readiness ─► method rules ─► change ─► your limits ─► your plans
 ```
 
 1. Recovery data comes in each morning: sleep, HRV and resting heart rate, and a short check-in.
 2. The engine scores three categories: wearable, subjective and performance.
-3. The method's rules decide: keep the session, add a note, trim it, or swap to a recovery day. One bad signal alone changes nothing.
-4. The guard rebuilds the day and the week, and checks them against your limits and the method's hard rules before any write.
-5. The plan goes to your phone. You log your sets. Your log feeds the next day.
+3. The method's rules decide: keep the session, add a note, trim it, or swap to a recovery day. An isolated low reading usually gives a note only. Two exceptions: when you do not want to train at all, the coach offers a recovery day, and an urgent warning sign stops all training changes.
+4. The coach reads your limits before every plan, and checks the planned week against them with the engine.
+5. The plan goes where your plans live. You log your sets. Your log feeds the next day.
 
-Code makes every number. Small changes apply on their own; big changes need your yes. The full description is in [docs/how-it-works.md](docs/how-it-works.md).
+The engine makes every number. Small changes apply on their own. Big changes need your yes; a scheduled run saves each big change for the next time you talk to the coach.
+
+**What git records:** every change to `athlete/`, `plans/` and `coach.yaml`, and a summary line in your athlete log for each Tally write. Changes the coach makes in another tool you connected are not recorded in git. The full description is in [docs/how-it-works.md](docs/how-it-works.md).
+
+## What code enforces, and what it does not
+
+Code enforces two rules:
+
+1. **The urgent stop.** When you mention an urgent warning sign, such as chest pain, fainting, or new numbness or weakness, a hook writes `athlete/.urgent-stop` and commits it, and the coach pushes it next (a cloud run sees the stop after that push). While the stop exists, code blocks: every plan tool on any MCP server whose name ends in `plan_workout_day`, `plan_workout_range`, `update_planned_workout`, `move_planned_workout`, `skip_planned_workout`, `delete_planned_workout`, `update_user_profile` or `update_training_limits`; Edit, Write and MultiEdit under `plans/`; and `plans write` and `plans done`. Code also refuses `urgent clear` in a scheduled run and without a reason.
+2. **Privacy.** Your athlete data never goes to a public repository. The push command and a git pre-push hook refuse a public destination.
+
+The rest of the stop is the coach's instruction, not code: it gives the urgent-care text, writes nothing to another tool you connected, makes no plan change through the shell, and asks you before it runs `urgent clear`. Only your answer in a live session should clear the stop: "A clinician has seen me about it" or "It was a false alarm".
+
+Code does **not** check your plans. The coach follows your limits and the method's rules because its instructions tell it to, not because a hook blocks it. It can misread a limit. The `audit` skill checks a planned week against your limits on request, git records every change, and the evals in `evals/` measure how often the coach follows your limits.
+
+## Safety and privacy
+
+- **Pain and injuries:** the coach asks one screen of clickable questions: train normally, go light and build back, or avoid loading the region for now. It writes the limit you chose. When you say "it's better", one question removes or loosens the limit.
+- **Your limits** live in `athlete/limits.yaml`: a ban, or a cap on weekly sets or load, for a body region. The coach changes them only when you ask, and commits each change.
+- **Your data** goes to Anthropic (your conversations with Claude, and the files the coach reads), your private GitHub repository, your Mac, and Tally or the tool you chose. The harness has no server.
+- **Tally notes:** with Tally, the short note on a changed day can include readiness values, body regions and pain scores. That is the default. Choose "Show details" on setup's data question, then "Yes, but keep Tally notes generic", to keep them out.
+- **The pre-push hook** cannot stop you from making the repository public later in GitHub's settings, so keep it private.
+
+The details are in [docs/safety-and-privacy.md](docs/safety-and-privacy.md) and [docs/safety.md](docs/safety.md).
 
 ## The method pack
 
@@ -64,19 +109,9 @@ The pack is a synthesis of Dr. Andy Galpin's public teaching, written in our own
 
 You can write your own pack. See [docs/adding-a-method.md](docs/adding-a-method.md).
 
-## Safety and privacy
-
-- A hook reads every message you send. A pain word or an urgent warning sign pauses training changes until you answer a few questions.
-- A hold for a body region (a shoulder, say) blocks only the exercises that load that region; other training goes on. A hold with no region, or an unanswered safety check, allows only notes, rest and recovery work. An urgent warning sign allows no exercise at all: only notes, rest days and skips. Only you can clear a hold, in a live session.
-- Your injury limits are enforced in code. The model cannot edit them.
-- Your data stays in your private repository, your logger, and on your Mac. The harness has no server.
-- A git pre-push hook blocks a push of athlete files to a public repository. It cannot stop you from making the repository public later in GitHub's settings, so keep it private.
-
-The details are in [docs/safety-and-privacy.md](docs/safety-and-privacy.md) and [docs/safety.md](docs/safety.md).
-
 ## Automation
 
-Setup asks which mode you want:
+After setup, say "automate it" to choose a mode:
 
 | Mode | What runs |
 |---|---|
@@ -84,13 +119,20 @@ Setup asks which mode you want:
 | **Mac** | launchd runs the coach on your Mac each morning and on Sunday. Needed for Oura. See [automation/launchd/README.md](automation/launchd/README.md). |
 | **Cloud** | Claude Code cloud routines run the coach each morning and on Sunday. See [automation/routine.md](automation/routine.md). |
 
-A scheduled run asks no questions. It makes small changes only, and it opens a pull request in your repository for a big change. Merging the pull request is your yes.
+The scheduled runs need Tally for now. A scheduled run asks no questions and makes small changes only. It writes each big change in your log, and the coach offers it the next time you talk to it.
 
 ## Updating
 
-Say "update the coach" in Claude Code. The coach shows what changes, asks before it writes, and never touches `coach.yaml` or `athlete/`.
-It needs `template-manifest.json`, which ships with each release; a copy made before updates existed cannot be updated this way.
-The command behind it is `node engine/cli.ts update --check`, then `update --yes --to <sha>`.
+Say "update the coach" in Claude Code. The coach shows what changes, asks before it writes, and never touches `coach.yaml` or `athlete/`. It needs `template-manifest.json`, which ships with each release; a copy made before updates existed cannot be updated this way.
+
+**From v0.1.x to v0.2:** the first upgrade runs the v0.1 update skill that your session already has.
+
+1. Open Claude Code in your main checkout (on `main`, not a git worktree), and say "update the coach". Answer its questions.
+2. When it finishes, quit Claude Code and start it again. Run nothing else first: the running session still has the v0.1 hooks.
+3. Say "finish the update". The v0.2 coach installs the packages and the git hook, checks your config and runs the tests.
+4. If your copy has an old hold or safety check, the coach asks one question: remove them (v0.2 uses limits instead), or show them first. An old urgent hold becomes the urgent stop, and removing the old files never clears it.
+
+Your plans stay in Tally. v0.2 no longer copies your limits to Tally; limits already in Tally stay until you remove them in the Tally app.
 
 ## Docs
 

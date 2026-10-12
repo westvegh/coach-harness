@@ -5,12 +5,11 @@
 //   readiness --date <YYYY-MM-DD> [--now <instant>]
 //   weeks --from <YYYY-MM-DD> --to <YYYY-MM-DD>
 //   block draft [--template <id>] --weeks <n> [--input <file.json>] [--now <instant>]
-//   block write --input <block.json> --proposal <id>   (only on proposal/<id>; launch review finding 2)
-//   ids next --kind block|limit|proposal [--change <kind>] [--now <instant>]
+//   ids next --kind block|limit [--now <instant>]
 //   signals refresh
 //   lint-methods [--pack <name>] [--volume]                         (exit 1: the pack has errors)
 //
-// (hold init lives in engine/hold.ts; adjust/loads --from-snapshot in engine/cli-helpers.ts.)
+// (adjust/loads --from-snapshot live in engine/cli-helpers.ts.)
 // Every command takes --root <dir> (default: the current directory).
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -43,9 +42,7 @@ function args(argv: string[]) {
       weeks: { type: "string" },
       input: { type: "string" },
       kind: { type: "string" },
-      change: { type: "string" },
       pack: { type: "string" },
-      proposal: { type: "string" },
       volume: { type: "boolean" },
     },
   });
@@ -84,30 +81,23 @@ function readJsonFile(path: string): unknown {
 async function cmdReadinessDate(a: Args): Promise<number> {
   const root = rootOf(a);
   const cfg = await config(root);
-  const [{ readinessForDate }, { loadSnapshot }] = await Promise.all([import("./readiness-date.ts"), import("./snapshot.ts")]);
-  out(readinessForDate({ root, date: a.values.date!, now: await nowOf(a), config: cfg, rules: await packRules(root, cfg), snapshot: loadSnapshot(root) }));
+  const [{ readinessForDate }, { coachSnapshot }] = await Promise.all([import("./readiness-date.ts"), import("./coach-snapshot.ts")]);
+  const now = await nowOf(a);
+  out(readinessForDate({ root, date: a.values.date!, now, config: cfg, rules: await packRules(root, cfg), snapshot: coachSnapshot(root, { now, cfg }) }));
   return 0;
 }
 
 async function cmdWeeks(a: Args): Promise<number> {
   if (!a.values.from || !a.values.to) throw new CoachError("USAGE", "usage: weeks --from <YYYY-MM-DD> --to <YYYY-MM-DD>");
-  const [{ weeksFromSnapshot }, { loadSnapshot }] = await Promise.all([import("./weeks.ts"), import("./snapshot.ts")]);
-  out(weeksFromSnapshot(loadSnapshot(rootOf(a)), a.values.from, a.values.to));
-  return 0;
-}
-
-/** block write: the drafted block to athlete/block.yaml, only on the branch proposal/<id>. */
-async function cmdBlockWrite(a: Args): Promise<number> {
-  if (!a.values.input || !a.values.proposal) throw new CoachError("USAGE", "usage: block write --input <block.json> --proposal <id>");
-  const raw = readJsonFile(a.values.input);
-  const block = isPlainObject(raw) && isPlainObject(raw.block) ? raw.block : raw;
-  out((await import("./proposals.ts")).writeBlockOnBranch(a.values.proposal, block, { root: rootOf(a) }));
+  const root = rootOf(a);
+  const [{ weeksFromSnapshot }, { coachSnapshot }] = await Promise.all([import("./weeks.ts"), import("./coach-snapshot.ts")]);
+  // With logger: files the week files are the record (contracts §12a).
+  out(weeksFromSnapshot(coachSnapshot(root, { now: await nowOf(a), cfg: await maybeConfig(root) }), a.values.from, a.values.to));
   return 0;
 }
 
 async function cmdBlockDraft(a: Args): Promise<number> {
-  if (a.positionals[0] === "write") return cmdBlockWrite(a);
-  if (a.positionals[0] !== "draft") throw new CoachError("USAGE", "usage: block draft [--template <id>] --weeks <n> [--input <file.json>] | block write --input <block.json> --proposal <id>");
+  if (a.positionals[0] !== "draft") throw new CoachError("USAGE", "usage: block draft [--template <id>] --weeks <n> [--input <file.json>]");
   const root = rootOf(a);
   const cfg = await config(root);
   const [{ draftBlock, templateIdFor, todayIn }, { loadTemplates }, { loadTaxonomy }] = await Promise.all([import("./block-draft.ts"), import("./methods.ts"), import("./taxonomy.ts")]);
@@ -120,9 +110,9 @@ async function cmdBlockDraft(a: Args): Promise<number> {
   if (!a.values.weeks || !Number.isInteger(weeks)) throw new CoachError("USAGE", "block draft needs --weeks <n>");
   const input = a.values.input ? readJsonFile(a.values.input) : {};
   if (!isPlainObject(input)) throw new CoachError("INPUT_ERROR", "block draft --input must be a JSON object");
-  // Logged weeks from the snapshot: week 1 is capped against the reference week, as the guard checks it.
-  const [{ loadSnapshot }, { historyWeeks }] = await Promise.all([import("./snapshot.ts"), import("./validate.ts")]);
-  const snap = loadSnapshot(root);
+  // Logged weeks from the snapshot: week 1 is capped against the reference week.
+  const [{ coachSnapshot }, { snapshotWeeks }] = await Promise.all([import("./coach-snapshot.ts"), import("./weeks.ts")]);
+  const snap = coachSnapshot(root, { now: await nowOf(a), cfg });
   const draft = draftBlock(
     template,
     weeks,
@@ -134,7 +124,7 @@ async function cmdBlockDraft(a: Args): Promise<number> {
       today: todayIn(cfg.athlete.timezone, a.values.now),
       emphasis: cfg.template.emphasis,
       templateId: id,
-      history: snap ? historyWeeks(snap, cfg.athlete.units) : undefined,
+      history: snap ? snapshotWeeks(snap, cfg.athlete.units) : undefined,
     },
     input as BlockDraftInput,
   );
@@ -143,13 +133,12 @@ async function cmdBlockDraft(a: Args): Promise<number> {
 }
 
 async function cmdIds(a: Args): Promise<number> {
-  if (a.positionals[0] !== "next") throw new CoachError("USAGE", "usage: ids next --kind block|limit|proposal [--change <kind>]");
+  if (a.positionals[0] !== "next") throw new CoachError("USAGE", "usage: ids next --kind block|limit");
   const root = rootOf(a);
   const kind = a.values.kind as IdKind;
-  if (!["block", "limit", "proposal"].includes(kind)) throw new CoachError("USAGE", "ids next --kind must be block | limit | proposal");
-  const cfg = await maybeConfig(root);
+  if (!["block", "limit"].includes(kind)) throw new CoachError("USAGE", "ids next --kind must be block | limit");
   const { nextId } = await import("./ids.ts");
-  out(nextId(root, kind, { change: a.values.change, now: await nowOf(a), tz: cfg?.athlete.timezone ?? "UTC" }));
+  out(nextId(root, kind));
   return 0;
 }
 

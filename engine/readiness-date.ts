@@ -14,7 +14,7 @@ import { DEFAULT_LONG_PATTERN_DAYS, DEFAULT_THRESHOLDS, readiness } from "./read
 import { loadSignals } from "./signals.ts";
 import { SNAPSHOT_MAX_AGE_MIN } from "./snapshot.ts";
 import { normalizeName } from "./taxonomy.ts";
-import { convertWeight } from "../adapters/loggers/tally/rebuild.ts";
+import { convertWeight } from "../adapters/loggers/tally/day.ts";
 import type { CalendarDate, CoachConfig, HistoryExercise, Instant, LoggerExercise, Readiness, ReadinessInput, ReadinessRules, Rules, SessionPerf, Snapshot, SnapshotDay, SnapshotSession, Units } from "./types.ts";
 
 /** How one logged session was judged. `perf` is absent when the evidence is missing. */
@@ -180,6 +180,7 @@ export function readinessRules(rules: Rules): ReadinessRules {
 export function coverageProblem(snap: Snapshot | null, date: CalendarDate, nowMs: number, expiryDays: number): string | null {
   const cov = snap?.history_coverage;
   if (!snap || !cov) return "no workout history read in this session (get_workout_history)";
+  if (!cov.complete && snap.warnings?.length) return `the plans files have rows the engine cannot read (${snap.warnings[0]}): a session may be missing`;
   if (!cov.complete) return "the history read is incomplete (more pages remain): the latest session may be missing";
   const age = (nowMs - parseInstant(cov.captured_at, "history_coverage.captured_at")) / 60_000;
   if (age > SNAPSHOT_MAX_AGE_MIN) return `the history was read ${Math.round(age)} minutes ago (limit ${SNAPSHOT_MAX_AGE_MIN}): read get_workout_history again`;

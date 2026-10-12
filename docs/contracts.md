@@ -1,6 +1,8 @@
 # Engineering contracts (v1)
 
-The file formats and module interfaces that the code follows. Read it before you change the engine, the guard, an adapter or a method pack. [how-it-works.md](how-it-works.md) explains the same parts in plain words. If code and this file disagree, fix one of them in the same change, and never weaken a guard rule to make a test pass ([CONTRIBUTING.md](../CONTRIBUTING.md)).
+The file formats and module interfaces that the code follows. Read it before you change the engine, a hook, an adapter or a method pack. [how-it-works.md](how-it-works.md) explains the same parts in plain words. If code and this file disagree, fix one of them in the same change ([CONTRIBUTING.md](../CONTRIBUTING.md)).
+
+**v0.2 (trust the coach).** Code enforces two things only: the urgent stop (§10) and privacy (§10a). Everything else is the coach's judgment, guided by `CLAUDE.md`, the skills and the method pack; the engine is a set of tools that report. Sections and items marked "Removed in 0.2" describe the v0.1 guard and stay only as a record ([docs/build/v0.2-trust-the-coach.md](build/v0.2-trust-the-coach.md) is not public; the CHANGELOG has the summary).
 
 ## 0. Conventions
 
@@ -11,15 +13,9 @@ The file formats and module interfaces that the code follows. Read it before you
 - **Dates:** a calendar date is `YYYY-MM-DD` in the athlete's timezone (`coach.yaml athlete.timezone`). An instant is ISO 8601 with an offset.
 - **IDs:**
   - Rules: `NA-<AREA>-NNN`. Limits: `L-NNN`. Operations: see §9.
-  - Proposals: `P-YYYYMMDD-<kind>-<n>`.
-- **Errors:** engine functions throw `CoachError {code, message}`. Hooks turn any throw into a deny (§7).
-- **Protected files:** the guard (§7) protects these from model edits:
-  - `athlete/limits.yaml`, `athlete/hold.yaml`, `athlete/.safety-pending`
-  - `athlete/movements.local.yaml`, `athlete/.cache/**`
-  - `athlete/block.yaml` and `athlete/signals/**` (§23)
-  - `methods/**`, `engine/**`, `.claude/**`, `adapters/**`, `git-hooks/**`
-  - the `approval` and `thresholds` keys of `coach.yaml`
-  - in every mode, files that node, npm, git or a hook could run (§23)
+  - Proposals: removed in 0.2. A change for the next live session is one line in the athlete log ("- proposal for the next live session: …").
+- **Errors:** engine functions throw `CoachError {code, message}`. A hook that throws exits 2; the urgent gate is registered with `onFailure: "block"`, so its crash blocks the call (§10).
+- **Protected files:** removed in 0.2. No file is protected from the coach. `.claude/settings.json` keeps one deny pair, for `athlete/.cache/**` (the snapshot cache that only `capture-reads` writes).
 
 ## 1. `coach.yaml`
 
@@ -35,28 +31,34 @@ template: { days: 4, emphasis: all-around }   # days 3|4|5; emphasis all-around|
 signals:
   wearable: apple-health-shortcut    # apple-health-shortcut | oura | none
   checkin: shortcut                  # shortcut | chat
-logger: tally                        # folder under adapters/loggers/
+logger: tally                        # optional (0.2): tally | files | other (§12a)
+tally_mentioned: false               # optional (0.2): true once the coach mentioned Tally to a files|other athlete
 consent:                             # optional (§23)
-  logger_health_notes: false         # true: health details may go into logger notes
+  logger_health_notes: true          # optional; default true (0.2); false keeps logger notes generic
 automation:
   mode: manual                       # cloud | mac | manual
   daily_window: { start: "05:07", end: "10:07" }
   weekly: { day: sun, time: "17:07" }
   verified: false                    # true only after a successful test run
   tool_prefix: mcp__tally__          # optional (§23): the connected Tally server's tool prefix
-approval:                            # PROTECTED. Policy input to engine/classify.
+approval:                            # Policy input to engine/classify (big or small).
   auto: [trim_session, swap_to_recovery, load_progression, reschedule_within_week]
   ask:  [new_exercise, volume_above_plan, override_user_day, skip_or_delete_user_day, limit_change, new_block, method_change]
-thresholds: {}                       # PROTECTED. Optional overrides of §5 defaults, same keys.
+thresholds: {}                       # Optional overrides of §5 defaults, same keys.
 ```
 
 Validation: `engine/config.ts` exports `loadConfig(path): CoachConfig`. Unknown keys are errors. A change kind cannot appear in both `auto` and `ask`. Hard-rule kinds (§6) cannot appear in `auto`.
 
-## 2. `athlete/limits.yaml` (PROTECTED)
+v0.2 defaults (§24 rule: a release never adds a required key):
+- `logger` is optional and one of `tally | files | other`. Without the key: `tally` when `automation.tool_prefix` is set (a copy that already uses Tally stays on Tally), else `files` (`engine/config.ts defaultLogger`). v0.1 required the key, so every v0.1 copy has `logger: tally` and stays on Tally with no edit.
+- `tally_mentioned` (boolean, default false) is written only by `tally-mention` (§12a).
+- `consent.logger_health_notes` defaults to true: setup's one data question names the readiness and pain scores in Tally notes. Only an explicit `false` keeps the notes generic.
+
+## 2. `athlete/limits.yaml`
 
 ```yaml
 version: 1
-pain_threshold: 4                    # 0-10; check-in pain in a region at or above this blocks exercises that load it
+pain_threshold: 4                    # 0-10; check-in pain at or above this goes to the safety skill
 limits:
   - id: L-001
     region: left-knee                # region id from engine/movements.yaml regions
@@ -73,6 +75,7 @@ limits:
     patterns: [hinge]
     max_load: { value: 135, unit: lbs }
     max_sets_per_week: 6
+    build_back: true                 # optional, cap only: the week skill raises the cap a step while the region feels fine
     note: "Hinge capped while rehabbing"
     source: clinician-reported
     since: 2026-10-01
@@ -80,9 +83,14 @@ limits:
 
 `limitsHash(file)` is the SHA-256 of the canonical JSON of the parsed file (sorted keys).
 
+- **Who follows it:** the coach, in every plan (`CLAUDE.md` hard rule 4). No hook checks a write against it (v0.2).
+- **Who changes it:** the coach, when the athlete asks (the `safety` and `limits` skills), and commits the change.
+- **`build_back`** (optional, `true` only on a cap): the athlete chose "go light and build back slowly". The `week` skill asks once a week how the region felt and raises the cap by one set (or about 10% load) when it felt fine. `engine/limits.ts` refuses it on a ban.
+- **`limits check --input <file.json>`** (`engine/limits-check.ts checkLimits`; `{week}` or `{days}`): a report, not a gate. Findings: `banned` (an exercise that a ban matches), `over_sets` (a weekly hard-set count over `max_sets_per_week`), `over_load` (a set over `max_load`, after unit conversion), `unclassified` (an exercise the taxonomy does not know, while any limit exists; the coach judges it). Warm-ups count toward `max_load` but not toward the weekly sets. Skipped days do not count. Output `{ok, findings}`; `ok` is false on any finding but `unclassified`. Matching: by name or exerciseId, else by pattern unless `allow` exempts it; an `allow` entry binds to the exerciseId first (§20 item 25).
+
 ## 3. Movement taxonomy
 
-`engine/movements.yaml` ships with the harness. `athlete/movements.local.yaml` (protected) has the same shape and wins when both define an entry.
+`engine/movements.yaml` ships with the harness. `athlete/movements.local.yaml` has the same shape and wins when both define an entry.
 
 ```yaml
 version: 1
@@ -244,64 +252,18 @@ classifyChange(before: DayPlan | null, after: DayPlan | null, ctx: { block: Bloc
 **Rules:**
 - **`new_exercise`:** an exercise in `after` that is in neither the block's template slots nor the last 8 weeks of history (matched by exerciseId, then normalized name).
 - **`volume_above_plan`:** the week's sets per muscle after the change exceed the block target for that muscle by more than 1 set.
-- **`annotate`:** only `notes` or `dayName` change. It is small, always allowed under a hold, and is how a run leaves its reason.
+- **`annotate`:** only `notes` or `dayName` change. It is small, and is how a run leaves its reason.
 - **`trim_session`:** the same exercises with fewer or equal sets and load.
 - **`swap_to_recovery`:** `after` is a recovery day: only patterns tagged `recovery` (Zone 2, mobility, breathing) and no loaded patterns.
 - **`load_progression`:** the same exercises, with a load or rep increase inside `top_set_jump_max`.
-- **`block_session`:** a new day on an empty date (no day before, or `found: false`) whose exercises all match the current block week's template slots (by exerciseId, then normalized name, as for `new_exercise`), with sets per exercise not above the slot's prescription for that week. It is small, so the Sunday run applies a template week without a PR. The guard still runs every check on it: limits, safety, volume and progression. An exercise outside the slots makes the change `new_exercise` (big). A change that no small kind describes is big.
+- **`block_session`:** a new day on an empty date (no day before, or `found: false`) whose exercises all match the current block week's template slots (by exerciseId, then normalized name, as for `new_exercise`), with sets per exercise not above the slot's prescription for that week. It is small, so the Sunday run applies a template week without asking. The coach still follows the limits and the method on it. An exercise outside the slots makes the change `new_exercise` (big). A change that no small kind describes is big.
 - **`override_user_day`:** the snapshot day has `source != "mcp"` or `userModified: true`, and the tool would change it.
 - **`skip_or_delete_user_day`:** a skip or delete of such a day.
 - **Several kinds:** the change is big when any kind is in `coach.yaml approval.ask`.
 
-## 7. Guard (`engine/validate.ts` + `.claude/hooks/guard-writes.ts`)
+## 7. Guard
 
-```ts
-type Verdict = { decision: "allow" | "ask" | "deny"; reasons: string[]; rule_ids: string[]; warnings: string[] };
-guard(input: { tool: LoggerTool; args: unknown; mode: "interactive" | "unattended"; snapshot: Snapshot; limits: Limits; rules: Rules; tax: Taxonomy; config: CoachConfig; hold: Hold | null; pending: SafetyPending | null; approvals: ApprovalRecord[]; now: string; session_id: string }): Verdict
-```
-
-**Order of checks** (the first deny wins):
-
-1. **Inputs present and valid.** Any parse or IO error is a deny with code `GUARD_ERROR`.
-2. **Snapshot.** The snapshot must exist, carry the same `session_id`, and be no more than 15 minutes old. Otherwise deny with "refresh: read the affected days with get_planned_workout first".
-3. **Versions.** A write to a date with an existing day must carry `expectedVersion`. `expectedUpdatedAt` alone is denied.
-   - `plan_workout_range` is denied while any date in range has a day, and denied entirely until T2 (`logger.capabilities.rangeCreateIfAbsent`).
-   - Skip and delete are denied until T2 (`logger.capabilities.versionedSkipDelete`). In interactive mode they return `ask` instead.
-4. **Rebuild.** `rebuild(tool, args, snapshot) → {days: DayPlan[] (after), week: WeekPlan}` uses the logger adapter's rebuild functions.
-5. **Safety.**
-   - A `pending` safety file, or an active `hold` with no `regions` (a systemic symptom): every write is denied unless every after-day is a recovery or rest day. Skip is always allowed: it is safer.
-   - An active `hold` with `regions` (a regional hold), and no pending file: a day that is unchanged, a trim, or a recovery day that adds no work passes as above. On any other day, an exercise that loads a held region (`classify` + `regionMatches`, the same test as check-in pain) is denied, and so is an unclassified exercise (fail closed). An exercise that loads no named region (zone 2, intervals) passes only when it is a recovery exercise that adds no work to itself (`addsWork`). Each pattern is checked on its own: in a combined exercise ("Bike and Bench Press"), a regionless pattern needs that test too, recovery-marked ones included. A recovery pattern is exempt only when the same keyword or `exercises` entry also gives a loaded pattern that names the regions ("Easy Run": zone 2 and running). Every other exercise follows the normal rules (limits, hard rules, consent). A trim passes only for exercises that keep their safety classification (`classifyForSafety`, the id and the name); a new name or id that adds a pattern goes through the checks above.
-   - An urgent event (§23 "Urgent state") comes first: no exercise at all, whatever the regions.
-   - Today's check-in pain at or above `pain_threshold` in a region: exercises that load that region are denied.
-6. **Limits.**
-   - **Ban:** an exercise whose patterns or name match the limit is denied. Exceptions in the `allow` list beat patterns.
-   - **Cap:** `max_load` is checked per set in the athlete's units, after conversion. `max_sets_per_week` is checked on the rebuilt week.
-   - **Unclassified:** an exercise whose classification `source` is `none` is denied while any limit is active ("classify it first").
-7. **Hard rules.**
-   - `weekly_volume_increase_max` per muscle against the **reference week**: the last completed non-deload build week (§8). The deload-to-build transition may return to the pre-deload level. A base under 10 sets allows +1 set.
-   - `top_set_jump_max` per exercise against the last logged top set.
-8. **Consent.**
-   - `classifyChange` gives `big`.
-   - Interactive: `ask`.
-   - Unattended: deny, unless an approval record matches exactly: the hash of the canonical tool call is in an approved proposal, every base version equals the snapshot version, and `limits_hash` equals the current one.
-   - `overrideUserModified: true`, or a change to a user day: `ask` in interactive mode, deny in unattended mode, always.
-9. **Soft rules.** These produce warnings only, for example `session_minutes_max` and `weekly_sets_per_muscle_range`.
-
-**The hook (`guard-writes.ts`):**
-- It reads the hook JSON from stdin.
-- **Mode:** `unattended` when `CLAUDE_CODE_REMOTE` is set, or when the env `COACH_UNATTENDED=1` is set (the Mac launchd template sets it). Otherwise `interactive`.
-- **Loads:** `.cache/snapshot.json`, `limits.yaml`, the pack rules, the taxonomy, `coach.yaml`, the hold, the pending file, and approvals.
-- **Output:**
-  - **Deny:** prints `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"<reasons + rule IDs>"}}` and exits 0. On an exception it prints the reason to stderr and exits 2.
-  - **Ask:** uses `permissionDecision: "ask"`.
-  - **Allow:** exits 0 with no output, or with `additionalContext` warnings.
-- **Matcher:** `^mcp__.*[Tt]ally.*__(plan_workout_day|plan_workout_range|update_planned_workout|move_planned_workout|skip_planned_workout|delete_planned_workout|update_user_profile)$`. It comes from `adapters/loggers/tally/adapter.yaml`. Observed names: `mcp__tally__…` (project server), `mcp__Tally_Workout__…` (claude.ai connector in a routine), `mcp__claude_ai_Tally_Workout__…` (connector in the local CLI).
-- **Required in `settings.json`:** every guard hook (`guard-writes`, `guard-files`) sets `"onFailure": "block"` and `"timeout": 10`. Without it, a crash or a missing command lets the write through. Claude Code ≥ 2.1.295 is required; `setup` checks `claude --version`.
-
-**`update_user_profile`:**
-- Allowed in interactive mode only, with `ask`.
-- Denied in unattended mode.
-- Always denied when it clears `limits`, or when the new text drops a region named in `limits.yaml`.
+Removed in 0.2: no hook validates a plan write. `.claude/hooks/guard-writes.ts` stays as an entry that allows every call (a running v0.1 session still calls it until it restarts; v0.3 deletes it).
 
 ## 8. Volume and progression (`engine/volume.ts`, `engine/progression.ts`)
 
@@ -318,7 +280,7 @@ nextWeekTargets(block: Block, ref: WeekLog | null, rules: Rules): Targets       
 
 ## 9. Snapshot, operations and logs
 
-**`athlete/.cache/snapshot.json`** (PROTECTED; written only by the `capture-reads` hook):
+**`athlete/.cache/snapshot.json`** (written only by the `capture-reads` hook; a cache the reporting tools read):
 
 ```json
 { "version": 1, "session_id": "…", "captured_at": "…", "timezone": "…",
@@ -330,7 +292,8 @@ nextWeekTargets(block: Block, ref: WeekLog | null, rules: Rules): Targets       
 
 - The **`capture-reads`** PostToolUse hook matches Tally reads (`get_planned_workout`, `get_training_context`, `get_workout_history`). Its `tool_response` is an array of `{type: "text", text}` blocks, and the text is the tool's JSON (local and cloud). It parses each response and merges it into the snapshot.
 - After every write, the same hook (on mutations) updates the written days from the write response.
-- **Operation ID:** `op-<date>-<kind>-<sha256(canonical tool call)[0..12]>`. Before T2, it is recorded in the log and in a human-readable notes line. After T2, it is passed as Tally's `opId`.
+- **Operation ID:** `op-<date>-<kind>-<sha256(canonical tool call)[0..12]>` (`engine/opid.ts opId`, `toolCallHash`). It is passed as Tally's `opId`.
+- **`log-writes`** (v0.2) appends one entry per logger write. The kind is the one in the submitted `opId`, else `unclassified`; `approval` names who made the write: "the coach, in a live session" or "the coach, in an unattended run". It no longer reads guard verdicts.
 - **`athlete/log/YYYY-MM.md`:** one entry per operation:
 
 ```
@@ -339,22 +302,38 @@ nextWeekTargets(block: Block, ref: WeekLog | null, rules: Rules): Targets       
 - readiness: wearable amber (HRV z -1.3), subjective amber (2.3), performance green → trim
 - rules: NA-REC-009, NA-PROG-001
 - change: Lower A, 5 → 4 sets on squat pattern lifts
-- approval: auto (trim_session)
+- approval: the coach, in an unattended run
 - result: written (version …)
 ```
 
-## 10. Safety files
+## 10. The urgent stop
 
-- **`athlete/.safety-pending`** (written by `safety-detect`): `{at, terms: string[], source: "prompt" | "session-notes"}`. The user's text is never stored.
-- **`athlete/hold.yaml`:** `{active, set_at, reason, regions, set_by, urgent?, cleared_at?, cleared_by?}`. `urgent: true` marks an urgent warning sign (§23).
-- **Hold effects** (§7 step 5): a hold with `regions` is regional (it blocks only the exercises that load a held region, and unclassified ones); a hold without regions is global (rest, recovery, trims and notes only); an urgent hold allows no exercise; the pending file is global, because its regions are not known yet.
-- **Release on accepted limits:** a regional hold that is not urgent may be cleared once `athlete/limits.yaml` covers every held region (a limit on the same region or its parent side-less region). `hold clear --approved --by user --released-by-limits` checks this and refuses otherwise (exit 1, `HOLD_NOT_COVERED`, nothing changes). The safety agent asks for both in one question ("Add these limits and end the shoulder hold?"), and runs the clear only after the limits are written.
-- **`engine/hold.ts`:**
-  - `set` is always allowed.
-  - `clear` exits with a code the guard maps to `ask`: the `guard-files` hook allows `node engine/hold.ts clear` only in interactive mode, and asks first.
-  - `clear --released-by-limits` adds the release check above.
-- **Facts for the safety agent:** `node engine/cli.ts limits schema` prints the `limits.yaml` entry shape with an example of each rule kind; `node engine/cli.ts regions` prints the region ids and, for each pattern, the regions it loads.
-- **Term list:** in `engine/safety-terms.yaml`, with two lists: `urgent` (chest pain, fainting, …) and `pain` (pain, hurts, tweak, …), plus region words.
+Rule 1 of v0.2. Urgent warning signs (the `urgent` list of `engine/safety-terms.yaml`: chest pain, fainting, new numbness or weakness, severe shortness of breath, a sudden severe headache, …) stop all training changes. The athlete cannot override it. It clears only on the athlete's answer in a live session.
+
+- **The file:** `athlete/.urgent-stop` = `{version: 1, at, terms: string[], sources: ("chat"|"checkin"|"note"|"answer"|"legacy")[]}`. Term names, sources and the time only, never the athlete's words. A new event extends it (union). A file that cannot be read still stops (`terms: ["unreadable stop file"]`). It is committed and pushed, so a cloud run sees it.
+- **Trigger routes** (`engine/urgent.ts`):
+  1. **A chat message:** `safety-detect` (UserPromptSubmit) runs `detect` and acts on urgent terms only (negations ignored: a false alarm is cheap). It writes the stop, commits it in an athlete copy (`coach.yaml` present; `git add` then `git commit --only` of that path), and adds an "URGENT STOP" context: give `URGENT_CARE_TEXT`, make no training change, push now with `node engine/cli.ts push`. Ordinary pain words make it do nothing (the coach notices pain without a word list).
+  2. **A check-in:** `node engine/cli.ts checkin … --urgent <term>,…` (`adapters/signals/checkin/write.ts`). The terms must be urgent term names. The writer writes and commits the stop first, before the date check and before the signal file is read, so a damaged or invalid signal file cannot prevent it; the CLI pushes it, also when the check-in itself then fails.
+  3. **A note:** `node engine/cli.ts safety scan-notes --since <date>` (`scanSessionNotes`, run by the `today` and `week` skills) writes, commits and pushes the stop for an urgent term in a note dated after the latest clearance of that term. Pain notes are reported in `matches` only. `--dry-run` writes nothing.
+  4. **Anything else the coach recognizes** (an answer, a file): `node engine/cli.ts urgent set --term <name> --source chat|checkin|note|answer`. `<name>` is an urgent term name or `other urgent sign`. It writes, commits and pushes.
+- **Persistence on every call:** `urgent set`, the check-in route and `urgent clear` reconcile the commit and the push each time, not only when the content changed (`persist`): an uncommitted change to the stop (or the clearance record) is committed, and a commit not yet on the upstream (`unpushed`) is pushed. A failed push is retried by the next call. `safety-detect` and the legacy conversion commit on every call (they do not push).
+- **The gate:** `.claude/hooks/urgent-gate.ts` (PreToolUse, built-ins only, `"onFailure": "block"`, timeout 10). Matcher (`.claude/hooks/urgent-list.ts URGENT_GATE_MATCHER`): `^(mcp__.+__(plan_workout_day|plan_workout_range|update_planned_workout|move_planned_workout|skip_planned_workout|delete_planned_workout|update_user_profile|update_training_limits)|Edit|Write|MultiEdit)$`. While the stop file exists it denies every such MCP call, whatever the server's name, and every Edit, Write or MultiEdit whose `file_path` is under `plans/`: the file's lexical and real path are compared with the lexical and real path of `<root>/plans`, so a `plans` symlink to an outside folder, another alias to that folder and a symlinked root count; a file not yet written resolves through its deepest existing ancestor; case is ignored. A file tool with no path is denied (fail closed). Without the file it allows everything at once. With `logger: other`, the gate cannot know the tool names: the context message and the skill text carry the stop there.
+- **Clear:** `node engine/cli.ts urgent clear --reason clinician|false-alarm`, after the `safety` skill's question ("A clinician has seen me about it", "It was a false alarm", "Not yet"). It refuses in an unattended run (`UNATTENDED`) and without one of the two reasons (`USAGE`). It appends `{date, at, terms, sources, reason}` to `athlete/log/urgent-clearances.jsonl` (`date` in the athlete's timezone; no symptom text), deletes the stop, commits both paths and pushes. Nothing to clear: `{cleared: false}`, no record.
+- **The clearance skip:** the note scan drops an urgent term in a note dated on or before the latest clearance of the same term (`clearedThrough`). A new note after it stops again.
+- **`urgent status`:** `{ok, stopped, stop, clearances}` (the last three records).
+- **Removed in 0.2:** `athlete/.safety-pending`, `athlete/hold.yaml`, `engine/hold.ts` and the `hold` command (a limit does the job of a regional hold; a systemic symptom is the coach's call).
+- **Term list:** `engine/safety-terms.yaml`, with `urgent` and `pain` lists and region words. `safety detect --text` prints the matcher's result and writes nothing.
+
+## 10a. Privacy
+
+Rule 2 of v0.2. Athlete data never goes to a public repository.
+
+- **`git-hooks/pre-push`:** refuses a push when the destination's visibility cannot be checked, or when it is public and any pushed commit touches athlete data: `athlete/`, `plans/` or `coach.yaml` (`engine/prepush.ts isAthleteData`, V3b) (§20 items 14 and 22).
+- **`node engine/cli.ts install-git-hooks`** (`engine/cli-git.ts installGitHooks`): copies the hook into git's hooks folder; a different existing hook is kept as a backup.
+- **`node engine/cli.ts prepush-check [--remote origin]`** and **`node engine/cli.ts push [--branch <name>]`**: §23 "Hooks in fresh clones". `push` is the trusted push of every skill and of `urgent set` (`pushBranch`).
+- **`session-context`** installs the pre-push hook when it is missing, differs or is not executable (a fresh clone has none), in an athlete copy (`coach.yaml` present), and says so in one line. The hooks path is resolved from `git rev-parse --git-path hooks/pre-push` (absolute in a linked worktree or with an absolute `core.hooksPath`).
+- **Setup** checks that the repository is private before the first push.
+- Nothing else: the coach is trusted with other git and shell use.
 
 ## 11. Signals
 
@@ -376,20 +355,37 @@ nextWeekTargets(block: Block, ref: WeekLog | null, rules: Rules): Targets       
 
 ## 12. Logger adapter (`adapters/loggers/<name>/`)
 
-- **`adapter.yaml`:** `name`, the tool map (reads and mutations to tool-name suffixes), the guard matcher regex, and capabilities:
-  - `rangeCreateIfAbsent`, `versionedSkipDelete`, `opId` (all `false` for Tally until T2);
-  - `protectsUserDays`.
-- **`rebuild.ts`:** one function per mutation:
-  - `(args, snapshot) → DayPlan[]` for day, update (operations applied with Tally semantics: unnamed exercises stay exactly as stored), move (status resets to planned), skip (status), delete (gone), and range.
-  - `toDayPlan(snapshotDay)`.
-- Parity with Tally is proven by the golden parity tests (`evals/golden/`).
+- **`adapter.yaml`:** `name`, the tool map (`tools.reads`, `tools.mutations`, and `tools.limits.update: update_training_limits`, which v0.2 never calls but still logs and gates), the `log-writes` matcher regex (`matcher`), the `capture-reads` matcher (`capture_matcher`), and capabilities: `rangeCreateIfAbsent`, `versionedSkipDelete`, `opId` (all `true` for Tally since T2) and `protectsUserDays`. Removed in 0.2: `capabilities.server_limits`.
+- **`day.ts`** (Tally): the tool name lists (`MUTATIONS`, `READS`), Tally's weight conversion (`convertWeight`) and `toDayPlan(date, snapshotDay, fallbackUnit)`, a snapshot day as an engine `DayPlan`.
+- **`engine/logger.ts`:** `loadAdapterConfig(name)` and `validateAdapterConfig`. Removed in 0.2: `rebuild.ts`, `loadLogger`, `affectedDates` and the golden parity tests (they existed for the guard). The golden JSON files in `evals/golden/` stay as data for the mock server.
+- The urgent gate's mutation list (`.claude/hooks/urgent-list.ts PLAN_MUTATIONS`) equals the adapter's mutations; a test keeps them equal.
+
+## 12a. Where plans live: `logger: tally | files | other` (0.2)
+
+Tally is optional. `coach.yaml logger` says where plans live, and every skill that reads or writes plans follows it (`CLAUDE.md` "Where plans live" maps each job).
+
+- **`tally`:** the Tally MCP tools, as in §12. Setup uses Tally without a question when a Tally server answers.
+- **`files`:** one CSV per ISO week, `plans/<YYYY>-W<ww>.csv` (`engine/plans-files.ts`). Columns, in order: `date, day, exercise, sets, reps, load, unit, notes, done_sets, done_reps, done_load, felt`. One row per exercise per date. `day` is the session name; `notes` on a day's first row is the day's note; `reps` is a number, a range (`8-10`, the bottom counts as the target) or a duration (`40min`, `600s`); `load` is the top working set (empty for bodyweight; `unit` then empty). The athlete fills the `done_` columns in any spreadsheet app, or the coach does from a chat report: `done_reps` and `done_load` take one value for every set or one per set (`5,5,4`, also `/`, `;` or spaces); `felt` is text, or an RPE (`8`, `RPE 8`). The reader accepts a BOM, CRLF and quoted fields, and keeps a column the athlete added on every write, in the file's own column order. **Nothing is lost** (V2b fix 1): a row without a `YYYY-MM-DD` date (a spreadsheet date such as `10/12/2026`) or without an exercise is kept by column name, and a line whose quote never closes is kept verbatim (reading goes on at the next line); both are reported in `warnings`, written back on every write, and scanned by `safety scan-notes` (dated their week's Monday). **Counts** (fix 3): a `sets` or `done_sets` cell is a whole number from 0 to 20 and a reps value one from 0 to 100, else it is unknown (no sets, no `suggestedSets`) with a warning; the raw cell stays in the file. **Units** (fix 2): every row keeps its own unit; the snapshot converts each row's load to `athlete.units` (Tally's rounding), and a replan of a logged exercise keeps the logged unit and converts the new plan load to it.
+  - `plans write --input <file.json>`: the days in `{days}`, `{week: {days}}`, `{day}`, `{tally_day}` (adjust's output) or one `{date, exercises}`; exercises in the engine shape (`sets`; warm-ups are not plan sets) or Tally's (`suggestedSets`, `suggestedReps`, `repsMax`, `suggestedWeight`, `suggestedDuration`). Each given date is replaced; other dates stay. A row with any done value keeps its done columns and added columns when the new plan has the same exercise (name compared without case or punctuation) on that date; a logged row the new plan drops is kept and listed in `dropped_done`. Prints `{files, dates, rows, kept_done, dropped_done}`. Atomic (temp file and rename).
+  - `plans read --week <YYYY-MM-DD | YYYY-Www>`: `{file, exists, week, week_start, days (DayPlans), logged (DayLogs), warnings}`.
+  - `plans done --date <d> (--as-planned | --exercise <name>) [--sets n] [--reps r] [--load x] [--felt <text>]`: fills the done columns. `--as-planned` copies the plan (a rep range: its top); with no `--exercise` it fills every row of the date not yet logged; an explicit value wins. `NOT_PLANNED` when the date has no such row. Prints `{file, updated, logged_sessions}`.
+  - **The tools read the files** (`engine/coach-snapshot.ts coachSnapshot`): with `logger: files`, `readiness --date`, `weeks`, `loads --from-snapshot`, `adjust --from-snapshot`, `block draft` and `classify` read a snapshot built from `plans/` (`days`: every planned date in Tally's shape; `history`: the logged rows; `history_coverage.complete` false, with `warnings`, when a row or a count could not be read, else true; no session or age check), and `safety scan-notes` scans the `notes` and `felt` text.
+  - **The urgent stop:** the urgent gate denies Edit and Write under `plans/` (§10). `plans write` and `plans done` run through Bash, which the gate does not see, so they refuse with `URGENT_STOP` while `athlete/.urgent-stop` exists (readable or not). `plans read` still works.
+- **`other`:** a tool the athlete already uses (an MCP server they connected, for example Google Sheets or Notion). Skill text only, no adapter code: the coach uses that tool's own instructions. When it does not answer, the coach says so in one line and runs `logger set files` (V2b fix 4), so the engine reads the files from then on. With `other`, `coachSnapshot` returns no snapshot (a Tally cache left from earlier use is not the record): the tools report unknown unless the coach passes the evidence with `--input`; `adjust` and `loads --from-snapshot` refuse with `NO_SNAPSHOT`.
+- **`logger set tally|files|other`** (`engine/cli-setup.ts setLogger`): writes `coach.yaml logger` (comments kept) and prints `{logger, previous, changed}`. The urgent gate cannot know its tool names: the context message and the skill text carry the stop there.
+- **The Tally mention** (`tally-mention [--sessions <n>]`, `engine/cli-setup.ts`): with `files` or `other`, once, after the third session logged by hand or in chat (`files`: the dates with a logged row; `other`: `--sessions`, the count the coach read from the tool). It writes `tally_mentioned: true` into `coach.yaml` (comments kept) before it prints `{mention: true, text}`, so it never repeats; otherwise `{mention: false, reason}`. With `tally` it never mentions. The skills run it in live sessions only. The text: "If logging by hand gets old: Tally logs sets on your phone at the gym, and I read them back. Say 'switch to Tally' to try it."
+- `capture-reads` and `log-writes` match Tally tool names only, so they read the Tally adapter whatever `logger` says.
 
 ## 13. Skills, agents, hooks (files)
 
-- **Skills:** `.claude/skills/{setup,today,check-in,week,block,audit,limits,explain,method}/SKILL.md`. Each description is under 1,000 characters and names its trigger phrases. Every skill states its read order and writes, and it runs `node engine/cli.ts <command>` for numbers.
-- **Agents:** `.claude/agents/{analyst,method-expert,safety}.md`.
-- **Hooks** in `.claude/settings.json`: `session-context` (SessionStart), `safety-detect` (UserPromptSubmit), `guard-writes` and `guard-files` (PreToolUse), `capture-reads` and `log-writes` (PostToolUse), `commit-check` (Stop). Each one is a `.ts` file run with `node`, with a timeout of 10 s or less. The guard hooks are fail-closed.
-- **`engine/cli.ts`:** subcommands `readiness`, `classify`, `validate`, `volume`, `hold init|set|clear`, `lint-methods`, `snapshot show`, `limits-hash`, `limits server-rules|sync-ops` and `oplog done` (§21), and the §15 and §22 helpers. Output is JSON on stdout. A nonzero exit means an error.
+- **Skills:** `.claude/skills/{setup,today,check-in,log,safety,week,block,audit,limits,explain,method,update,recovery-data,automation,injury-history}/SKILL.md`. v0.2 setup asks five clickable screens to week 1 with Tally or with files (its "Screens" table; `tests/skills.test.ts` walks the scripted answer paths); recovery data, automation and injury history are their own skills, offered in one line at the end of setup. Each description is under 1,000 characters and names its trigger phrases. Every skill states its steps and writes, and runs `node engine/cli.ts <command>` for numbers.
+- **Agents:** `.claude/agents/{analyst,method-expert}.md`. Removed in 0.2: the `safety` agent (the `safety` skill replaces it: subagents cannot show clickable questions).
+- **Hooks** in `.claude/settings.json`: `session-context` (SessionStart), `safety-detect` (UserPromptSubmit, `onFailure: continue`), `urgent-gate` (PreToolUse, `onFailure: block`; the only gate), `capture-reads` and `log-writes` (PostToolUse; records), `commit-check` (Stop). Each one is a `.ts` file run with `node`, with a timeout of 10 s or less.
+  - **`session-context`:** today's date; the urgent stop first (with the urgent-care text and the clear question); the v0.1 safety files (§24 "Migration to 0.2"); the limits summary; setup progress (the last line of `athlete/log/setup.md`); what is due and the block week; privacy (installs the pre-push hook when missing; tracked-file findings).
+  - **`commit-check`** (built-ins only): the auto-commit. With `coach.yaml`, it reads `git status --porcelain -z` (NUL-delimited, renames included, so spaces and Unicode stay intact) and commits the changed paths among `athlete/`, `plans/` and `coach.yaml` (`git add`, then `git commit --only`, never other staged work) with the message "coach: update …", and says nothing. It never runs `git add` or `git commit` with an empty path list. A failed commit is one `systemMessage` line.
+  - **`guard-writes.ts`, `guard-files.ts`:** v0.1 entries kept as allow-all stubs with no imports; not registered. v0.3 deletes them.
+- **`permissions`** in `.claude/settings.json`: `deny` keeps `Edit` and `Write` of `athlete/.cache/**`. `allow` is a narrow list, so auto mode runs the coach's commands without a prompt (auto mode honors narrow allow rules and drops broad ones such as `Bash(node *)`): `Bash(node engine/cli.ts <sub>)` for `mode`, `window-check *`, `readiness *`, `signals *`, `checkin *`, `weeks *`, `targets *`, `block draft *`, `ids next *`, `adjust *`, `loads *`, `volume *`, `classify *`, `opid *`, `oplog done *`, `limits schema`, `limits regions`, `limits check *`, `safety scan-notes *`, `snapshot show`, `lint-methods *`, `config-check`, `urgent status`, `urgent set *`, `urgent clear --reason clinician`, `urgent clear --reason false-alarm`, `install-git-hooks`, `prepush-check`, `push`, `update --check`; v0.2 V2 adds `plans write *`, `plans read *`, `plans done *`, `setup-check`, `init-athlete`, `allow-server *`, `worktree status`, `worktree ff-main`, `worktree ff-branch`, `commit --message *`, `tally-mention`, `tally-mention *`, `push --branch main`, `update --check --root *`, `update --yes --to *` (the update skill asks the athlete once in chat), and in V2b `logger set *`, `worktree main-checkout`, `worktree remove-temp`, `history-files`, and in V3b `help` and `help *`; plus `Bash(npm ci)`, `Bash(git -C * merge --ff-only *)`, `Bash(node adapters/signals/oura/fetch.ts *)`, `Bash(git pull --rebase)`, and `Edit` and `Write` of the coach's own files (`athlete/**`, `plans/**`, `coach.yaml`, `.tmp/coach/**`, each also with a leading `/`; the cache deny rules win), and `Read(~/Downloads/*.csv)`, `Read(~/Desktop/*.csv)` (a training export at setup). The Tally server's name varies, so setup writes `mcp__<server>` into `.claude/settings.local.json` (`allow-server`, §22a), a user file the update never touches. `tests/hooks/settings.test.ts` pins the list; `tests/skills.test.ts` checks that every engine command the skills run is covered (except the one-time `routine-body` and `install-launchd`).
+- **`engine/cli.ts`:** subcommands `readiness`, `volume`, `limits-hash`, `limits schema|regions|check`, `oplog done`, `snapshot show`, `safety detect|scan-notes`, `classify`, `urgent set|clear|status`, `signals`, `checkin`, `install-git-hooks`, `prepush-check`, `push`, `update`, `config-check`, `plans write|read|done` (§12a), `setup-check`, `init-athlete`, `allow-server`, `worktree status|ff-main|ff-branch`, `commit`, `tally-mention`, `logger set`, `history-files` (§22a), and the §15 and §22 helpers. Removed in 0.2: `validate`, `hold …`, `proposals …`, `block write`, `limits server-rules|sync-ops`, `ids next --kind proposal`. Output is JSON on stdout. A nonzero exit means an error.
 
 ## 14. Automation facts (tested against Claude Code routines)
 
@@ -400,8 +396,7 @@ nextWeekTargets(block: Block, ref: WeekLog | null, rules: Rules): Targets       
   - Cron: daily `7 5-10 * * *` (hourly, minimum interval 1 hour); weekly Sunday `7 17 * * 0`.
 - **Finding the Tally connector:** each user's connector ID differs. `setup` creates the routine **disabled** (`enabled: false`), reads the `mcp_connections` the API returns (all connectors on the account), picks the one whose `url` is `https://mcp.tallyworkout.app/api/mcp`, then updates the routine with that connector only and `enabled: true`. With no Tally connector, setup stops and links the connect page. The create response lists every connector with `connector_uuid`, `name` and `url`.
 - **Prompts dispatch explicitly:** "Read .claude/skills/today/SKILL.md and follow it exactly."
-- **Pull requests** from a routine: `gh api -X POST repos/{owner}/{repo}/pulls -f title=… -f head=… -f base=main -f body=…`. `gh pr create` (GraphQL) is blocked in Claude Code sessions.
-- **Apply after merge:** the `today` and `week` skills check `athlete/proposals/` on `main` for approved, unapplied proposals before anything else, and apply them under the guard's approval-record rule. A GitHub merge trigger is optional; the user adds it in the web UI.
+- **Pull requests and apply after merge:** removed in 0.2. A routine opens no pull request; a big change is one log line ("- proposal for the next live session: …"), and the next live session offers it (`today` step 3).
 - **The Mac launchd template** runs `env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN COACH_UNATTENDED=1 claude -p "…" --permission-mode dontAsk --allowedTools …`. With an API key set, claude.ai connectors are disabled and usage bills to the API.
 - **The allowed tools** of a routine and of the launchd template are `UNATTENDED_TOOLS` plus the 11 Tally tools under the connected server's prefix (§23). No open `Bash`, `Write` or `Edit`.
 - **Network:** cloud runs reach Tally through the connector (no allowlist change). Oura direct in the cloud would need a Custom network environment plus a token broker, so v1 runs Oura on the Mac.
@@ -414,7 +409,7 @@ adjustDay(day: DayPlan, decision: "trim" | "recovery", ctx: { tax: Taxonomy; thr
 //  trim: for loaded (non-recovery) patterns, sets -= round(sets * trim_fraction), minimum 1; loads unchanged;
 //        exercise order kept; recovery patterns untouched.
 //  recovery: replace with a recovery day from the template's recovery slots (Zone 2 cardio, mobility,
-//            breathing), duration matched to the planned session length, never loading a held or limited region.
+//            breathing), duration matched to the planned session length, never loading a limited region.
 // engine/loads.ts
 suggestLoads(exercises: PlannedExercise[], history: SessionHistory, rules: Rules, units: "lbs" | "kg"): { exerciseId: string; suggestedWeight?: number; reason: string; rule_ids: string[] }[]
 //  from the last logged top set: hit all reps at RPE <= target -> + one step (2.5% for upper, 5% for lower, rounded
@@ -423,10 +418,7 @@ suggestLoads(exercises: PlannedExercise[], history: SessionHistory, rules: Rules
 opId(date: string, kind: ChangeKind | "apply" | "week", call: { tool: string; args: unknown }): string   // contracts §9 format
 // engine/mode.ts
 mode(): "interactive" | "unattended"   // CLAUDE_CODE_REMOTE or COACH_UNATTENDED -> unattended
-// engine/proposals.ts (extends approvals.ts)
-createProposal(input: { kind; summary; writes: {tool, input}[]; base: Record<string, string>; limits_hash; rule_ids }): { id; path }
-openProposalPR(proposal, opts: { owner; repo; branch }): { url }        // gh api REST; never gh pr create
-markApplied(id, results): void
+// engine/proposals.ts: removed in 0.2 (a proposal is one line in the athlete log).
 // engine/automation.ts
 routineBody(kind: "daily" | "weekly", cfg: CoachConfig, repoUrl: string, connector: { uuid: string; name: string; url: string }): object
 //  cron from cfg.automation in the athlete's timezone converted to UTC; mcp_connections = [Tally only] with
@@ -437,9 +429,8 @@ launchdPlist(kind, cfg, repoPath): string   // runs: env -u ANTHROPIC_API_KEY -u
 
 **CLI commands** (`engine/cli.ts`; JSON on stdout):
 - `mode`, `opid`, `adjust`, `loads`, `targets` (`nextWeekTargets`);
-- `proposals create|open-pr|list|mark-applied`;
 - `routine-body`, `launchd-plist`, `install-launchd` (writes to `~/Library/LaunchAgents` only with `--yes`);
-- `signals`, `checkin`, `readiness`, `validate`, `classify`, `hold …`, `lint-methods`.
+- `signals`, `checkin`, `readiness`, `classify`, `urgent …`, `limits …`, `lint-methods`.
 
 ## 16. Decisions from building the engine
 
@@ -457,18 +448,11 @@ launchdPlist(kind, cfg, repoPath): string   // runs: env -u ANTHROPIC_API_KEY -u
 
 ## 17. Approval provenance
 
-- `createProposal` writes `status: proposed`. No engine or CLI path writes `approved` on `main`.
-- The skill writes the approved copy only on the branch `proposal/<id>`, pushes it, opens the PR (REST) and records `pr_url`.
-- **Merging the PR is the approval.** The guard accepts an approval record only when the file on `main` has `status: approved` **and** it arrived through a merge commit of `proposal/<id>`. Squash merges are not accepted, and the user docs say so.
-- `guard-files` in unattended mode denies Bash commands that merge PRs (`gh pr merge`, `gh api … pulls/<n>/merge`) and denies Edit or Write of `athlete/proposals/**` on `main`. Interactive mode asks.
-- `markApplied` adds `applied_at` and `results`.
+Removed in 0.2: no proposal files, branches or pull requests. A big change in an unattended run is one log line for the next live session, and the athlete's answer there is the approval.
 
 ## 18. Guard activation in the template repo
 
-- `guard-files` is active only when `coach.yaml` exists at the repo root, which means an athlete instance has been set up. The template and development repo has only `coach.example.yaml`, so development is unaffected. No environment variable switches the guard off.
-- In an instance, `guard-files` also protects `coach.yaml`: Edit, Write, and Bash `rm` or `mv` of it are `ask` in interactive mode and denied in unattended mode.
-- `guard-writes` denies every Tally mutation when `coach.yaml` is missing. With no config, nothing can be written, so deleting it never opens a path.
-- `permissions.deny` covers only `athlete/hold.yaml`, `athlete/.safety-pending` and `athlete/.cache/**`. Everything else is enforced by the hooks.
+Removed in 0.2 (there is no guard). In the template repo (no `coach.yaml`), `safety-detect` writes no commit, `commit-check` does nothing, and `session-context` installs no git hook; the urgent gate still acts on an `athlete/.urgent-stop` file if one exists.
 
 ## 19. Schedule window and Mac launch
 
@@ -481,89 +465,55 @@ launchdPlist(kind, cfg, repoPath): string   // runs: env -u ANTHROPIC_API_KEY -u
 
 ## 20. Decisions from building the guard
 
+Most items described the v0.1 guard and are removed in 0.2; the rest still hold.
+
 1. **Snapshot day shape (§9).** A day holds the logger's own exercise shape (for Tally: `suggestedSets`, `suggestedWeight`, …), not `sets[]`. The adapter's `toDayPlan` converts it. A day also has `found` (a read that found no day is stored with `found: false`), `weightUnit` and `weightUnitSource` (only when Tally knows the unit). The snapshot adds `planned` (the listing from `get_training_context`), `history_coverage` (item 18), `weightUnit` and `weightUnitSource`.
-2. **Every date a write touches must be read in this session, within 15 minutes** (`get_planned_workout`, including empty dates and the destination of a move). This is stricter than §7 step 2, which checks only the whole snapshot's age.
-3. **A write that raises a muscle's weekly sets needs the whole week, fresh** (item 19), and the history (`get_workout_history`, item 18) unless the week is block week 1. A write the snapshot cannot confirm (a plan write, a conflict, an uncertain result) removes the day and adds it to the listing, so it must be read again.
-4. **No block, no volume rise.** Without `athlete/block.yaml`, any rise in a muscle's weekly sets is denied. With a block and no completed build week, the reference is block week 1 as planned; a muscle missing from it has a base of 0 (so +1 set).
-5. **A raised top set needs the history read first.** Without it, the top-set check cannot run, so the write is denied.
-6. **`guard()` takes 4 more inputs:** `block`, `pain` (today's check-in pain from `athlete/signals/<today>.json`), `limits_hash` and `logger` (the adapter). `classifyChange` takes `tax`, `rules`, `config`, `today` and `volume` in its context. `Verdict` adds `kinds`, `big`, `approval` and `code`.
+2. Removed in 0.2: the 15-minute read rule for each written date (a guard input).
+3. Removed in 0.2: the whole-week evidence rule (a guard input).
+4. Removed in 0.2: no block, no volume rise (the guard's volume check).
+5. Removed in 0.2: the history read before a raised top set (a guard check).
+6. Removed in 0.2: the extra `guard()` inputs.
 7. **Kinds:** a change that no small kind describes is big (fail closed). A new day on an empty date is big unless it is a recovery day or a `block_session` (§6 ruling; item 24). A skip or delete of an MCP day is `trim_session`. Recovery exercises are never `new_exercise`. A move across weeks is big.
-8. **Limits apply to every exercise of every after-day,** not only to the changed ones. Names match after normalization (case, spaces, `_`). `max_sets_per_week` and the volume cap deny only when the call raises the count: a trim of an over-cap week is allowed.
+8. Removed in 0.2: limits on every after-day (the guard's limit check; `limits check` reports instead, §2).
 9. **Unit rule:** an exercise's weight is in Tally's known unit; when Tally does not know it, in the call's `weightUnit`; else in `coach.yaml athlete.units`.
-10. **`update_user_profile` under a hold** is not blocked by the hold. It still follows its own rules: ask interactive, deny unattended, deny when it clears `limits`, deny when it drops a `limits.yaml` region the old text named (or any region, when the profile was not read).
-11. **`guard-files`** is active only when `coach.yaml` exists. It also protects `adapters/**` and `git-hooks/**` (the adapter holds the capabilities and the matcher). It allows any single `node engine/cli.ts <command>` and `node engine/hold.ts set …` with no shell operators, `$` or backticks; `hold clear` asks. Bash is matched on protected names and on path operands (item 17; best effort). `permissions.deny` covers only `athlete/hold.yaml`, `athlete/.safety-pending` and `athlete/.cache/**`.
-12. **Approval provenance (§17)** needs remote evidence (item 16). A base version of `null` means the date must still be empty.
-13. **Operation IDs** use `sha256(canonical JSON of {tool: <suffix>, args})`, the same hash as approval records. `log-writes` takes the kind from the verdict that `guard-writes` saves in `athlete/.cache/verdicts/<tool_use_id>.json`.
+10. Removed in 0.2: `update_user_profile` under a hold.
+11. Removed in 0.2: `guard-files`.
+12. Removed in 0.2: approval provenance.
+13. **Operation IDs** use `sha256(canonical JSON of {tool: <suffix>, args})` (`engine/opid.ts toolCallHash`). `log-writes` takes the kind from the submitted `opId` (v0.2; the verdict hand-off is removed).
 14. **pre-push** looks up visibility with `gh api repos/<owner>/<repo>` (REST), because GraphQL (`gh repo view`) is blocked in Claude Code sessions. A non-GitHub URL is a failed lookup.
 15. **Hooks honor `COACH_NOW`** (an instant) for tests. The hook process inherits the session's environment, which the model cannot change.
 
-### Guard hardening
+### Hardening
 
-16. **Approval needs remote evidence.** `engine/approvals.ts` accepts an approved proposal on local `main` only when `gh api repos/<owner>/<repo>/pulls?state=closed&base=main&head=<owner>:proposal/<id>` (REST) lists a merged pull request from `proposal/<id>` into `main`, its `merge_commit_sha` is an ancestor of the fetched `origin/main`, it is a merge commit (not a squash), and it holds exactly `main`'s copy of the file. `origin` must be a GitHub URL; a failed `gh` call gives no record. Local merges never count. Unattended Bash denies `git merge`, `gh pr merge` and `gh api … pulls/<n>/merge`; interactive asks (best effort). **Residual risk:** a model holding the user's GitHub token could merge its own pull request through another path. Hard limits stay enforced by the guard, and Tally T3 adds the server-side backstop.
-17. **Bash path operands and broad restores.** `guard-files` resolves absolute, `./`, `../`, `$CLAUDE_PROJECT_DIR` and `$PWD` operands against the repo root, and a protected file or folder (the folder name itself included) asks or denies. `git checkout|restore|reset|stash|clean` is broad when it names `.`, a protected path or a folder holding one, or no path at all; `reset --hard|--merge|--keep` is always broad. Not broad: `checkout -b|-B|--orphan <name>` with no start point, `stash list|show`, and a restore of an unprotected path. Broad: deny unattended, ask interactive. Proposal files stay guarded for Edit and Write only, because the proposal flow commits them with Bash. Branch switches with `git checkout <branch>` count as broad; skills switch branches with `git switch`.
+16. Removed in 0.2: approval needs remote evidence.
+17. Removed in 0.2: Bash path operands and broad restores (`guard-files`).
 18. **Responses are validated.** Every captured read is checked against Tally's result shape. An error or a malformed read never counts as evidence: it removes the day (`get_planned_workout`), the listing (`get_training_context`) or the history coverage (`get_workout_history`). `history_coverage` holds `captured_at`, `complete` (false while `nextCursor` remains; a later page completes the chain) and the requested `since`/`until`. The history is evidence only when it is complete, read in the last 15 minutes, starts no later than 8 weeks before today and ends no earlier than yesterday.
-19. **Fresh evidence for the whole week.** When a call raises a muscle's sets in a week, every day of that week (Monday to Sunday, earlier days included) needs a `get_planned_workout` read in the last 15 minutes, or lies on or after the `from` date of a training-context listing read in the last 15 minutes that does not list it (an empty date). This check runs after the safety step and before the limits.
+19. Removed in 0.2: fresh evidence for the whole week.
 20. **The block is validated whole.** `engine/block.ts`: known keys only, `start` a Monday, unique week numbers, `kind` build|deload|test, and every count (`sessions`, `targets`, slot `sets`) a finite whole number of 0 or more (slot sets 1 or more). A bad block is `GUARD_ERROR` (deny), both from the file and as a `guard()` input.
-21. **Rebuild of hidden stored exercises** is deferred to Tally T3: the server validates the full stored day, and T3 reads return nameless entries.
+21. Removed in 0.2: rebuild of hidden stored exercises.
 22. **Pre-push inspects every commit reachable from a pushed SHA,** with no exclusions, because cached remote-tracking refs can belong to another repository than the push URL. Paths are read NUL-delimited (`git diff-tree -z`). A pushed SHA that cannot be listed denies the push.
-23. **Safer is always allowed.** Under a hold or a pending safety file, `skip_planned_workout` (skip, not restore) is allowed for any day, user days included, in both modes, before the T2 and consent checks. A trim (each exercise on the day before, with fewer or equal hard sets, top load and reps, and the same safety classification by id and name) is allowed under a hold; limits and hard rules still apply to it. Outside a hold, skipping a user day unattended stays denied.
+23. Removed in 0.2: safer is always allowed under a hold.
 24. **`block_session` (§6 ruling)** is implemented in `engine/classify.ts`: a new day on an empty date inside the block whose every exercise matches a block slot (exerciseId, then normalized name, then pattern for a slot that names no exercise) with hard sets not above the slot's sets (a deload week scales them by `deload_depth.volume`). It is in the default `approval.auto` of `coach.example.yaml`.
 25. **`allow` binds to the exerciseId.** An `allow` entry that matches the exerciseId exempts the exercise. One that matches only the display name exempts it unless the exerciseId by itself classifies to a limited pattern; then the exercise is an identity conflict and is denied.
-26. **One hash.** `engine/approvals.ts toolCallHash` is SHA-256 of `engine/opid.ts canonicalToolCall`; an operation ID's suffix is its first 12 hex characters. `proposals list` is part of the `proposals` command and adds `approved_on_main` and `not_approved_because`.
+26. Removed in 0.2: `approvals.ts` and `proposals list`.
 
 ### Hook bootstrap
 
-27. **Hooks work before `npm ci`.** Each hook entry file (the path `.claude/settings.json` runs) imports Node built-ins only: `.claude/hooks/bootstrap.ts` and, for guard-files, `.claude/hooks/fast-files.ts`. The engine code is in `<hook>.body.ts`, loaded with a dynamic `import()`. stdin is read once (`stdinText`), so the body reads the same input. The root is `CLAUDE_PROJECT_DIR`, else the input's `cwd`.
-    - **Never rename or delete an entry file.** Write a new body first, then replace the entry content last, so the hook works at every step. A test checks that every command path in `settings.json` exists and that each entry imports built-ins only.
-    - **No `coach.yaml`, decided with built-ins:** guard-files allows. guard-writes blocks a logger mutation with exit 2: `MISSING_FILE: coach.yaml is missing; …` plus "coach-harness is not set up yet (no coach.yaml). Run setup first." It allows any other tool. The block stays exit 2, not a JSON deny, because the §18 test pins that shape. The mutation list (`LOGGER_MUTATIONS`, and the regex `LOGGER_MUTATION` built from it) is in `bootstrap.ts`. Tests keep it equal to the adapter's mutations, `update_training_limits` included, and check that each `settings.json` matcher for guard-writes, log-writes and capture-reads selects every one in all three name forms.
-    - **Engine cannot load, no `coach.yaml`:** capture-reads, log-writes and commit-check exit 0 with no output. session-context says "coach-harness is not set up. Run `npm ci`, then say 'set me up'." safety-detect adds "SAFETY: the pain and red-flag detector could not run (packages are not installed). …" and writes no pending file. This applies to any engine-load failure (a missing package or a missing or broken engine module). With `coach.yaml`, a load failure keeps the `detector-error` path.
-    - **Engine cannot load, `coach.yaml` present:** fail closed with "coach-harness packages are missing. Run `npm ci`." guard-writes denies every call. guard-files checks first that the `yaml` package resolves from `engine/`. If it does not, the fast path and the read-only allowlist do not run, and only the repair passes: exactly `npm ci` or `npm install` (spaces or tabs only: no flag, no newline), optionally after `cd <repo root> && `. The folder may be quoted and holds no `$`, backtick or backslash. A bare command also needs the input's `cwd`, when given, to be the repo root. capture-reads and log-writes exit 2 with the reason. commit-check blocks the first stop and warns on the second. session-context gives the reason as context. safety-detect writes `detector-error`.
-    - **guard-files fast path (latency).** With `coach.yaml`, `fast-files.ts` allows only calls that `fileGuard` also allows. For a file tool: a path outside the root, or a path that is not `coach.yaml`, not a protected file or folder, and not a proposal, compared without regard to case (item 28). For Bash: no quote, backslash, `$`, backtick or `/`, no `git` or `gh` word, no protected name, and no `.` or `..` operand. Anything else goes to the engine. A test keeps the lists equal to `engine/protect.ts` and checks every fast allow against `fileGuard` in both modes. **Residual:** a new protected name added only to `BASH_TOKENS` in `engine/protect.ts` must also be added to `BASH_NAMES` in `fast-files.ts`.
-    - **Read-only Bash allowlist.** guard-files allows a Bash command in every mode, when the packages are installed, when it is one `ls`, `cat`, `head`, `tail`, `wc`, `stat` or `grep` as the first word, followed only by words made of letters, digits and `. _ / - , + @ : * ?`, separated by spaces or tabs. Anything else goes to the full guard: parentheses, brackets, braces, quotes, `$`, `=`, `~`, `!`, `#`, backslash, any shell operator or newline. zsh runs commands from glob qualifiers such as `x(e:cmd:)` and from `=(cmd)`. No `xargs`, `tee`, `sed`, `find`, `-exec` or `--in-place` word. It cannot write, so it may name a protected path. Tests run the allowed commands and the zsh attacks under bash and zsh.
-    - **Compile cache.** `bootHook` turns on `module.enableCompileCache()` (V8 code cache in `$TMPDIR/node-compile-cache`, checked against each source's hash) before it loads the body. This saves about 40 ms per engine load. `NODE_DISABLE_COMPILE_CACHE=1` turns it off.
-    - **Latency floor.** `settings.json` runs `node <hook>.ts`. Node loads its type stripper for any `.ts` file, so a one-line `.ts` file takes about 35 ms more than a bare `node` start. `scripts/bench-hooks.mjs` prints that floor next to each hook.
-28. **Protected paths match without regard to case** (`engine/protect.ts` and the fast path). macOS volumes are case-insensitive by default, so `ENGINE/protect.ts`, `Athlete/Limits.yaml` and `.CLAUDE/settings.json` name protected files there. File paths, Bash operands, the Bash name tokens, `coach.yaml` and proposal paths are compared in lower case, and a path under a case variant of the repo root counts as inside the root. Over-protecting on a case-sensitive volume is harmless.
+27. **Hooks work before `npm ci`.** Each hook entry file (the path `.claude/settings.json` runs) imports Node built-ins only: `.claude/hooks/bootstrap.ts`, and `.claude/hooks/urgent-list.ts` for the urgent gate. The engine code is in `<hook>.body.ts`, loaded with a dynamic `import()` (`urgent-gate` and `commit-check` need none). stdin is read once (`stdinText`). The root is `CLAUDE_PROJECT_DIR`, else the input's `cwd`.
+    - **Never rename or delete an entry file that a running session may call.** The v0.1 entries `guard-writes.ts` and `guard-files.ts` stay as stubs that import nothing and allow everything (they ran with `onFailure: block`); v0.3 deletes them. A test checks that every command path in `settings.json` exists and that each entry, and both stubs, import built-ins only.
+    - **Engine cannot load, no `coach.yaml`:** capture-reads, log-writes and commit-check exit 0 with no output. session-context says "coach-harness is not set up. Run `npm ci`, then say 'set me up'." safety-detect says the urgent detector could not run and writes nothing.
+    - **Engine cannot load, `coach.yaml` present:** capture-reads and log-writes exit 2 with "coach-harness packages are missing. Run `npm ci`." session-context gives the reason as context. safety-detect asks the coach to check the message for urgent signs itself (and run `urgent set` for one). The urgent gate and commit-check run with built-ins and work as always.
+    - **Compile cache.** `bootHook` turns on `module.enableCompileCache()` before it loads the body (about 40 ms less per engine load). `NODE_DISABLE_COMPILE_CACHE=1` turns it off.
+    - **Latency floor.** `settings.json` runs `node <hook>.ts`; any `.ts` file costs about 35 ms more than a bare `node` start. `scripts/bench-hooks.mjs` prints that floor next to each hook.
+28. Removed in 0.2: protected paths match without regard to case.
 
 ## 21. Server limits (Tally T3)
 
-Tally can enforce training limits on its server too. The feature is off for users today, so this code is dormant: it acts only when the connected logger lists `update_training_limits`. The local guard always enforces `athlete/limits.yaml`.
+Removed in 0.2: the sync of `athlete/limits.yaml` to Tally (`engine/limits-compile.ts`, `engine/server-match.ts`, `engine/limits-sync.ts`, `limits server-rules|sync-ops`). A limit that only the Tally app can remove broke the one-click promise. Limits already in Tally stay until the athlete removes them in the app; the `limits` skill says so once. Still true:
 
-1. **Compile** (`engine/limits-compile.ts compileServerRules(limits, tax, resolved)`): a ban becomes a Tally `ban` rule and a cap with `max_sets_per_week` a `cap` rule. A cap with only `max_load` is skipped; a cap's `max_load` stays local (`localOnly`). A limit with an allow entry missing from `resolved` is skipped, because without it Tally would refuse what the local guard allows. Except-keywords are every taxonomy phrase that holds a banned keyword but that `classify` maps to none of the limit's patterns: keywords, exercise entries, and two keywords that overlap by whole words ("incline bench" + "bench press").
-2. **Matcher** (`engine/server-match.ts`): a TypeScript port of Tally's server matching rules. The property test (`engine/server-match.test.ts`) proves that for every taxonomy exercise and template pattern, the server matches exactly what the local guard matches. Known gaps, all in the safe direction (Tally matches less): an exercise named by `limits.yaml` but stored under another exerciseId, and an allow entry stored under its id with another name (Tally needs both).
-3. **Sync** (`engine/limits-sync.ts syncOps`): the rule id of a changed rule is the old id plus `_2`, `_3`, … (the first one free). A form such as `L-001.2` fails Tally's id pattern. Content is the kind and the match lists; labels are not content.
-4. **CLI:** `limits server-rules [--resolved]` and `limits sync-ops --server <file|-> [--resolved]` (`engine/cli-limits.ts`).
-5. **Adapter:** `tools.limits.update: update_training_limits`; `capabilities.server_limits: { when_tool: update_training_limits }`, true at run time only when the tool list holds the tool (`engine/logger.ts serverLimits`). The guard, log and capture matchers (adapter and `settings.json`) include the tool.
-6. **Guard:** `update_training_limits` is `limit_change`: ask interactive, deny unattended. Its input must hold 1-20 ops of `add_rule`, `lower_cap` or `set_weekly_cap` and an `expectedVersion`; anything else is denied.
-7. **Refusals:** a result with `status: refused, code: training_limit` (read even when the response is flagged as an error) reconciles to the status `refused`, names the rule, and says it is not retried. The snapshot keeps every day the refused call named, so the after-write week check sees no change. A range without opId that wrote some days is `written` and names the refused days; only the written days leave the snapshot.
-8. **Matching details.**
-   - The matcher follows Tally's rules: whole-word keywords with a plural `s`/`es` (the rule of `taxonomy.ts keywordSpans`); `norm()` deletes Unicode format characters before NFKC; each field is read to 200 characters. The property test covers every template slot with its set count, plural and suffix variants, and differing names and ids. With differing names and ids, Tally refuses more than the local guard only on an identity conflict: the name alone or the id alone is limited, and the local guard classifies only one of them.
-   - `syncOps` groups compiled rules by matching content, keeps the strictest cap, and makes one op per target rule.
-   - A plan range reconciles every day first; any written day makes the status `written` (the week check runs), and refusals and conflicts are named.
-9. **Tally T2 (safe writes).** `rangeCreateIfAbsent`, `versionedSkipDelete` and `opId` are `true`.
-   - Every `plan_workout_range` day carries `ifAbsent: true`; the rebuild keeps a day that exists (Tally skips it, code `exists`). `ifAbsent` with `expectedVersion`, `expectedUpdatedAt`, `replace: true` or `overrideUserModified: true` is denied (a Tally validation error). `plan_workout_day` with `ifAbsent: true` over a day is denied with the reason.
-   - `skip_planned_workout` and `delete_planned_workout` need the snapshot's `expectedVersion` in both modes. The skip under a hold or a pending safety check (§20 item 23) stays allowed.
-   - `opId` is accepted on every day mutation (8-120 characters of letters, digits, `.`, `_`, `:` or `-`). The call hash (`canonicalToolCall`, approvals and operation IDs) leaves a top-level `opId` out. `log-writes` records the submitted `opId` (`oplog.ts loggedOpId`).
-   - A result with `replayed: true` reconciles to the status `replayed`, lists the stored outcome per input, and asks for a re-read (`oplog.ts nextStep`); the snapshot forgets every date the call or the stored outcome names.
-10. **Operation IDs and apply checks.**
-    - **An opId is bound to its call.** The guard accepts a submitted `opId` only when it is the engine's operation ID for that call (`engine/opid.ts opIdProblem`): `op-<date>-<kind>-<hash>`, a real date, a known kind, and the first 12 hex characters of the hash of the canonical call without its `opId`. Anything else is denied, so one key cannot name two calls. The log records the submitted id.
-    - **`node engine/cli.ts oplog done --date <YYYY-MM-DD> --kind <kind>`** (`engine/oplog.ts opDone`). It reads `athlete/log/*.md` and prints `{date, kind, done, status: done|not_done|uncertain, reason, reread, entries}`. Done only for a confirmed successful outcome of that kind on that date: a `written` result (a range by its written dates) or a `replayed` result whose stored outcome for the date succeeded. `conflict`, `skipped`, `refused` and `not_found` are not done; `uncertain` is not done and lists the dates in `reread`. Dates and kinds come from the change line and the operation ID. Example:
-
-      ```
-      $ node engine/cli.ts oplog done --date 2026-10-15 --kind trim_session
-      {"date": "2026-10-15", "kind": "trim_session", "done": false, "status": "not_done",
-       "reason": "no trim_session change on 2026-10-15 succeeded (conflict)", "reread": [],
-       "entries": [{"heading": "2026-10-15 07:07 · op-2026-10-15-trim_session-3fa1c2d9e0b4", "op_id": "op-2026-10-15-trim_session-3fa1c2d9e0b4", "status": "conflict", "outcome": "conflict"}]}
-      ```
-    - **`node engine/cli.ts proposals check-applied --id <id> [--input <results.json>] [--now <instant>]`** (`engine/proposal-check.ts checkApplied`). `results.json` is a list with one tool result per write, in order (`null` when there is none), or `{results: [...]}`. Each write's dates are checked twice: the result in Tally's real shape (written, updated, moved, deleted, unchanged for a skip, per-day range results, replays) must be a success for the date, and the snapshot's read-back of the date (at most 15 minutes old) must show the change. It prints `{id, status: applied|partial|not-applied, writes: [{index, tool, dates, result, readback, applied}], missing}` and writes nothing. Example:
-
-      ```
-      $ node engine/cli.ts proposals check-applied --id P-20261014-reschedule_within_week-1 --input .tmp/coach/results.json
-      {"id": "P-20261014-reschedule_within_week-1", "status": "applied",
-       "writes": [{"index": 1, "tool": "move_planned_workout", "dates": ["2026-10-15", "2026-10-16"],
-                   "result": {"2026-10-15": "done", "2026-10-16": "done"},
-                   "readback": {"2026-10-15": "match", "2026-10-16": "match"}, "applied": true}],
-       "missing": []}
-      ```
+- **Refusals:** a result with `status: refused, code: training_limit` reconciles to the status `refused` in the log, names the rule, and says it is not retried.
+- **Tally T2 (safe writes):** `rangeCreateIfAbsent`, `versionedSkipDelete` and `opId` are `true`. Every `plan_workout_range` day carries `ifAbsent: true`; skip and delete carry `expectedVersion`; `opId` is accepted on every day mutation and left out of the call hash; a `replayed: true` result reconciles to `replayed` and asks for a re-read (`oplog.ts nextStep`).
+- **`node engine/cli.ts oplog done --date <YYYY-MM-DD> --kind <kind>`** (`engine/oplog.ts opDone`): reads `athlete/log/*.md` and prints `{date, kind, done, status: done|not_done|uncertain, reason, reread, entries}`. Done only for a confirmed success.
 
 ## 22. Engine helpers for the skills
 
@@ -571,11 +521,7 @@ The skills never do arithmetic or reshape data. They run these commands. Every c
 
 ### 22.1 `hold init`
 
-- **Purpose:** writes the inactive hold file that the guard needs (§10), so a fresh setup passes `validate`. Setup runs it once, after it writes `coach.yaml`.
-- **Command:** `node engine/cli.ts hold init` (the same as `node engine/hold.ts init`).
-- **Rules:** no hold file: writes `{active: false, set_at: null, reason: null, regions: [], set_by: null}` (the shape of `templates/athlete/hold.yaml`), exit 0, `created: true`. The create is atomic: the full file goes to a temporary name and is hard-linked to `hold.yaml`, which fails when a file exists, so a hold set meanwhile is never replaced. An inactive hold: no change, exit 0, `created: false`. An active hold: no change, **exit 3**, `{ok: false, active: true, message}`. A malformed file: no change, exit 1 (`HOLD_INVALID`).
-- **Output:** `{"ok": true, "created": true, "hold": {...}, "path": "<root>/athlete/hold.yaml"}`.
-- **Guard-files exception (planned; not yet in `engine/protect.ts`):** allow the exact commands `node engine/cli.ts hold init` and `node engine/hold.ts init` (with an optional `--root <dir>`), the same way as `hold set`. In `bashDecision`: `if (sub[0] === "hold" && (sub[1] === "set" || sub[1] === "init")) return allow`. It is safe because `init` never changes an existing hold. Today these commands get `ask` (interactive) or `deny` (unattended).
+Removed in 0.2 (there is no hold file).
 
 ### 22.2 Tally day ↔ engine day; `adjust` and `loads` on Tally days
 
@@ -599,8 +545,7 @@ The skills never do arithmetic or reshape data. They run these commands. Every c
 
 ### 22.3 Null base in proposals
 
-- `proposals create` accepts `base: {"<date>": null}` for a date with no day. `matchApproval` then requires the date to be still empty (a snapshot read with `found: false`). A filled date, or a date not read, gives no match. An empty string is still refused. The PR body shows the date as "empty".
-- **Example input:** `{"kind": "new_exercise", "summary": "Add a Friday legs day", "writes": [{"tool": "plan_workout_day", "input": {…}}], "base": {"2026-10-16": null}, "rule_ids": []}`.
+Removed in 0.2 (there are no proposal files).
 
 ### 22.4 `readiness --date <d>`
 
@@ -631,7 +576,7 @@ The skills never do arithmetic or reshape data. They run these commands. Every c
 - **Arguments:** `--template` (default `<coach.yaml template.days>-day`), `--weeks` 1-52, `--input` (optional): `{id?, start? (a Monday; default the next Monday), emphasis? (default coach.yaml), targets? ({muscle: week-1 sets}; default the template's own counts), step? (default 0.05, never above weekly_volume_increase_max), deload_weeks? (default every deload_every_weeks-th week), weekdays? (default 3-day mon wed fri; 4-day mon tue thu fri; 5-day mon tue wed fri sat), exercises? ({"<day>.<slot>" or pattern: {name, exerciseId}}), loads? ({exerciseId or name: working load in the athlete's units})}`.
 - **Rules:**
   1. Base slot sets: `scaledSets` (emphasis multiplier, rounded, at least 1 unless the multiplier is 0; a 0 slot is left out).
-  2. A slot's muscles: its exercise's classification, else its pattern's muscles (the guard counts the same way).
+  2. A slot's muscles: its exercise's classification, else its pattern's muscles (`volume` counts the same way).
   3. Allocation: each target muscle's sets split across its slots in proportion to their base sets (largest remainder). A slot takes the smallest share its muscles give it, at least 1 set. A warning names a muscle that the 1-set minimum puts above its target.
   4. Build week j: `round(target × (1 + step)^(j − 1))`, capped by `allowedSets(previous build week, cap)`. Week 1 is capped the same way against the reference week (§8: the last completed non-deload week before the block, from the snapshot history, as the guard finds it), and every muscle of the template then gets a target. `capped` lists each week-1 target the cap lowered. With no reference week, week 1 is the targets as given.
   5. Deload week: each non-recovery slot keeps `max(1, round(previous build sets × deload_depth.volume))`; loads are `× deload_depth.load`, rounded to 5 lbs or 2.5 kg, at least one step.
@@ -640,10 +585,10 @@ The skills never do arithmetic or reshape data. They run these commands. Every c
 - **Output:** `{template, block (the athlete/block.yaml shape; validated when it has an id), ready, unresolved: [{slot, day, pattern, adaptation, sets, reason}], weeks: [{week, kind, week_start, load_factor, sets_by_muscle (weeklySetsByMuscle of the returned days), planned_by_muscle (every slot; the block week's targets), targets, days: DayPlan[] (each exercise also has pattern and adaptation)}], reference: {week_start, sets_by_muscle} | null, capped: [{muscle, base, planned, allowed}], rule_ids, warnings}`. `audit` checks `sets_by_muscle`; every drafted day passes the guard's `block_session` check (tested). Only a `ready` draft is a full plan.
 - **Example:** `node engine/cli.ts block draft --weeks 6 --input d.json` with `{"id": "B-001", "start": "2026-10-19"}` → 5 build weeks and a deload in week 6 (`deload_every_weeks` 6), `"block": {"id": "B-001", "start": "2026-10-19", "weeks": [{"week": 1, "kind": "build", "sessions": 4, "targets": {"chest": 9, …}}, …], "days": [{"day": "mon", "focus": "Whole-body lifting, 5 to 10 reps", "slots": [{"pattern": "squat", "adaptation": "strength", "sets": 4, "reps": 5, "rest_s": 180}, …]}, …]}`.
 
-### 22.7 `ids next --kind block|limit|proposal [--change <kind>]`
+### 22.7 `ids next --kind block|limit`
 
 - **Purpose:** the next free ID, so the model never counts.
-- **Rules:** `block`: `B-NNN`, one past the highest in `athlete/block.yaml` and `athlete/blocks/*.yaml` (the block skill keeps old blocks there). `limit`: `L-NNN`, one past the highest in `athlete/limits.yaml`. `proposal`: `P-YYYYMMDD-<change>-<n>` for today in the athlete's timezone, the same rule as `createProposal`; `--change` is required.
+- **Rules:** `block`: `B-NNN`, one past the highest in `athlete/block.yaml` and `athlete/blocks/*.yaml` (the block skill keeps old blocks there). `limit`: `L-NNN`, one past the highest in `athlete/limits.yaml`. Removed in 0.2: `proposal`.
 - **Output:** `{"kind": "block", "id": "B-008", "taken": ["B-002", "B-007"]}`.
 
 ### 22.8 `signals refresh`
@@ -659,42 +604,37 @@ The skills never do arithmetic or reshape data. They run these commands. Every c
 - **Rules:** the pack is `--pack`, else `coach.yaml method`, else `nine-adaptations`, under `methods/`. Exit 1 when the pack has errors.
 - **Output:** `{"pack": "nine-adaptations", "ok": true, "errors": [], "warnings": […], "volume": [{template, emphasis, sets}] (with --volume)}`.
 
+## 22a. Setup v2 helpers (0.2)
+
+`engine/cli-setup.ts`. `setup-check`, `init-athlete`, `allow-server` and `worktree` load Node built-ins only, so they run before `npm ci`.
+
+- **`setup-check`:** setup's silent checks in one call: `{mode, node: {version, need, ok}, claude: {version, need, ok}, npm_ci_needed, timezone, name, coach_yaml, setup_progress, worktree, problems}`. `claude.ok` is null when `claude --version` does not answer (go on). `name` is the first word of `git config user.name` (for `athlete.name`, no typed answer); `timezone` is the system's IANA zone. `problems` lists what stops setup: an unattended run, Node older than 22.18, Claude Code older than 2.1.295. `setup_progress` is the last `setup: <part> done|stopped …` line of `athlete/log/setup.md` (the v0.1 `setup: step <n> done` form is read too; `session-context` uses the same rule).
+- **`init-athlete`:** copies `templates/athlete/{brief.md,limits.yaml,baselines.json,block.yaml}` to `athlete/` when missing and makes `athlete/log/`. Never overwrites.
+- **`allow-server --server <name>`:** adds `mcp__<name>` to `permissions.allow` in `.claude/settings.local.json`, keeping every other key; idempotent; a name outside `[A-Za-z0-9_-]` is `USAGE`; a file that does not parse is `SETTINGS_INVALID` and is left as it is.
+- **`commit --message <text>`:** commits `athlete/`, `plans/` and `coach.yaml` only (`git add`, then `git commit --only` of the paths with staged changes; never other staged work), like the Stop hook, with no permission prompt. Prints `{committed, reason?, ok, paths}`; exits 0 when it committed or there was nothing to commit, and 1 on a failed commit (not a repository, a refusing hook, a git error): the skills stop and say so in one line (V2b fix 9).
+- **`history-files`:** the two newest `.csv` files directly in `~/Downloads` and `~/Desktop` (`{files: [{path, name, folder, modified}]}`), the options of setup's history question. The coach reads the chosen file with the Read tool; `Read(~/Downloads/*.csv)` and `Read(~/Desktop/*.csv)` are the only read allow rules.
+- **`worktree status | ff-main | ff-branch`:** §24 "A copy in a worktree".
+- **`tally-mention`:** §12a.
+
 ## 23. Launch hardening
 
 ### Unattended allowlist
 
-- **Runner list:** `engine/automation.ts UNATTENDED_TOOLS`: `Read`, `Glob`, `Grep`; `Bash(node engine/cli.ts:*)`, `Bash(git status|diff|log|add|commit|pull|switch:*)`, `Bash(gh api:*)`, `Bash(date:*)`, `Bash(printenv CLAUDE_CODE_REMOTE)`; `Edit` and `Write` on `athlete/log/**`, `athlete/proposals/**`, `.tmp/coach/**`. There is no `git push`: pushes go through `node engine/cli.ts push`.
-- **Guard:** in an unattended run (`CLAUDE_CODE_REMOTE` or `COACH_UNATTENDED` set), `engine/protect.ts unattendedBash` denies a Bash command unless every segment is on the list. Segments are split as in §20 (a file-descriptor duplication is dropped; one final redirect may go from the engine CLI into `.tmp/coach/`).
-  - **Words (`strictWords`):** each word is made of plain parts (`[A-Za-z0-9._/:=@,+%-]`) and quoted parts whose text holds no `$`, backtick, backslash or newline. An unquoted `{ } * ? [ ] ~ ! #`, any backslash (so no backslash-newline continuation) and `$` even inside quotes deny: nothing is left for the shell to expand. One exception: a newline inside quotes is allowed in the value of `git commit -m`, `--message`, `-am` or `--message=`, so a message can hold a body and a `Co-Authored-By` line. The splitter does not cut inside quotes. A quoted newline anywhere else denies, and an unquoted newline still ends the command.
-  - **Engine:** `node engine/cli.ts <command>` and `node engine/hold.ts <command>` (the hold entry; the §10 hold rules apply). `install-launchd` and `checkin` deny, and both commands also refuse themselves when an unattended marker is set.
-  - **git:** no option before the subcommand. `status` (`--porcelain`, `--short`, `-s`, `--branch`, `-b`), `diff` (`--stat`, `--name-only`, `--cached`, `--staged`, `--quiet`, `--exit-code`, `--`) and `log` (`--oneline`, `-n <N>`, `-<N>`, `--format=<fmt>`, `--since=<date>`, `--stat`, `--name-only`) take only these options, plus path and ref operands. `add`, `commit`, `pull` and `switch` accept only their listed options. `pull` takes no remote or branch (it pulls the current branch's upstream, so no other branch is merged locally). `switch` must be the whole command (not joined to another), and denies while `athlete/block.yaml` has uncommitted changes. `push` denies: use `node engine/cli.ts push`.
-  - **gh api:** `repos/<owner>/<repo>` or its `pulls[/<n>]`, where `<owner>/<repo>` equals the `origin` remote's GitHub repository (`engine/prepush.ts githubRepo`, case-insensitive); no GitHub origin denies. The effective method is `-X`/`--method` when given, else POST when any `-f`, `-F`, `--field` or `--raw-field` is present, else GET. GET passes; POST passes only on `pulls`. No `-F k=@file`, `--input` or `-H`.
-  - **Others:** `printenv` reads only `CLAUDE_CODE_REMOTE` or `COACH_UNATTENDED`; `date` takes only `+FORMAT` operands and `-u`, after an optional `TZ=<zone>`.
-  - Bash with `run_in_background: true` denies, also for the `npm ci` repair when the engine cannot load. An unquoted single `&` (background) denies, also at the end of the command; `splitWithSeparators` keeps each separator, so `&&` still joins two commands. Edit and Write outside `UNATTENDED_WRITE_DIRS` deny. The fast path (`.claude/hooks/fast-files.ts`) never decides an unattended call.
-- **Paths:** `realish` (engine and fast path) resolves every symbolic link with `lstat` and `readlink`, dangling links included, one component at a time; more than 40 links in one path is a loop (ask interactive, deny unattended; the fast path sends it to the engine). Callers join the root and the raw relative path without normalizing it (`rawAbs`), so `..` after a link goes to the parent of the link's target, as the operating system reads it. A missing component counts as a folder that a write could create, and the walk goes on through it. So a link in `.tmp/coach/` or `athlete/log/` cannot point a write or a redirect elsewhere, also through `link/..`.
-- **Package repair:** a cloud run starts from a fresh clone with no `node_modules`. Then the guard cannot load and allows only the exact `npm ci` / `npm install` repair (§20 item 27), in both modes; the routine prompt says "If node_modules is missing, run npm ci first." The run cannot change what `npm ci` installs: `package.json` and `package-lock.json` are executable files (below).
-- **Executable files (every mode):** a write to `package.json`, `package-lock.json`, `.npmrc`, `*.js|cjs|mjs|ts|cts|mts|sh`, a path under `node_modules/`, `.husky/`, `.git/` or `.github/workflows/`, or an existing file with an execute bit: `ask` interactive, deny unattended.
-- **Residual risk:** interactive Bash keeps the §20 rules; Claude Code asks the user before each command that is not allowed. docs/safety-and-privacy.md says so.
+Removed in 0.2: the hook that enforced the list (`engine/protect.ts unattendedBash`), the executable-file rule and the package-repair rule. `engine/automation.ts UNATTENDED_TOOLS` still goes to routines and the launchd template as their allowed tools; V3 revisits it.
 
 ### Protected evidence
 
-- `athlete/block.yaml` and `athlete/signals/**` are protected paths (Edit, Write and Bash names).
-- The guard's block is the approved block: the working tree on `main` (or outside git), and `git show main:athlete/block.yaml` on any other branch (`engine/guard-context.ts readApprovedBlock`). A block on a branch authorizes nothing.
-- `node engine/cli.ts block write --input <block.json> --proposal <id>` writes `athlete/block.yaml` only on `proposal/<id>`, for a `proposed` `new_block` proposal. A previous block with another id moves to `athlete/blocks/<old id>.yaml`. It commits both files on the branch ("proposal <id>: block <block id>"); when the commit fails, it restores the previous files and throws `GIT_ERROR`. Other errors: `WRONG_BRANCH`, `PROPOSAL_STATE`, `BLOCK_INVALID`.
-- `node engine/cli.ts checkin` throws `UNATTENDED` in an unattended run and writes nothing.
+Removed in 0.2: protected `athlete/block.yaml` and `athlete/signals/**`, the approved-block rule and `block write`. `node engine/cli.ts checkin` still throws `UNATTENDED` in an unattended run and writes nothing.
 
 ### Urgent state
 
-- An urgent event is active when the pending file holds an urgent term (`engine/safety-terms.yaml urgent`), or the active hold has `urgent: true`, the word "urgent" in its reason, or an urgent term in its reason (`engine/validate.ts urgentEvent`).
-- Under it the guard denies every day that still holds an exercise whose logger exercises differ in any field from the day before the call (the full Tally objects: sets, reps, load, duration, distance, per side, …): trims and recovery workouts deny. A note or name change on unchanged exercises, a rest day (no exercises), a skip and a delete pass.
-- `hold set` stores `urgent: true` when `--urgent` is given, when the new reason has the word "urgent" or an urgent term, or when the active hold it extends is urgent by the same test (`engine/safety.ts isUrgentHold`, which the guard uses too).
-- The plan representation carries `distance_m` (Tally `distanceMeters`) on each set and `perSide` on the exercise. A change in either is a prescription change, not `annotate`; a longer distance or a new `perSide: true` is not a trim. `classifyChange` labels a change `trim_session` only when `isTrimOf` holds for every exercise; `extraWork` (per side, a longer distance or duration, a higher RPE, more sets with warm-ups, a warm-up above every earlier set) on any exercise makes the change neither a trim nor a `load_progression`, so it is big. `hold status` (through `cli.ts`) adds `urgent` and `urgent_reason`. Extra work is judged per kept set position as well as by the maximum (`extraWork`), so a rise below the old maximum counts. `swap_to_recovery`, and a recovery day under a hold, need a day that adds no work to an exercise it keeps (`addsWork`: extra work, more hard sets, a heavier top set or more reps).
+Removed in 0.2: the urgent hold and the urgent pending terms. The urgent stop (§10) replaces them.
 
 ### Hooks in fresh clones
 
 - `node engine/cli.ts prepush-check [--remote origin]`: exit 0 and `{ok: true, repo, visibility, hook_installed: true}` only when the pre-push hook at `git rev-parse --git-path hooks/pre-push` equals `git-hooks/pre-push` and is executable, and `gh api repos/<owner>/<repo>` reports `private` or `internal`. Otherwise exit 1 with `{ok: false, reason}`.
-- `node engine/cli.ts push [--branch <name>]` is the only push of an unattended run. The branch (default: the current branch) must exist as `refs/heads/<name>` (`git show-ref --verify`); a name that starts with `refs/`, a detached HEAD, a bad name or a missing branch is `USAGE`. It runs `install-git-hooks`, then `prepush-check`, then reads every push URL of `origin` (`git remote get-url --all --push origin`, `insteadOf` and `pushInsteadOf` applied). Each one must name the GitHub repository that the check looked up; otherwise exit 1. Then `git push --no-follow-tags [-u] origin refs/heads/<name>:refs/heads/<name>` (`-u` when the branch has no upstream): the explicit pair leaves no destination to `remote.origin.push`, and `--no-follow-tags` overrides `push.followTags`. A failed check exits 1 with `{ok: false, pushed: false, reason}` and pushes nothing. Success prints the `argv` it ran.
-- The routine prompt, `today`, `week`, `block`, `limits` and `setup` push with it. Unattended, raw `git push` denies. Interactive sessions may still run `git push` (the installed pre-push hook checks it). Setup runs `install-git-hooks` and `prepush-check` and requires `ok: true`.
+- `node engine/cli.ts push [--branch <name>]` is the trusted push of every skill and of `urgent set` (`engine/cli-git.ts pushBranch`). The branch (default: the current branch) must exist as `refs/heads/<name>` (`git show-ref --verify`); a name that starts with `refs/`, a detached HEAD, a bad name or a missing branch is `USAGE`. It runs `install-git-hooks`, then `prepush-check`, then reads every push URL of `origin` (`git remote get-url --all --push origin`, `insteadOf` and `pushInsteadOf` applied). Each one must name the GitHub repository that the check looked up; otherwise exit 1. Then `git push --no-follow-tags [-u] origin refs/heads/<name>:refs/heads/<name>` (`-u` when the branch has no upstream): the explicit pair leaves no destination to `remote.origin.push`, and `--no-follow-tags` overrides `push.followTags`. A failed check exits 1 with `{ok: false, pushed: false, reason}` and pushes nothing. Success prints the `argv` it ran.
+- The routine prompt, `today`, `week`, `block`, `limits` and `setup` push with it. A raw `git push` still runs the installed pre-push hook. `session-context` installs the hook when it is missing (§10a). Setup runs `install-git-hooks` and `prepush-check` and requires `ok: true`.
 
 ### Logger notes
 
@@ -713,13 +653,13 @@ The skills never do arithmetic or reshape data. They run these commands. Every c
 
 ### Latency
 
-- `fileGuard` looks up the branch and main's proposals only for a path under `athlete/proposals/`. `scripts/bench-hooks.mjs` measures four unattended calls too (Edit `athlete/log/x.md`, Write `.tmp/coach/x.json`, `node engine/cli.ts mode`, `git switch main`).
+- `scripts/bench-hooks.mjs` measures the hooks Claude Code runs: the urgent gate (no stop, and a stop with a plan write), the two stubs, session-context (no stop, and a stop) and safety-detect.
 
 ### Eval re-run fixes
 
 - **Bash over-blocks:** a file-descriptor duplication (`2>&1`, `>&2`, `1>&2`) names no file and is dropped before the segment rules (`normalizeSegment`). An engine call may end with one `>` or `>>` into `.tmp/coach/` (resolved inside the root, no script extension); this is on the unattended allowlist too. A read-only command (§20) may carry whole quoted words whose text holds only letters, digits, spaces and `. _ - : / @ , +`. Loops stay strict: CLAUDE.md asks for one engine command per Bash call.
 - **Agents in the foreground:** every agent call in the skills sets `run_in_background: false`. `safety-detect` removes closed `<task-notification>…</task-notification>` blocks (background-task results) before it scans; the athlete's own words outside them are scanned as before.
-- **Safety questions:** the `safety` agent ends its output with a "Questions for the athlete (copy exactly):" block. The main session pastes it word for word, as a quoted block, without rewording.
+- **Safety questions:** removed in 0.2 (the `safety` agent and its copy-exactly block). The `safety` skill asks with AskUserQuestion, or as text with lettered options in print mode.
 
 ## 24. Template updates
 
@@ -733,7 +673,7 @@ A user's repo is made with GitHub's "Use this template": one fresh commit and no
 ### The manifest
 
 - `scripts/export-public.sh` writes `template-manifest.json` at the export root after the copy (`scripts/template-manifest.ts`): `{version: 1, repo: "https://github.com/<owner>/coach-harness", release: <package.json version>, files: {<path>: {mode: "100644" | "100755", blob: <git blob id>}}}`, sorted by path, for every exported file but the manifest. The blob id is git's (`blob <size>\0<bytes>`, sha1); the mode is 100755 when the owner may execute the file.
-- The manifest is a protected file (`PROTECTED_FILES` in `engine/protect.ts` and `.claude/hooks/fast-files.ts`): Edit or Write asks interactive and denies unattended.
+- The manifest was a protected file in v0.1; removed in 0.2 (no file is protected).
 - The source of an update is the local manifest's `repo`; only `https://github.com/<owner>/<repo>` (optional `.git`) is accepted. There is no `coach.yaml` key for it.
 
 ### Path rules
@@ -775,8 +715,24 @@ A template write (replace or add) whose path differs only in case from a local p
 
 ### The guard
 
-- The fast path never allows `update` (any arguments).
-- An engine call is recognized only when every word passes the strict word rule (plain parts plus quoted parts with no `$`, backtick, backslash or newline; `strictWords`), in both guards. Any other form (`upda\<newline>te`, `updat?`) is not an engine call, so the protected-name rule decides (ask interactive, deny unattended). Before any check, both guards remove each backslash-newline outside single quotes, as the shell does (`joinContinuations`), so `node en\<newline>gine/cli.ts upda\<newline>te` is judged as `node engine/cli.ts update`. Interactive, a segment whose first word is `node` and whose words fail the strict rule asks; it never falls through to allow.
-- `engineCallDecision`: `update` with `--yes`, `--keep-mine` or `--take-template` asks interactive ("update replaces the coach's code and needs your yes"); `update --check` passes.
-- Unattended, `update` denies (with any arguments), and the command refuses itself.
+Removed in 0.2: the guard's asks and denies for `update` and the protected manifest. The `update` skill asks the athlete once and runs it; `update` still refuses itself in an unattended run.
+
+### Migration to 0.2
+
+- **Restart boundary.** A running v0.1 session keeps its old hooks until it restarts. `guard-files` and `guard-writes` ran with `onFailure: block`, so their entry files stay as stubs that allow everything (v0.3 deletes them). After `update --yes`, the `update` skill tells the athlete to restart at once and runs nothing else first.
+- **Settings.** `update` replaces a stock `.claude/settings.json` (the new hook list and allow rules) and deletes the removed files. After any update the effective hooks include `urgent-gate` with `onFailure: "block"`: when the athlete keeps a customized `settings.json` (`--keep-mine`), `update` merges the template's urgent-gate entry into it, replacing a stale one and keeping every other setting (`engine/settings-gate.ts mergeUrgentGate`; `settings_merged: true`). Hooks in `.claude/settings.local.json` that point at the guard stubs are harmless and are reported (`local_guard_hooks`). `config-check` reports a missing settings file or a missing or changed urgent-gate registration (matcher, `onFailure`, timeout) as a problem, and local guard-stub hooks as a note.
+- **Restart, then finish.** With `restart_claude_code: true`, the `update` skill asks for a restart right after `update --yes` and runs nothing else. "Finish the update" in the new session runs `npm ci`, `install-git-hooks`, `config-check`, `npm test`, the push and the old-files question.
+- **Legacy files, before the first training write in the new session** (`engine/legacy.ts classifyLegacy`, run by `session-context`): an urgent hold (the `urgent` flag, the word "urgent" or an urgent term in its reason, or an unreadable hold file) or urgent terms in `athlete/.safety-pending` become `athlete/.urgent-stop` first (source `legacy`; committed), unless a clearance on or after the event's date covers the term. Then the context asks one question: "Your copy has an old hold or safety check. The v0.2 coach uses limits instead. Remove them? A) Yes, B) Show them first". Removing them never clears a converted urgent stop.
+- **A copy in a worktree:** the v0.1 `update` refuses any branch but `main`, so the first upgrade runs against the main checkout (`--root <main checkout>`, when it is clean and not behind); then the coach fast-forwards the worktree branch and asks for a restart.
+
+### A copy in a worktree (0.2)
+
+`engine/worktree.ts`; fast-forward only, never a merge commit or a force.
+
+- `worktree status`: `{git, worktree, branch, main_checkout, main_checkout_branch, main_checked_out_at, clean, main_clean, ahead, behind}` (the main checkout is the first `git worktree list --porcelain` entry; `ahead`/`behind` against the local `main`).
+- `worktree ff-main`: moves `main` to this branch's commit. Where `main` is checked out, that checkout must be clean (`git -C <it> merge --ff-only refs/heads/<branch>`); where it is not, `git fetch . <branch>:main` (a fast-forward or nothing). Refused (exit 1, `reason`): a dirty main checkout, a diverged `main`, no local `main`, a detached HEAD. Skipped (ok): on `main`, or nothing to move.
+- `worktree ff-branch`: moves this branch to `main` (`git merge --ff-only main`); this checkout must be clean.
+- `worktree main-checkout` (V2b fix 8): `{ok, path, temporary}`: the folder where `main` is checked out (`main_checked_out_at`, which need not be the main checkout), else a new temporary worktree of `main` at `.tmp/coach/main-checkout` (gitignored). It never switches another checkout's branch. `worktree remove-temp` removes that temporary checkout only, with `git worktree remove` and never `--force` (a checkout with changes is refused and kept).
+- **Setup** in a worktree on another branch works on the branch, commits, runs `worktree ff-main`, then `push --branch main` (it tells the athlete only when that fails).
+- **Update** in a worktree: `commit`, `worktree ff-main`, `worktree main-checkout`, `update --check --root <path>`, `update --yes --to <sha> --root <path>` (the update's own refusals apply to that checkout: clean, on `main`, not behind `origin`), then `worktree ff-branch`, `worktree remove-temp` and the restart; "finish the update" pushes with `push --branch main`. Tested end to end in both layouts (`tests/update.test.ts`).
 

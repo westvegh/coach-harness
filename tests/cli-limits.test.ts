@@ -1,4 +1,4 @@
-// Smoke tests for the server-limits CLI: limits server-rules and limits sync-ops.
+// Smoke tests for the limits CLI (reports only): limits schema, regions and check.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -49,58 +49,70 @@ limits:
     since: 2026-10-01
 `;
 
-function root(): { dir: string; resolved: string } {
+function root(): string {
   const dir = mkdtempSync(join(tmpdir(), "coach-limits-cli-"));
   mkdirSync(join(dir, "athlete"));
   writeFileSync(join(dir, "athlete/limits.yaml"), LIMITS);
-  const resolved = join(dir, "resolved.json");
-  writeFileSync(resolved, JSON.stringify({ "Barbell Back Squat": { exerciseId: "barbell_back_squat", name: "Barbell Back Squat" }, "Box Squat": { exerciseId: "box_squat", name: "Box Squat" } }));
-  return { dir, resolved };
+  return dir;
 }
 
-test("limits server-rules prints the compiled rules and what was skipped", () => {
-  const { dir, resolved } = root();
-  const r = cli(["limits", "server-rules", "--root", dir, "--resolved", resolved]);
+const sets = (n: number, weight?: number) => Array.from({ length: n }, () => ({ reps: 5, ...(weight === undefined ? {} : { weight }) }));
+
+test("limits check reports a banned exercise, a weekly cap and a load cap, with the day; an allowed swap passes", () => {
+  const dir = root();
+  const week = {
+    week_start: "2026-10-12",
+    days: [
+      { date: "2026-10-12", exercises: [{ name: "Barbell Back Squat", exerciseId: "Barbell_Squat", unit: "lbs", sets: sets(3, 185) }, { name: "Box Squat", unit: "lbs", sets: sets(3, 135) }] },
+      { date: "2026-10-14", exercises: [{ name: "Romanian Deadlift", unit: "lbs", sets: sets(4, 155) }, { name: "Overhead Press", unit: "kg", sets: sets(3, 20) }] },
+      { date: "2026-10-16", exercises: [{ name: "Romanian Deadlift", unit: "lbs", sets: sets(3, 125) }] },
+    ],
+  };
+  writeFileSync(join(dir, "week.json"), JSON.stringify({ week }));
+  const r = cli(["limits", "check", "--input", join(dir, "week.json"), "--root", dir]);
   assert.equal(r.code, 0, r.stderr);
-  assert.deepEqual(r.json.rules.map((x: any) => [x.id, x.kind, x.maxSetsPerWeek ?? null]), [["L-001", "ban", null], ["L-002", "cap", 6]]);
-  assert.deepEqual(r.json.rules[0].allow, [{ exerciseId: "box_squat", name: "Box Squat" }]);
-  assert.deepEqual(r.json.skipped.map((x: any) => x.id), ["L-003"]);
-  assert.deepEqual(r.json.localOnly.map((x: any) => x.id), ["L-002"]);
-  assert.deepEqual(r.json.unresolved, []);
-  // Without --resolved, the allow entry is unresolved and L-001 is skipped.
-  const bare = cli(["limits", "server-rules", "--root", dir]);
-  assert.equal(bare.code, 0);
-  assert.deepEqual(bare.json.rules.map((x: any) => x.id), ["L-002"]);
-  assert.ok(bare.json.unresolved.includes("Box Squat"));
+  assert.equal(r.json.ok, false);
+  const kinds = r.json.findings.map((f: { limit: string; kind: string; date?: string }) => [f.limit, f.kind, f.date ?? null]);
+  assert.deepEqual(kinds, [
+    ["L-001", "banned", "2026-10-12"],
+    ["L-002", "over_load", "2026-10-14"],
+    ["L-002", "over_sets", null],
+  ]);
+  // 20 kg is about 44 lbs: under the 50 lbs shoulder cap.
+  assert.ok(!r.json.findings.some((f: { limit: string }) => f.limit === "L-003"));
+
+  // A compliant week: no findings, ok.
+  writeFileSync(join(dir, "ok.json"), JSON.stringify({ days: [{ date: "2026-10-12", exercises: [{ name: "Box Squat", unit: "lbs", sets: sets(3, 135) }, { name: "Romanian Deadlift", unit: "lbs", sets: sets(3, 125) }] }] }));
+  const ok = cli(["limits", "check", "--input", join(dir, "ok.json"), "--root", dir]);
+  assert.deepEqual([ok.json.ok, ok.json.findings], [true, []]);
 });
 
-test("limits sync-ops reads a get_training_context result from a file or stdin", () => {
-  const { dir, resolved } = root();
-  const first = cli(["limits", "sync-ops", "--root", dir, "--resolved", resolved, "--server", "-"], JSON.stringify({ today: "2026-10-12", trainingLimits: null }));
-  assert.equal(first.code, 0, first.stderr);
-  assert.equal(first.json.expectedVersion, null);
-  assert.deepEqual(first.json.ops.map((o: any) => [o.op, o.rule.id]), [["add_rule", "L-001"], ["add_rule", "L-002"]]);
-  assert.deepEqual(first.json.appOnly, []);
-
-  // The server has both, with a looser hinge cap and a rule limits.yaml lacks.
-  const rules = cli(["limits", "server-rules", "--root", dir, "--resolved", resolved]).json.rules;
-  const extra = { id: "APP-1", label: "Wrist", kind: "ban", exerciseIds: [], keywords: ["wrist curl"], exceptKeywords: [], allow: [] };
-  const ctx = [{ type: "text", text: JSON.stringify({ trainingLimits: { version: 4, rules: [rules[0], { ...rules[1], maxSetsPerWeek: 8 }, extra], maxWeeklySets: null } }) }];
-  const file = join(dir, "context.json");
-  writeFileSync(file, JSON.stringify(ctx));
-  const next = cli(["limits", "sync-ops", "--root", dir, "--resolved", resolved, "--server", file]);
-  assert.equal(next.code, 0, next.stderr);
-  assert.equal(next.json.expectedVersion, 4);
-  assert.deepEqual(next.json.ops, [{ op: "lower_cap", ruleId: "L-002", maxSetsPerWeek: 6 }]);
-  assert.deepEqual(next.json.appOnly.map((a: any) => [a.ruleId, a.reason]), [["APP-1", "removed"]]);
+test("limits check lists an unclassified exercise for the coach to judge; skipped days do not count", () => {
+  const dir = root();
+  writeFileSync(join(dir, "w.json"), JSON.stringify({ days: [{ date: "2026-10-12", exercises: [{ name: "Mystery Move", sets: sets(3) }] }, { date: "2026-10-13", status: "skipped", exercises: [{ name: "Barbell Back Squat", sets: sets(3) }] }] }));
+  const r = cli(["limits", "check", "--input", join(dir, "w.json"), "--root", dir]);
+  assert.deepEqual(r.json.findings.map((f: { kind: string }) => f.kind), ["unclassified"]);
+  assert.equal(r.json.ok, true, "unclassified alone is a note, not a conflict");
 });
 
-test("limits: usage errors exit 2; a context without trainingLimits exits 1", () => {
-  const { dir } = root();
-  assert.equal(cli(["limits"]).code, 2);
-  assert.equal(cli(["limits", "nope", "--root", dir]).code, 2);
-  assert.equal(cli(["limits", "sync-ops", "--root", dir]).code, 2);
-  const r = cli(["limits", "sync-ops", "--root", dir, "--server", "-"], JSON.stringify({ today: "2026-10-12" }));
-  assert.equal(r.code, 1);
-  assert.equal(r.json.error.code, "NO_SERVER_LIMITS");
+test("limits schema shows build_back; limits regions lists the regions; usage errors exit 2; the server commands are gone", () => {
+  const s = cli(["limits", "schema"]);
+  assert.equal(s.code, 0);
+  assert.match(s.json.entry.build_back, /cap only/);
+  assert.ok(s.json.examples.some((e: { build_back?: boolean }) => e.build_back === true));
+  const g = cli(["limits", "regions"]);
+  assert.ok(g.json.regions.includes("left-knee"));
+  for (const args of [["limits"], ["limits", "check"], ["limits", "server-rules"], ["limits", "sync-ops"]]) assert.equal(cli(args).code, 2, args.join(" "));
+});
+
+test("V1b fix 9: warm-ups stay out of the weekly set count, but a warm-up over max_load is reported", () => {
+  const dir = root();
+  const warm = (n: number, weight: number) => Array.from({ length: n }, () => ({ reps: 5, weight, warmup: true }));
+  // L-002 caps hinge at 6 hard sets and 135 lbs: 6 hard sets plus 3 light warm-ups is fine.
+  writeFileSync(join(dir, "ok.json"), JSON.stringify({ days: [{ date: "2026-10-12", exercises: [{ name: "Romanian Deadlift", unit: "lbs", sets: [...warm(3, 95), ...sets(6, 125)] }] }] }));
+  assert.deepEqual(cli(["limits", "check", "--input", join(dir, "ok.json"), "--root", dir]).json.findings, []);
+  // A warm-up above the 135 lbs cap is a finding, even with the hard sets under it.
+  writeFileSync(join(dir, "heavy.json"), JSON.stringify({ days: [{ date: "2026-10-12", exercises: [{ name: "Romanian Deadlift", unit: "lbs", sets: [...warm(1, 145), ...sets(3, 125)] }] }] }));
+  const r = cli(["limits", "check", "--input", join(dir, "heavy.json"), "--root", dir]);
+  assert.deepEqual(r.json.findings.map((f: { limit: string; kind: string }) => [f.limit, f.kind]), [["L-002", "over_load"]]);
 });

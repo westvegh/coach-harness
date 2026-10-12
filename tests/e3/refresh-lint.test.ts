@@ -134,11 +134,16 @@ test("CLI lint-methods: the coach.yaml pack passes; a broken pack exits 1 with t
   rmSync(bad, { recursive: true });
 });
 
-test("every E3 command has a --help line", () => {
-  for (const cmd of [["hold", "init"], ["adjust"], ["loads"], ["proposals"], ["readiness"], ["weeks"], ["block", "draft"], ["ids", "next"], ["signals", "refresh"], ["lint-methods"]]) {
+test("every E3 command has a --help line; urgent and limits have one too", () => {
+  for (const cmd of [["adjust"], ["loads"], ["readiness"], ["weeks"], ["block", "draft"], ["ids", "next"], ["signals", "refresh"], ["lint-methods"]]) {
     const r = cli([...cmd, "--help"]);
     assert.equal(r.code, 0, `${cmd.join(" ")}: ${r.stderr}`);
     assert.match(r.json.usage, /§22/, cmd.join(" "));
+  }
+  for (const cmd of [["urgent"], ["limits"]]) {
+    const r = cli([...cmd, "--help"]);
+    assert.equal(r.code, 0, `${cmd.join(" ")}: ${r.stderr}`);
+    assert.match(r.json.usage, /report only|urgent clear --reason clinician\|false-alarm/, cmd.join(" "));
   }
 });
 

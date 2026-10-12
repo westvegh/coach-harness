@@ -1,11 +1,11 @@
 ---
 name: today
-description: The daily run. It decides whether today's session stays, gets a note, is trimmed, or becomes a recovery day, from the recovery signals and the method's rules, and suggests today's top-set loads. Use it when the user asks "how should I train today?", "what's my workout today?", "should I train today?", "adjust today", "am I recovered?", "today's session", or "apply the approved proposal", and for the scheduled daily run ("Read .claude/skills/today/SKILL.md and follow it exactly"). It checks safety first, applies merged proposals, exits when today is already adjusted, runs signals, readiness, adjust and loads in the engine, writes through the guard, logs, commits and pushes.
+description: The daily run. It decides whether today's session stays, gets a note, is trimmed, or becomes a recovery day, from the recovery signals and the method's rules, and suggests today's top-set loads. Use it when the user asks "how should I train today?", "what's my workout today?", "should I train today?", "adjust today", "am I recovered?", "today's session", or "what did you propose?", and for the scheduled daily run ("Read .claude/skills/today/SKILL.md and follow it exactly"). It checks the urgent stop and the limits first, offers changes proposed for the live session, exits when today is already adjusted, runs signals, readiness, adjust and loads in the engine, writes, logs, commits and pushes.
 ---
 
 # Today
 
-The daily run. One adjustment kind a day at most. Precedence: hold, then recovery, then trim, then progression. An applied proposal for today is today's adjustment. Readiness acts on patterns against the athlete's own baseline, not on single days: one off day is a note [NA-REC-008].
+The daily run. One adjustment kind a day at most. Precedence: the urgent stop, then recovery, then trim, then progression. A proposal the athlete accepts for today is today's adjustment. Readiness acts on patterns against the athlete's own baseline, not on single days: one off day is a note [NA-REC-008].
 
 Today is the date in the athlete's timezone: `local.date` in the step 1 `window-check` output (interactive, `TZ=<coach.yaml athlete.timezone> date +%F` also works). Now is `date -u +%Y-%m-%dT%H:%M:%SZ`. Put engine input files in `.tmp/coach/`.
 
@@ -18,38 +18,43 @@ Tally is outside the athlete's private repo. Every note you write to a Tally day
 | `note` | `[coach] Readiness note (<rule_ids>)` |
 | `trim` or `propose_deload` | `[coach] Adjusted for recovery (<rule_ids>)` |
 | `recovery` | `[coach] Recovery day (<rule_ids>)` |
-| a hold, a pending safety check, or an urgent event | `[coach] Rest day: see your coach repo` |
+| a region the athlete chose to avoid | `[coach] Adjusted for recovery (NA-REC-007)` |
+| a rest day the athlete chose | `[coach] Rest day: see your coach repo` |
 | `load_progression` | `[coach] Load progression (<rule_ids>)` |
-| an applied proposal | `[coach] Approved change <proposal id>` |
+| a proposal the athlete accepted | `[coach] Change you approved` |
 
-- Never put symptoms, body regions, pain scores, readiness values, sleep or heart data, or the hold reason in a Tally note. They stay in `athlete/log/` in the private repo.
-- Only when `coach.yaml` has `consent.logger_health_notes: true` (the athlete's separate yes in setup) may the note be detailed: `[coach] <decision_reasons> (<rule_ids>)`.
+- Never put symptoms, body regions, pain scores, readiness values, sleep or heart data in a Tally note. They stay in `athlete/log/` in the private repo.
+- Only when `coach.yaml` has `consent.logger_health_notes: true` (the default since v0.2; setup's data question can turn it off) may the note be detailed: `[coach] <decision_reasons> (<rule_ids>)`.
+- With `logger: files`, the note goes in the `notes` column of the day's first row, in this private repo, so the detailed form is fine. With `logger: other`, treat the tool like Tally.
+
+## Where plans live
+
+Read `coach.yaml logger` in step 1 and follow CLAUDE.md "Where plans live". The steps name the Tally tools. With `logger: files`:
+
+- Step 2: no history read. `safety scan-notes` reads the notes and felt columns of `plans/` by itself.
+- Step 4: read today with `node engine/cli.ts plans read --week <today>` and take today's day. No day: a rest day. Today is already adjusted when the day's notes already hold a `[coach]` line from today's run: say "Today is already adjusted." and end the run.
+- Step 5: skip it (the units are in `coach.yaml`).
+- Step 6: `readiness` reads the planned and logged days in `plans/` by itself; no per-date reads.
+- Step 7: run `adjust --from-snapshot <today>` as written. Put its `tally_day`, with the reason line in `notes`, in `.tmp/coach/today.json` as `{tally_day}`, and run `node engine/cli.ts plans write --input .tmp/coach/today.json`. No `expectedVersion` and no `opId`.
+- Step 8: run `loads --from-snapshot <today>` as written. Write today's day with each new `suggestedWeight` through `plans write` (the whole day).
+- Read the week back with `plans read` after each write.
+
+With `logger: other`: read and write today through that tool, by its own instructions. When it does not answer, say so in one line, run `node engine/cli.ts logger set files`, and use files from then on. The engine cannot read that tool, so `readiness` reports performance as unknown. Under the urgent stop, write nothing to it.
 
 ## Steps
 
 1. **Window and mode.**
    - Run `node engine/cli.ts window-check --kind daily`. A nonzero exit means: stop, write nothing, end the run.
    - Run `node engine/cli.ts mode`. Note `interactive` or `unattended`.
-   - Read `adapters/loggers/tally/adapter.yaml` with the Read tool. Note `capabilities.opId`.
-   - Unattended, with `opId: false`: run `printenv CLAUDE_CODE_REMOTE`. A value means a cloud run: it reports only (no Tally write) in steps 3, 7 and 8.
+   - Read `coach.yaml logger` (see "Where plans live"). With Tally, read `adapters/loggers/tally/adapter.yaml` with the Read tool and note `capabilities.opId`.
 2. **Safety.** This step runs before proposals, planning and every early exit.
-   - Run `node engine/cli.ts hold status`.
+   - Run `node engine/cli.ts urgent status`. Read `athlete/limits.yaml` with the Read tool.
    - Read the history with `get_workout_history`, `since` 8 weeks before today and `until` today (today's logged notes count). Follow `nextCursor` to the last page.
-   - Run `node engine/cli.ts safety scan-notes --since <today minus 3 days>`. It scans the logged session notes, today's included, and writes the pending file on a match.
-   - A pending safety file, interactive: run the `safety` agent first, in the foreground (`run_in_background: false`; never as a background agent). In the same turn, ask its questions with the AskUserQuestion tool (CLAUDE.md hard rule 1); without that tool, paste its "Questions for the athlete (copy exactly):" block to the user word for word, as a quoted block: do not reword it, and add nothing that changes its meaning. An AskUserQuestion call that returns no answers (denied, failed or not available) means the athlete was not asked; paste the copy-exactly block in the same reply, and wait for the answers. Then only `annotate`, rest or recovery are allowed today.
-   - A pending safety file, unattended: ask nothing and do not start the question round. Set the hold: `node engine/cli.ts hold set --reason "pending safety check <today>: <terms>" --regions <the region: terms, if any>`. Leave the pending file. Then only `annotate`, rest or recovery are allowed today.
-   - An active hold with no regions: allowed are only an `annotate` (the generic note "Rest day: see your coach repo", see "Notes to the logger") or a recovery day. Skip step 3 and steps 6 to 8 for training changes. Go to step 4, then write the note, then step 9.
-   - An active hold with regions (and no pending file): run `node engine/cli.ts classify` on today's exercises. Remove each exercise that loads a held region or is unclassified (a removal is a trim), and leave the generic note "Adjusted for recovery". The rest of the day follows the normal steps. The guard denies any exercise that loads a held region.
-   - `hold status` prints `urgent: true` (an urgent warning sign): no exercise at all, not even a recovery workout. Skip today's planned session with `skip_planned_workout` and leave the generic note "Rest day: see your coach repo". Interactive: run the `safety` agent in the foreground (`run_in_background: false`; never as a background agent) and give its urgent-care text word for word.
-3. **Apply merged proposals.** Run `node engine/cli.ts proposals list --status approved`. For each proposal with `approved_on_main: true` and no `applied_at`:
-   1. **Read the evidence first** (contracts §20). For each week that a write in `writes` touches: `get_training_context`, then `get_planned_workout` for every date of that week (Monday to Sunday, empty dates too). Use the history from step 2. All reads must be under 15 minutes old at each write; read again if more time passed.
-   2. **Check the base.** If a date's version differs from `base`, or a `null` base date is no longer empty, do not apply the proposal. Log "proposal <id> not applied: the day changed after the proposal". Interactive: say so and offer a new proposal.
-   3. **Write.** Make each write in `writes` exactly as stored. The guard accepts it through the approval record. Keep each tool result.
-   4. **Read back.** Read each date the writes touch with `get_planned_workout`, so the snapshot holds the read-back.
-   5. **Check.** Write the tool results, one per write in order (`null` when a write has no result), to `.tmp/coach/results.json`. Run `node engine/cli.ts proposals check-applied --id <id> --input .tmp/coach/results.json`. It checks each result and each read-back, and writes nothing.
-   6. **Mark applied only when `check-applied` prints `status: applied`.** Then run `node engine/cli.ts proposals mark-applied <id> --input .tmp/coach/results.json`.
-   7. **Otherwise do not mark it applied** (`partial` or `not-applied`). Log the partial state from the `check-applied` output: each write's `result`, `readback` and `applied`, and the `missing` list. Leave the proposal open, so the next run sees it again. Interactive: say so.
-   - A proposal with `approved_on_main: false` and a `not_approved_because`: do not apply it. Log the reason.
+   - Run `node engine/cli.ts safety scan-notes --since <today minus 3 days>`. It scans the logged session notes, today's included. An urgent term newer than its last clearance writes, commits and pushes the urgent stop; pain notes are reported in `matches`.
+   - **Urgent stop** (`urgent status` prints `stopped: true`, or the scan wrote it): make no Tally write at all (the urgent gate denies every plan write, a skip and a note included). Log "rest day: urgent stop" and go to step 9. Interactive: give the urgent-care text first and ask the `safety` skill's clear question (its step 6).
+   - **Pain notes** in `matches`, not already handled in the log: interactive, ask the `safety` skill's old-notes question (its step 8) before planning. Unattended: avoid loading the named region today (remove the exercises that load it; that is a trim with the note "Adjusted for recovery"), and write one log line "- proposal for the next live session: ask about <region>".
+   - **Limits:** today's session must follow every limit. After step 4 reads today, write `{days: [<today as a DayPlan>]}` to `.tmp/coach/today.json` and run `node engine/cli.ts limits check --input .tmp/coach/today.json`. Remove or swap each exercise it reports (a trim, note "Adjusted for recovery") before any other change.
+3. **Proposals for the live session** (interactive only). Read the last 10 log entries for lines "- proposal for the next live session: …" with no later "proposal handled" line. Offer each: "<the change>. A) Yes, do it, B) Not now". A yes: make the change (it is today's adjustment when it changes today). Log "- proposal handled: <yes|no>: <the change>". Unattended: skip this step.
 4. **Read today.** Call `get_planned_workout` for today.
    - No day planned: log "rest day: no session planned" and go to step 9.
    - Already adjusted? For each kind `trim_session`, `swap_to_recovery`, `load_progression` and `annotate`, run `node engine/cli.ts oplog done --date <today> --kind <kind>`.
@@ -75,17 +80,16 @@ Tally is outside the athlete's private repo. Every note you write to a Tally day
      1. Run `node engine/cli.ts adjust --from-snapshot <today> --decision <trim|recovery>`. It reads today's day from the snapshot (step 4's read, under 15 minutes old) and prints `tally_day`, `changes` and `warnings`. With `SNAPSHOT_STALE`, read today again and rerun it. Resolve each `warnings` exercise with `search_exercises`.
      2. Make the write from `tally_day`, copying its values: `update_planned_workout` (preferred: `modify` operations for set counts, `replace` for swapped exercises) or `plan_workout_day` with `tally_day`'s fields, `expectedVersion` and `replace: true`. Add the reason line to `notes`. Pass `expectedVersion`.
      3. Add `opId` when `capabilities.opId` is true: write `{tool, args}` to `.tmp/coach/call.json` and run `node engine/cli.ts opid --date <today> --kind <trim_session|swap_to_recovery> --input .tmp/coach/call.json`.
-   - Read today again within 15 minutes of each write. The guard denies a stale read.
-   - Unattended cloud run with `opId: false`: make no write. Log the decision and the exact change it would make.
-8. **Loads.** Run this step only when `hold_progression` in step 6's readiness output is false (the decision is `none` or `note`), no hold is active, and step 3 applied no proposal for today. One adjustment kind a day.
+   - Read today again within 15 minutes of each write.
+8. **Loads.** Run this step only when `hold_progression` in step 6's readiness output is false (the decision is `none` or `note`) and step 3 made no change to today. One adjustment kind a day.
    - Skip it when `hold_progression` is true (`trim`, `recovery` or `propose_deload`): the pattern holds progression, and trim and recovery beat progression. The planned loads stay.
-   - Skip it when step 3 applied a proposal with a write for today. The proposal is today's adjustment.
+   - Skip it when step 3 changed today. The accepted proposal is today's adjustment.
    - One off day is not a pattern: with `hold_progression: false`, run this step as usual. `loads` progresses only exercises whose rep targets were hit.
    - Run `node engine/cli.ts loads --from-snapshot <today>`. The history comes from the snapshot, so step 2's history read must be complete.
-   - When its `update.operations` list is not empty, write them with `update_planned_workout`: `date`, `weightUnit` and `operations` from `update`, plus `expectedVersion`, `timezone` and the generic note `[coach] Load progression (<rule_ids>)` in `notes`. This is `load_progression`; the guard checks the top-set cap. Exercises in `not_targeted` stay as they are.
+   - When its `update.operations` list is not empty, write them with `update_planned_workout`: `date`, `weightUnit` and `operations` from `update`, plus `expectedVersion`, `timezone` and the generic note `[coach] Load progression (<rule_ids>)` in `notes`. This is `load_progression`; `loads` keeps the top-set cap [NA-PROG-003]. Never raise a load past a limit's `max_load`. Exercises in `not_targeted` stay as they are.
    - Read the day back after the write.
 9. **Log, commit and push.**
-   - The `log-writes` hook logs every Tally write. For a day with no write (`none`, a rest day, a report-only run, or a skipped proposal), append one entry to `athlete/log/<YYYY-MM>.md`:
+   - The `log-writes` hook logs every Tally write. For a day with no write (`none`, a rest day, the urgent stop, or a declined proposal), append one entry to `athlete/log/<YYYY-MM>.md`:
      ```
      ## <today> <HH:MM> · no-change
      - trigger: daily run (cloud | mac) | user
@@ -93,21 +97,23 @@ Tally is outside the athlete's private repo. Every note you write to a Tally day
      - rules: <rule IDs>
      - change: none (<one-line reason>)
      ```
-   - `git add athlete` and commit "today <date>: <decision> (<rule IDs>)".
-   - `git pull --rebase`, then push with `node engine/cli.ts push`. It installs the git hooks (a fresh clone has none), checks that the repository is private, and only then pushes the branch to `origin`. A nonzero exit means nothing was pushed: append "push skipped: <reason>" to the log entry and commit it locally. Never run `git push` yourself in an unattended run: the guard denies it.
-10. **Tell the athlete** (interactive): today's session in one short table, the decision, the reason in one sentence, and the rule IDs. On a pattern (`trim`, `recovery` or `propose_deload`), say how many off-mornings in a row (`pattern.days_of_decline`) and ask "Sleep, eating or drinking different this week? A) sleep, B) eating, C) drinking, D) no change". Record the answer in the log. Give no targets and no advice on food or supplements. End with the `openInTally` link when a tool result has one.
+   - With `logger: files` or `other`, in a live session: run `node engine/cli.ts tally-mention` first (with `other`, add `--sessions <n>`), so its `coach.yaml` change goes into the commit. When it prints `mention: true`, say its `text` once in step 10.
+   - Run `node engine/cli.ts commit --message "today <date>: <decision> (<rule IDs>)"`. A nonzero exit: stop, and say in one line that the commit failed and why.
+   - `git pull --rebase`, then push with `node engine/cli.ts push`. It installs the git hooks (a fresh clone has none), checks that the repository is private, and only then pushes the branch to `origin`. A nonzero exit means nothing was pushed: append "push skipped: <reason>" to the log entry and commit it locally.
+10. **Tell the athlete** (interactive): today's session in one short table, the decision and the reason in one sentence, in plain words (no rule IDs or file paths: CLAUDE.md "Style"). On a pattern (`trim`, `recovery` or `propose_deload`), say how many off-mornings in a row (`pattern.days_of_decline`) and ask "Sleep, eating or drinking different this week? A) sleep, B) eating, C) drinking, D) no change". Record the answer in the log. Give no targets and no advice on food or supplements. End with the `openInTally` link when a tool result has one.
 
 ## Writes
 
-- Tally, today only: `update_planned_workout` (preferred) or `plan_workout_day` with `expectedVersion`; kinds `annotate`, `trim_session`, `swap_to_recovery`, `load_progression`. Applied proposals: their stored writes.
-- `athlete/log/<YYYY-MM>.md` (no-change entries), `athlete/proposals/<id>.yaml` (through `proposals mark-applied`, only after full success), `.tmp/coach/*.json`.
+- Tally, today only: `update_planned_workout` (preferred) or `plan_workout_day` with `expectedVersion`; kinds `annotate`, `trim_session`, `swap_to_recovery`, `load_progression`. An accepted proposal: its change.
+- With `logger: files`: today's day in `plans/<YYYY>-W<ww>.csv`, only through `node engine/cli.ts plans write`. With `logger: other`: today's day in that tool.
+- `athlete/log/<YYYY-MM>.md` (no-change entries, proposal lines), `.tmp/coach/*.json`.
 - Git: one commit, pushed to `main`.
 
 ## Unattended
 
 - `window-check` runs first; outside the window, stop.
-- Ask no questions. A change that needs the user (a protected day, a big change) becomes an `annotate` with the reason; the next `week` run can propose it.
+- Ask no questions. A change that needs the athlete (a protected day, a big change) becomes an `annotate` with the generic reason, plus one log line "- proposal for the next live session: <the change>".
 - With `capabilities.opId: true`: every write carries `opId` and `expectedVersion`, then a read-back.
-- With `capabilities.opId: false`: a cloud run writes nothing to Tally and logs what it would do; a Mac run writes and reads back.
-- Never clear a hold or a pending file. Never change limits.
+- Under the urgent stop, write no plan change (Tally, `plans/` or another tool). Never clear the stop. Never change limits.
+- Never run `tally-mention`: no one is there to see the line.
 - Always commit, `git pull --rebase`, and push with `node engine/cli.ts push`. A failed check means no push and a log entry.

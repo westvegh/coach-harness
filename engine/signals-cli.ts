@@ -2,12 +2,15 @@
 //
 //   node engine/cli.ts signals --from <date> --to <date> [--now <instant>] [--root <dir>]
 //   node engine/cli.ts checkin --date <date> --sleep-quality 1-5 --energy 1-5 --soreness 1-5 --stress 1-5
-//                              [--want-to-train 1-5] [--pain region:score,...] [--now <instant>] [--root <dir>]
-import { resolve } from "node:path";
+//                              [--want-to-train 1-5] [--pain region:score,...] [--urgent <term>,...] [--now <instant>] [--root <dir>]
+//   --urgent names urgent warning signs the athlete chose in the check-in; it writes,
+//   commits and pushes the urgent stop (engine/urgent.ts, source checkin).
+import { existsSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { writeCheckin, type CheckinAnswers } from "../adapters/signals/checkin/write.ts";
 import { CoachError } from "./errors.ts";
-import { unattendedMarker } from "./hold.ts";
+import { unattendedMarker } from "./mode.ts";
 import { loadSignals } from "./signals.ts";
 import type { PainEntry, Scale } from "./types.ts";
 
@@ -42,7 +45,7 @@ export function parsePain(v: string | undefined): PainEntry[] | undefined {
   });
 }
 
-export function cmdCheckin(argv: string[]): number {
+export async function cmdCheckin(argv: string[]): Promise<number> {
   // A check-in is the athlete's own answers; an unattended run has no athlete to ask, and
   // replacing a check-in could erase reported pain (launch review finding 2).
   const marker = unattendedMarker(process.env);
@@ -60,6 +63,7 @@ export function cmdCheckin(argv: string[]): number {
       stress: { type: "string" },
       "want-to-train": { type: "string" },
       pain: { type: "string" },
+      urgent: { type: "string" },
     },
   });
   if (!values.date) throw new CoachError("USAGE", "checkin needs --date <YYYY-MM-DD>");
@@ -72,7 +76,25 @@ export function cmdCheckin(argv: string[]): number {
   if (values["want-to-train"] !== undefined) answers.want_to_train = scale(values["want-to-train"], "want-to-train");
   const pain = parsePain(values.pain);
   if (pain) answers.pain = pain;
-  const r = writeCheckin({ root: resolve(values.root ?? "."), date: values.date, answers, now: values.now });
-  out({ path: r.path, action: r.action, replaced: r.replaced, file: r.file });
+  const root = resolve(values.root ?? ".");
+  const urgentTerms = values.urgent ? values.urgent.split(",") : [];
+  let r: ReturnType<typeof writeCheckin>;
+  try {
+    r = writeCheckin({ root, date: values.date, answers, now: values.now, urgent: urgentTerms });
+  } catch (e) {
+    // The stop was written first; it still goes to the remote when the check-in fails.
+    if (urgentTerms.length > 0 && existsSync(join(root, "athlete/.urgent-stop"))) {
+      const { pushNow, unpushed, URGENT_RELATIVE } = await import("./urgent.ts");
+      if (unpushed(root, [URGENT_RELATIVE])) await pushNow(root);
+    }
+    throw e;
+  }
+  // The stop goes to the remote at once (or on a retry), so a cloud run sees it.
+  let push = null;
+  if (r.urgent_stop) {
+    const { pushNow, unpushed, URGENT_RELATIVE } = await import("./urgent.ts");
+    push = r.urgent_stop.commit.committed || unpushed(root, [URGENT_RELATIVE]) ? await pushNow(root) : null;
+  }
+  out({ path: r.path, action: r.action, replaced: r.replaced, file: r.file, ...(r.urgent_stop ? { urgent_stop: { ...r.urgent_stop, push } } : {}) });
   return 0;
 }

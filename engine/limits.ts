@@ -5,7 +5,7 @@ import { CoachError } from "./errors.ts";
 import { isPlainObject, readYamlFile } from "./yaml-file.ts";
 import type { Limit, Limits, Taxonomy } from "./types.ts";
 
-const LIMIT_KEYS = ["id", "region", "rule", "patterns", "exercises", "allow", "max_load", "max_sets_per_week", "note", "source", "since"];
+const LIMIT_KEYS = ["id", "region", "rule", "patterns", "exercises", "allow", "max_load", "max_sets_per_week", "build_back", "note", "source", "since"];
 const REQUIRED = ["id", "region", "rule", "source", "since"];
 
 function stringList(v: unknown, path: string, errors: string[]): string[] {
@@ -71,6 +71,8 @@ export function validateLimits(raw: unknown, tax?: Taxonomy, where = "limits.yam
       if (l.rule === "ban" && (l.max_load !== undefined || msw !== undefined)) {
         errors.push(`${p}: a ban cannot carry max_load or max_sets_per_week (use rule: cap)`);
       }
+      if (l.build_back !== undefined && typeof l.build_back !== "boolean") errors.push(`${p}.build_back: must be true or false`);
+      if (l.build_back === true && l.rule !== "cap") errors.push(`${p}.build_back: only a cap can build back (a ban has nothing to raise)`);
       if (l.note !== undefined && typeof l.note !== "string") errors.push(`${p}.note: must be a string`);
       if (l.source !== "athlete" && l.source !== "clinician-reported") {
         errors.push(`${p}.source: must be athlete | clinician-reported, got ${JSON.stringify(l.source)}`);
@@ -85,6 +87,7 @@ export function validateLimits(raw: unknown, tax?: Taxonomy, where = "limits.yam
         allow,
         ...(max_load ? { max_load } : {}),
         ...(typeof msw === "number" ? { max_sets_per_week: msw } : {}),
+        ...(l.build_back === true ? { build_back: true } : {}),
         ...(typeof l.note === "string" ? { note: l.note } : {}),
         source: l.source as Limit["source"],
         since: l.since as string,

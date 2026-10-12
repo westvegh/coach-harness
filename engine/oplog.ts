@@ -1,10 +1,8 @@
-// Operation IDs, guard verdict hand-off and the operation log (contracts §9).
-//
-// guard-writes saves its verdict under athlete/.cache/verdicts/ keyed by the tool-use
-// ID; log-writes reads it back to name the change kind, the rules and the approval.
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+// Operation IDs and the operation log (contracts §9). log-writes appends one entry per
+// logger write.
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { toolCallHash } from "./approvals.ts";
+import { toolCallHash } from "./opid.ts";
 import { isCalendarDate, localDate } from "./dates.ts";
 import { toolSuffix } from "./logger.ts";
 import { OP_KINDS } from "./opid.ts";
@@ -12,7 +10,6 @@ import { refusedDays, responsePayload, tallyRefusal } from "./snapshot.ts";
 import { isPlainObject } from "./yaml-file.ts";
 import type { ChangeKind, Instant } from "./types.ts";
 
-export const VERDICTS_RELATIVE = "athlete/.cache/verdicts";
 export const LOG_RELATIVE = "athlete/log";
 
 /** contracts §9: op-<date>-<kind>-<sha256(canonical tool call)[0..12]>. */
@@ -27,49 +24,6 @@ export function opId(date: string, kind: string, call: { tool: string; args: unk
 export function loggedOpId(date: string, kind: string, call: { tool: string; args: unknown }): string {
   const submitted = isPlainObject(call.args) ? call.args.opId : undefined;
   return typeof submitted === "string" && submitted !== "" ? submitted : opId(date, kind, call);
-}
-
-export type SavedVerdict = {
-  tool: string;
-  args_hash: string;
-  decision: "allow" | "ask" | "deny";
-  kinds: ChangeKind[];
-  rule_ids: string[];
-  reasons: string[];
-  warnings: string[];
-  approval?: string;
-  mode: "interactive" | "unattended";
-  at: Instant;
-};
-
-function verdictPath(root: string, key: string): string {
-  return join(root, VERDICTS_RELATIVE, `${key.replace(/[^A-Za-z0-9_-]/g, "_")}.json`);
-}
-
-/** The key a verdict is saved under: the tool-use ID, else the call hash. */
-export function verdictKey(toolUseId: unknown, tool: string, args: unknown): string {
-  return typeof toolUseId === "string" && toolUseId !== "" ? toolUseId : toolCallHash(tool, args);
-}
-
-export function saveVerdict(root: string, key: string, v: SavedVerdict): void {
-  const p = verdictPath(root, key);
-  mkdirSync(dirname(p), { recursive: true });
-  const tmp = `${p}.tmp-${process.pid}`;
-  writeFileSync(tmp, JSON.stringify(v, null, 2) + "\n");
-  renameSync(tmp, p);
-}
-
-/** The saved verdict, removed once read. Null when there is none or it is unreadable. */
-export function takeVerdict(root: string, key: string): SavedVerdict | null {
-  const p = verdictPath(root, key);
-  if (!existsSync(p)) return null;
-  try {
-    const v = JSON.parse(readFileSync(p, "utf8")) as SavedVerdict;
-    rmSync(p, { force: true });
-    return v;
-  } catch {
-    return null;
-  }
 }
 
 // ---------- status reconciliation ----------

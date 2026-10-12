@@ -4,12 +4,12 @@ Without progressive overload nothing improves. With too much of it, recovery fal
 
 ## How fast to progress
 
-- **Hard cap:** weekly volume for a muscle never rises more than 10% over the reference week [NA-PROG-001]. The guard enforces this on every write. The reference week is the last completed build week that was not a deload or a test week.
+- **Hard cap:** weekly volume for a muscle never rises more than 10% over the reference week [NA-PROG-001]. The engine's progression tools apply it, and the audit checks it. The reference week is the last completed build week that was not a deload or a test week.
 - **Small bases:** when a muscle's reference week has fewer than 10 sets, one extra set a week is always allowed, because a 10% step on a small base is less than one set [NA-PROG-009]. This is a harness policy.
 - **Target pace:** aim for about 5-7% more volume a week, or about 3% more intensity [NA-PROG-002]. Progress one or two variables at a time, not everything at once. Overload can come from any variable: load, sets, reps, exercises, tempo, frequency, shorter rest or harder movements.
 - **Watch the total, not the parts.** Adding "just one mile" to each of three runs turns a 10-mile week into a 13-mile week, a 30% jump. The cap applies to the weekly total for each muscle.
 
-A worked example: raising a muscle from 64 to 72 weekly sets is +12.5%, so the guard denies it. The engine's tests keep this case.
+A worked example: raising a muscle from 64 to 72 weekly sets is +12.5%, so the audit reports it and the coach plans fewer sets. The engine's tests keep this case.
 
 ## Top sets
 
@@ -17,7 +17,7 @@ A planned top set may not exceed the last logged top set of the same exercise by
 
 Absolute jumps depend on the lift. A heavy squat or deadlift can usually take about 5 lb a week, because 5 lb is a small share of the load. A light upper-body lift often needs a smaller step, or a rep added instead of load [NA-PROG-004].
 
-Known gap: for very light loads, the smallest available step (for example a 20 lb to 25 lb dumbbell) can exceed 10%. The guard denies that write. Progress with reps instead, until the engine supports a minimum increment.
+Known gap: for very light loads, the smallest available step (for example a 20 lb to 25 lb dumbbell) can exceed 10%. The audit reports that step. Progress with reps instead, until the engine supports a minimum increment.
 
 ## Deloads
 

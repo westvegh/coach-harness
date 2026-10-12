@@ -17,11 +17,11 @@ tools:
     skip: skip_planned_workout
     delete: delete_planned_workout
     profile: update_user_profile
-  # Tally track T3 (Tally server-limits spec §6.2): add rules and lower caps only.
-  # The guard treats it as a limit change: ask interactive, deny unattended.
+  # Tally track T3: server-side training limits. v0.2 never syncs limits; the tool stays
+  # listed so log-writes records a call and the urgent gate stops it.
   limits:
     update: update_training_limits
-# guard-writes matcher (contracts §7). settings.json carries the same regex; a test
+# log-writes matcher (contracts §9). settings.json carries the same regex; a test
 # keeps them equal.
 matcher: "^mcp__.*[Tt]ally.*__(plan_workout_day|plan_workout_range|update_planned_workout|move_planned_workout|skip_planned_workout|delete_planned_workout|update_user_profile|update_training_limits)$"
 # capture-reads matcher: the reads plus the mutations (their responses update the snapshot).
@@ -38,6 +38,3 @@ capabilities:
   # Tally skips a day whose source is not "mcp" or that the user modified, unless the
   # call sets overrideUserModified (authority.ts).
   protectsUserDays: true
-  # Tally track T3: server-side training limits. True only when the connected tool list
-  # holds this tool (engine/logger.ts serverLimits); a server with the flag off lists none.
-  server_limits: { when_tool: update_training_limits }

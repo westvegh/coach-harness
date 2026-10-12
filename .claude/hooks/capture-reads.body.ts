@@ -16,7 +16,8 @@ runHook("capture-reads", () => {
   const root = projectRoot();
   const cfgPath = join(root, "coach.yaml");
   const cfg = existsSync(cfgPath) ? loadConfig(cfgPath) : null;
-  const adapter = loadAdapterConfig(cfg?.logger ?? "tally");
+  // The hook matches Tally tools only, so it reads the Tally adapter whatever coach.yaml logger says (v0.2).
+  const adapter = loadAdapterConfig("tally");
   if (!new RegExp(adapter.capture_matcher).test(input.tool_name)) return;
   let prev: Snapshot | null = null;
   try {

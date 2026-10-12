@@ -2,6 +2,37 @@
 
 All notable changes to this project are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [semantic versioning](https://semver.org/).
 
+## [0.2.0]
+
+v0.2 trusts the coach. Code enforces two rules only, the urgent stop and privacy, and the rest is the coach's judgment, guided by the method pack and the skills. Setup and pain reports take a few clicks.
+
+### Changed for the athlete
+
+- **Setup in five screens of clicks, with no typed answers,** on the basic path: basics, goal, a health check, where your plans and data go, and week 1 as a table. Optional paths add a screen or a typed answer only when you choose them: "Show details" on the data question, a typed summary of your training history, a region that limits your training now, and "Change something" on week 1. Recovery data, automation, injury history and assessments are separate skills for later ("add recovery data", "automate it").
+- **Pain in one screen.** Say what hurts, and the coach asks one screen of clickable questions: train normally, go light and build back, or avoid loading the region for now. It writes the limit you chose. "It's better" is one question that removes or loosens the limit. No safety agent runs, and there is no hold to clear.
+- **Tally is optional.** Without Tally, your plans go in a spreadsheet file per week in your repo (`plans/<YYYY>-W<ww>.csv`). Log in any spreadsheet app, or tell the coach in chat ("did all sets, last set of squats felt heavy"). You can also use a tool you already connected to Claude Code. After the third session you log by hand, the coach mentions Tally once.
+- **No typed commands.** Normal flows need no `!` command and no permission prompt for the coach's own engine commands: `.claude/settings.json` allows each one exactly.
+- **Proposals are log lines.** A scheduled run writes a big change as one line in your athlete log, and the coach offers it the next time you talk to it. No proposal files, branches or pull requests.
+
+### What code enforces now
+
+- **The urgent stop.** An urgent warning sign (chest pain, fainting, new numbness or weakness, and the other urgent terms) writes `athlete/.urgent-stop`. The message hook commits it and the coach pushes it next; `urgent set`, the check-in and the note scan push it themselves. While the stop exists, code blocks: every MCP tool, on any server, whose name ends in `plan_workout_day`, `plan_workout_range`, `update_planned_workout`, `move_planned_workout`, `skip_planned_workout`, `delete_planned_workout`, `update_user_profile` or `update_training_limits`; Edit, Write and MultiEdit under `plans/`; and `plans write` and `plans done`. Code also refuses `urgent clear` in a scheduled run and without a reason. The rest is the coach's instruction only: no change in a tool you connected yourself, no plan change through the shell, and asking you before `urgent clear`. Only your answer in a live session should clear it ("A clinician has seen me about it" or "It was a false alarm"), and the clearance is recorded.
+- **Privacy.** The pre-push hook and `node engine/cli.ts push` refuse a public or unknown destination.
+- **Removed:** the plan-write guard and its rebuild, the file guard (protected files, the Bash rules for scheduled runs), holds and pending safety checks, the safety agent, pain words in the message hook, approval records, and limit sync to the Tally server. The coach follows your limits by its own judgment; `node engine/cli.ts limits check` and the `audit` skill report any conflict, and the evals measure it.
+
+### Migration from 0.1.x
+
+The first upgrade runs the 0.1.x update skill that your session already has. From 0.1.2:
+
+1. Open Claude Code in your main checkout (on `main`, not a git worktree: the 0.1.x update refuses another branch), and say "update the coach".
+2. When it finishes, quit Claude Code and start it again. Run nothing else first: the running session keeps the v0.1 hooks until it restarts. v0.2 keeps the two old guard files as stubs that allow everything, so the old session does not lock up.
+3. Say "finish the update". The v0.2 coach runs `npm ci`, installs the git hook, checks your config and runs the tests.
+4. The old-files question: if your copy has `athlete/hold.yaml` or `athlete/.safety-pending`, the coach asks once: "Your copy has an old hold or safety check. The v0.2 coach uses limits instead. Remove them? A) Yes, B) Show them first". An urgent hold or an urgent term in the pending file becomes the urgent stop first, and removing the old files never clears it.
+
+- `coach.yaml` needs no change: a v0.1 copy has `logger: tally` and stays on Tally.
+- Limits already synced to Tally stay there until you remove them in the Tally app.
+- Later updates from v0.2 on also work from a git worktree: the update runs where `main` is checked out, then moves your branch forward.
+
 ## [0.1.2]
 
 ### Fixed

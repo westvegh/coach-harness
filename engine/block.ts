@@ -1,8 +1,10 @@
 // athlete/block.yaml validation (contracts §16 item 5). Every number must be
 // a finite, non-negative integer: a NaN target would make every volume comparison pass.
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { isCalendarDate, weekdayOf, WEEKDAYS } from "./dates.ts";
 import { CoachError } from "./errors.ts";
-import { isPlainObject } from "./yaml-file.ts";
+import { isPlainObject, readYamlFile } from "./yaml-file.ts";
 import type { Block } from "./types.ts";
 
 const KINDS = ["build", "deload", "test"];
@@ -60,4 +62,16 @@ export function validateBlock(raw: unknown, where = "athlete/block.yaml"): Block
   });
   if (errors.length > 0) throw new CoachError("BLOCK_INVALID", `${where} is invalid:\n  - ${errors.join("\n  - ")}`);
   return raw as unknown as Block;
+}
+
+export const BLOCK_RELATIVE = "athlete/block.yaml";
+
+/** athlete/block.yaml, or null when it is absent or still the unfilled template (start: null). */
+export function readBlock(root: string): Block | null {
+  const p = join(root, BLOCK_RELATIVE);
+  if (!existsSync(p)) return null;
+  const raw = readYamlFile(p, "BLOCK_INVALID");
+  if (!isPlainObject(raw)) throw new CoachError("BLOCK_INVALID", `${BLOCK_RELATIVE} must be a mapping`);
+  if (raw.start === null || raw.start === undefined) return null;
+  return validateBlock(raw, BLOCK_RELATIVE);
 }

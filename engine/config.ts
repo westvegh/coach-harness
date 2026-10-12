@@ -29,10 +29,13 @@ export const ALL_KINDS: readonly ChangeKind[] = [...SMALL_KINDS, ...BIG_KINDS];
 export const DEFAULT_SLEEP_TARGET_MIN = 480;
 export const SLEEP_TARGET_RANGE: readonly [number, number] = [240, 720];
 
-const TOP_KEYS = ["version", "athlete", "method", "template", "signals", "logger", "consent", "automation", "approval", "thresholds"];
+const TOP_KEYS = ["version", "athlete", "method", "template", "signals", "logger", "tally_mentioned", "consent", "automation", "approval", "thresholds"];
+/** Where plans live (v0.2, contracts §1, §12a). */
+export const LOGGERS = ["tally", "files", "other"] as const;
 /** The tool-name prefix of a connected logger server, in any of its name forms (launch review finding 7). */
 export const LOGGER_TOOL_PREFIX_RE = /^mcp__[A-Za-z0-9_-]*[Tt]ally[A-Za-z0-9_-]*__$/;
-const REQUIRED_TOP = ["version", "athlete", "method", "template", "signals", "logger", "approval"];
+// `logger` was required up to 0.1; a release never adds a required key, and 0.2 makes it optional (§24).
+const REQUIRED_TOP = ["version", "athlete", "method", "template", "signals", "approval"];
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const NAME_RE = /^[a-z0-9][a-z0-9._-]*$/;
 
@@ -82,7 +85,8 @@ export function validateConfig(raw: unknown, where = "coach.yaml"): CoachConfig 
   }
 
   if ("method" in raw) c.string(raw.method, "method", NAME_RE, "must be a folder name under methods/");
-  if ("logger" in raw) c.string(raw.logger, "logger", NAME_RE, "must be a folder name under adapters/loggers/");
+  if ("logger" in raw) c.oneOf(raw.logger, "logger", LOGGERS);
+  if ("tally_mentioned" in raw && typeof raw.tally_mentioned !== "boolean") c.fail("tally_mentioned", "must be true or false");
 
   // launch review finding 5: health details go into logger notes only after this separate consent.
   const consent = raw.consent ?? {};
@@ -183,8 +187,10 @@ export function validateConfig(raw: unknown, where = "coach.yaml"): CoachConfig 
     method: r.method,
     template: { days: r.template.days, emphasis: r.template.emphasis },
     signals: { wearable: r.signals.wearable, checkin: r.signals.checkin },
-    logger: r.logger,
-    consent: { logger_health_notes: (consent as Record<string, unknown>).logger_health_notes === true },
+    logger: r.logger ?? defaultLogger(auto),
+    tally_mentioned: r.tally_mentioned === true,
+    // v0.2: setup's one data question covers the notes; only an explicit false keeps them generic.
+    consent: { logger_health_notes: (consent as Record<string, unknown>).logger_health_notes !== false },
     automation: {
       mode: (auto as any).mode,
       daily_window: { start: (auto as any).daily_window.start, end: (auto as any).daily_window.end },
@@ -195,6 +201,14 @@ export function validateConfig(raw: unknown, where = "coach.yaml"): CoachConfig 
     approval,
     thresholds,
   };
+}
+
+/**
+ * The logger when coach.yaml has no `logger` key: `files` (plans in this repo), unless the copy
+ * already uses Tally (a connected Tally server's tool prefix is recorded), which stays on Tally.
+ */
+export function defaultLogger(automation: unknown): CoachConfig["logger"] {
+  return isPlainObject(automation) && typeof automation.tool_prefix === "string" ? "tally" : "files";
 }
 
 function invalid(where: string, errors: string[]): CoachError {

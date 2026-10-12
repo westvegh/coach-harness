@@ -1,7 +1,8 @@
 // Hook bootstrap probes (docs/contracts.md §20 item 27). In a fresh copy
 // of the template (no node_modules, no coach.yaml), the runner feeds the instance's own
-// hooks one file edit and one Tally write, the way Claude Code would, before the model
-// runs. The hooks must load with built-ins only: the edit is allowed, the write is denied.
+// PreToolUse hooks one file edit and one Tally write, the way Claude Code would, before the
+// model runs. The hooks must load with built-ins only. With no urgent stop, the urgent gate
+// allows both; the v0.1 guard entries (stubs in v0.2) allow everything.
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -40,19 +41,18 @@ export type BootstrapState = { nodeModules: boolean; coachYaml: boolean; probes:
 /** Runs the probes against an instance. Call it before the model run. */
 export function bootstrapProbes(root: string): BootstrapState {
   const state = { nodeModules: existsSync(join(root, "node_modules")), coachYaml: existsSync(join(root, "coach.yaml")) };
+  const edit = { tool_name: "Write", tool_input: { file_path: join(root, "athlete/brief.md"), content: "# Athlete brief\n" } };
+  const plan = { tool_name: "Edit", tool_input: { file_path: join(root, "plans/2026-W42.csv"), old_string: "a", new_string: "b" } };
+  const write = {
+    tool_name: `mcp__${MOCK_SERVER}__plan_workout_day`,
+    tool_input: { date: "2026-10-12", timezone: "America/Los_Angeles", exercises: [{ exerciseId: "goblet_squat", name: "Goblet Squat", suggestedSets: 3, suggestedReps: 8 }] },
+  };
   const probes = [
-    runHook(root, "a file edit before npm ci and before coach.yaml", "guard-files.ts", {
-      tool_name: "Write",
-      tool_input: { file_path: join(root, "athlete/brief.md"), content: "# Athlete brief\n" },
-    }),
-    runHook(root, "a file edit (Edit) before npm ci and before coach.yaml", "guard-files.ts", {
-      tool_name: "Edit",
-      tool_input: { file_path: join(root, "README.md"), old_string: "coach", new_string: "coach" },
-    }),
-    runHook(root, "a Tally write before npm ci and before coach.yaml", "guard-writes.ts", {
-      tool_name: `mcp__${MOCK_SERVER}__plan_workout_day`,
-      tool_input: { date: "2026-10-12", timezone: "America/Los_Angeles", exercises: [{ exerciseId: "goblet_squat", name: "Goblet Squat", suggestedSets: 3, suggestedReps: 8 }] },
-    }),
+    runHook(root, "a file edit before npm ci and before coach.yaml", "urgent-gate.ts", edit),
+    runHook(root, "a plans/ edit before npm ci and before coach.yaml", "urgent-gate.ts", plan),
+    runHook(root, "a Tally write before npm ci and before coach.yaml", "urgent-gate.ts", write),
+    runHook(root, "the v0.1 guard-files stub", "guard-files.ts", edit),
+    runHook(root, "the v0.1 guard-writes stub", "guard-writes.ts", write),
   ];
   return { ...state, probes };
 }

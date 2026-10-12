@@ -11,8 +11,6 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { blobId, buildManifest, manifestJson, parseTreeRules, pathProblem, validateManifest, type Manifest } from "../engine/manifest.ts";
 import { applyUpdate, planUpdate, prepareUpdate, type Entry } from "../engine/update.ts";
-import { fileGuard } from "../engine/protect.ts";
-import { fastFileDecision } from "../.claude/hooks/fast-files.ts";
 import { CoachError } from "../engine/errors.ts";
 
 const REPO = new URL("..", import.meta.url).pathname;
@@ -386,34 +384,12 @@ test("the CLI: --check and --yes together, unattended, no manifest, and only the
   assert.equal(cli(local, ["update", "--check"]).json?.error?.code, "MANIFEST_INVALID");
 });
 
-test("the guard: update --yes asks interactive and denies unattended; --check passes interactive and denies unattended; the fast path never allows update; the manifest is protected", () => {
-  const root = tmp("coach-guard-");
-  cpSync(join(REPO, "coach.example.yaml"), join(root, "coach.yaml"));
-  git(root, "init", "-q", "-b", "main");
-  const decide = (command: string, mode: "interactive" | "unattended") => fileGuard({ tool_name: "Bash", tool_input: { command }, mode, root, branch: "main", proposalsOnMain: [] }).decision;
-  for (const c of [`node engine/cli.ts update --yes --to ${"a".repeat(40)}`, "node engine/cli.ts update --yes --to x --keep-mine files/a", "node engine/cli.ts update --take-template files/a", "node engine/cli.ts update"]) {
-    assert.equal(decide(c, "interactive"), "ask", c);
-    assert.equal(decide(c, "unattended"), "deny", c);
-    assert.equal(fastFileDecision("Bash", { command: c }, root), null, `fast: ${c}`);
-  }
-  for (const c of ["node engine/cli.ts update --check", "node engine/cli.ts update --check --ref v0.2.0"]) {
-    assert.equal(decide(c, "interactive"), "allow", c);
-    assert.equal(decide(c, "unattended"), "deny", c);
-    assert.equal(fastFileDecision("Bash", { command: c }, root), null, `fast: ${c}`);
-  }
-  for (const tool of ["Edit", "Write"]) {
-    const input = { file_path: "template-manifest.json", content: "{}", old_string: "a", new_string: "b" };
-    assert.equal(fileGuard({ tool_name: tool, tool_input: input, mode: "interactive", root }).decision, "ask", tool);
-    assert.equal(fileGuard({ tool_name: tool, tool_input: input, mode: "unattended", root }).decision, "deny", tool);
-    assert.equal(fastFileDecision(tool, input, root), null);
-  }
-  assert.equal(decide("rm template-manifest.json", "interactive"), "ask");
-});
-
 test("config-check reports a missing required key, and passes a valid coach.yaml", () => {
   const root = tmp("coach-config-");
   const example = readFileSync(join(REPO, "coach.example.yaml"), "utf8");
   writeFileSync(join(root, "coach.yaml"), example);
+  mkdirSync(join(root, ".claude"));
+  cpSync(join(REPO, ".claude/settings.json"), join(root, ".claude/settings.json"));
   const ok = cli(root, ["config-check"]);
   assert.equal(ok.code, 0);
   assert.equal(ok.json.ok, true);
@@ -424,37 +400,89 @@ test("config-check reports a missing required key, and passes a valid coach.yaml
   assert.ok(bad.json.problems.some((p: string) => /method/.test(p)), JSON.stringify(bad.json.problems));
 });
 
+// ---------- V1b fix 3: the urgent gate stays registered after any update ----------
+
+const GATE_ENTRY = JSON.parse(readFileSync(join(REPO, ".claude/settings.json"), "utf8")).hooks.PreToolUse.find((e: { hooks: { command: string }[] }) => e.hooks.some((h) => h.command.includes("urgent-gate.ts")));
+const GATED = (extra: unknown[] = []) => JSON.stringify({ hooks: { PreToolUse: [GATE_ENTRY, ...extra] } }, null, 2);
+const BASH_HOOK = { matcher: "Bash", hooks: [{ type: "command", command: `node "$CLAUDE_PROJECT_DIR/.claude/hooks/guard.ts"` }] };
+
+/** Release 2 registers the urgent gate (the v0.2 settings shape). */
+function gatedFixture(edit?: (dir: string) => void) {
+  const r2 = release2();
+  r2[".claude/settings.json"] = GATED([BASH_HOOK]);
+  r2[".claude/hooks/urgent-gate.ts"] = "// gate\n";
+  const s1 = staged(RELEASE1, "0.1.0");
+  const s2 = staged(r2, "0.2.0");
+  return { source: templateRepo(s1, s2), root: copyOf(s1, (d) => { userEdits(d); edit?.(d); }) };
+}
+const settled = { keepMine: ["files/conflict.txt", "files/removed-changed.txt", "files/new-collide.txt"] };
+const gateProblems = async (root: string) => (await import("../engine/settings-gate.ts")).urgentGateProblems(readFileSync(join(root, ".claude/settings.json"), "utf8"));
+
+test("V1b fix 3: a stock settings file takes the template's, with the urgent gate; nothing is merged", async () => {
+  const { source, root } = gatedFixture();
+  const p = prepareUpdate(opts(root, source));
+  const r = applyUpdate(opts(root, source, { to: p.to, ...settled }));
+  assert.equal(r.settings_merged, false);
+  assert.ok(r.written.includes(".claude/settings.json"));
+  assert.deepEqual(await gateProblems(root), []);
+  assert.equal(cli(root, ["config-check"]).json.problems.some((x: string) => /urgent-gate/.test(x)), false);
+});
+
+test("V1b fix 3: a customized settings file the athlete keeps gets the urgent-gate entry merged in; their other hooks stay", async () => {
+  const mine = { matcher: "Read", hooks: [{ type: "command", command: "echo mine" }] };
+  const { source, root } = gatedFixture((d) => writeFileSync(join(d, ".claude/settings.json"), JSON.stringify({ hooks: { PreToolUse: [BASH_HOOK, mine] }, env: { MINE: "1" } }, null, 2)));
+  const before = cli(root, ["config-check"]);
+  assert.ok(before.json.problems.some((x: string) => /does not register the urgent-gate hook/.test(x)), JSON.stringify(before.json));
+  const p = prepareUpdate(opts(root, source));
+  assert.ok(p.plan.conflicts.some((c) => c.path === ".claude/settings.json"));
+  const r = applyUpdate(opts(root, source, { to: p.to, keepMine: [...settled.keepMine, ".claude/settings.json"] }));
+  assert.equal(r.settings_merged, true);
+  assert.equal(r.restart_claude_code, true);
+  const after = JSON.parse(readFileSync(join(root, ".claude/settings.json"), "utf8"));
+  assert.deepEqual(after.env, { MINE: "1" });
+  assert.equal(after.hooks.PreToolUse.length, 3);
+  assert.deepEqual(after.hooks.PreToolUse.slice(0, 2), [BASH_HOOK, mine]);
+  assert.deepEqual(await gateProblems(root), []);
+  assert.equal(git(root, "status", "--porcelain"), "", "the merged file is committed with the update");
+  // A stale urgent-gate entry (onFailure changed) is replaced, not doubled.
+  const stale = structuredClone(GATE_ENTRY);
+  stale.hooks[0].onFailure = "continue";
+  const { mergeUrgentGate } = await import("../engine/settings-gate.ts");
+  const fixed = JSON.parse(mergeUrgentGate(JSON.stringify({ hooks: { PreToolUse: [stale] } }), GATED())!);
+  assert.deepEqual(fixed.hooks.PreToolUse, [GATE_ENTRY]);
+  writeFileSync(join(root, ".claude/settings.json"), JSON.stringify({ hooks: { PreToolUse: [stale] } }));
+  assert.ok(cli(root, ["config-check"]).json.problems.some((x: string) => /onFailure/.test(x)));
+});
+
+test("V1b fix 3: hooks in settings.local.json that point at the guard stubs are reported, not refused", () => {
+  const { source, root } = gatedFixture();
+  writeFileSync(join(root, ".claude/settings.local.json"), JSON.stringify({ hooks: { PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: `node "$CLAUDE_PROJECT_DIR/.claude/hooks/guard-files.ts"` }] }] } }));
+  // settings.local.json is ignored (Claude Code's own convention), so the tree stays clean.
+  writeFileSync(join(root, ".gitignore"), ".tmp/\n.claude/settings.local.json\n");
+  git(root, "add", ".gitignore");
+  git(root, "commit", "-q", "-m", "ignore local settings");
+  const p = prepareUpdate(opts(root, source));
+  const r = applyUpdate(opts(root, source, { to: p.to, ...settled }));
+  assert.deepEqual(r.local_guard_hooks, [`node "$CLAUDE_PROJECT_DIR/.claude/hooks/guard-files.ts"`]);
+  const cc = cli(root, ["config-check"]);
+  assert.match(cc.json.notes.join(" "), /settings\.local\.json still runs the v0\.1 guard stubs/);
+  assert.equal(cc.json.problems.some((x: string) => /guard/.test(x)), false);
+});
+
+test("V1b fix 3: config-check reports a missing settings file", () => {
+  const root = tmp("coach-config-");
+  writeFileSync(join(root, "coach.yaml"), readFileSync(join(REPO, "coach.example.yaml"), "utf8"));
+  const r = cli(root, ["config-check"]);
+  assert.equal(r.code, 1);
+  assert.ok(r.json.problems.some((x: string) => /settings\.json is missing/.test(x)));
+});
+
 // ---------- U2: the fix round after the review (each fails on the first update version) ----------
 
 import { commandPaths, hookPaths } from "../engine/update.ts";
 import { readdirSync as readdir } from "node:fs";
 
 const SHA = "a".repeat(40);
-
-test("U2 fix 1: a continuation or a glob in an engine call is not an engine call; quoted values keep their decision", () => {
-  const root = tmp("coach-u2-guard-");
-  cpSync(join(REPO, "coach.example.yaml"), join(root, "coach.yaml"));
-  git(root, "init", "-q", "-b", "main");
-  const decide = (command: string, mode: "interactive" | "unattended") => fileGuard({ tool_name: "Bash", tool_input: { command }, mode, root, branch: "main", proposalsOnMain: [] }).decision;
-  for (const c of [`node engine/cli.ts upda\\\nte --yes --to ${SHA}`, `node engine/cli.ts updat? --yes --to ${SHA}`, `node engine/cli.ts upd[a]te --yes --to ${SHA}`, "node engine/cli.ts hold cle\\\nar"]) {
-    assert.equal(decide(c, "interactive"), "ask", JSON.stringify(c));
-    assert.equal(decide(c, "unattended"), "deny", JSON.stringify(c));
-    assert.equal(fastFileDecision("Bash", { command: c }, root), null, `fast: ${JSON.stringify(c)}`);
-  }
-  // Plain and safely quoted engine calls keep their decisions in both guards.
-  const keep: [string, string, string | null][] = [
-    ["node engine/cli.ts hold status", "allow", "allow"],
-    ['node engine/cli.ts hold set --reason "knee pain"', "allow", null],
-    ['node engine/cli.ts safety detect --text "my knee hurts"', "allow", null],
-    ["node engine/cli.ts update --check", "allow", null],
-    [`node engine/cli.ts update --yes --to ${SHA}`, "ask", null],
-  ];
-  for (const [c, interactive, fast] of keep) {
-    assert.equal(decide(c, "interactive"), interactive, c);
-    assert.equal(fastFileDecision("Bash", { command: c }, root), fast, `fast: ${c}`);
-  }
-  assert.equal(decide('node engine/cli.ts hold set --reason "knee pain"', "unattended"), "allow");
-});
 
 test("U2 fix 2: a symlink at the backup path, or in a backup parent folder, refuses before any write", () => {
   for (const where of ["file", "parent"] as const) {
@@ -686,4 +714,74 @@ test("fold fix 4: project-local absolute paths and path options are checked; a p
   const source = templateRepo(s1, staged({ ...RELEASE1, "package.json": '{"version":"0.2.0"}\n', ".claude/settings.json": settings }, "0.2.0"));
   applyUpdate(opts(copy, source, { to: git(source, "rev-parse", "HEAD") }));
   assert.equal(JSON.parse(readFileSync(join(copy, "template-manifest.json"), "utf8")).release, "0.2.0");
+});
+
+// ---------- V2b fix 8: a copy in a worktree, both layouts ----------
+
+/** The update skill's worktree sequence, through the engine: commit, ff-main, main-checkout, update there, ff-branch, remove-temp. */
+function worktreeUpdate(wt: string, source: string) {
+  const step = (args: string[]) => {
+    const r = cli(wt, args);
+    assert.equal(r.code, 0, `${args.join(" ")}: ${JSON.stringify(r.json)}`);
+    return r.json;
+  };
+  step(["commit", "--message", "coach: before the update"]);
+  step(["worktree", "ff-main"]);
+  const mc = step(["worktree", "main-checkout"]);
+  const p = prepareUpdate(opts(mc.path, source));
+  applyUpdate(opts(mc.path, source, { to: p.to }));
+  step(["worktree", "ff-branch"]);
+  const rm = step(["worktree", "remove-temp"]);
+  return { mc, rm };
+}
+
+function worktreeCopy(): { source: string; main: string; wt: string } {
+  const s1 = staged(RELEASE1, "0.1.0");
+  const source = templateRepo(s1, staged(release2(), "0.2.0"));
+  const main = copyOf(s1);
+  const wt = join(tmp("coach-wt-"), "wt");
+  git(main, "worktree", "add", "-q", "-b", "coach", wt);
+  // The athlete coached in the worktree: a commit main lacks, and an uncommitted log line.
+  mkdirSync(join(wt, "athlete/log"), { recursive: true });
+  writeFileSync(join(wt, "athlete/log/2026-10.md"), "## 2026-10-12\n");
+  git(wt, "add", "athlete");
+  git(wt, "commit", "-q", "-m", "coach: log");
+  writeFileSync(join(wt, "athlete/log/2026-10.md"), "## 2026-10-12\n- more\n");
+  return { source, main, wt };
+}
+
+test("V2b fix 8: worktree update when main is checked out in the main checkout: the update runs there, then the branch catches up", () => {
+  const { source, main, wt } = worktreeCopy();
+  const { mc, rm } = worktreeUpdate(wt, source);
+  assert.equal(mc.path, main);
+  assert.equal(mc.temporary, false);
+  assert.equal(rm.removed, false, "no temporary checkout to remove");
+  assert.equal(readFileSync(join(wt, "files/replace.txt"), "utf8"), "v2\n", "the worktree has the update");
+  assert.equal(readFileSync(join(main, "files/replace.txt"), "utf8"), "v2\n");
+  assert.equal(git(wt, "rev-parse", "HEAD"), git(main, "rev-parse", "main"));
+  assert.equal(readFileSync(join(wt, "athlete/log/2026-10.md"), "utf8"), "## 2026-10-12\n- more\n", "the athlete's log is kept");
+  assert.match(git(wt, "log", "-1", "--format=%B"), /Coach-Template-Commit:/);
+});
+
+test("V2b fix 8: worktree update when main is checked out nowhere: a temporary checkout in .tmp/coach, updated, then removed; no other checkout touched", () => {
+  const { source, main, wt } = worktreeCopy();
+  git(main, "switch", "-q", "-c", "other");
+  writeFileSync(join(main, "work-in-progress.txt"), "mine\n");
+  const { mc, rm } = worktreeUpdate(wt, source);
+  assert.equal(mc.temporary, true);
+  assert.equal(mc.path, join(wt, ".tmp/coach/main-checkout"));
+  assert.equal(rm.removed, true);
+  assert.equal(existsSync(join(wt, ".tmp/coach/main-checkout")), false);
+  assert.equal(readFileSync(join(wt, "files/replace.txt"), "utf8"), "v2\n");
+  assert.equal(git(wt, "rev-parse", "HEAD"), git(main, "rev-parse", "main"));
+  // The main checkout stays on its branch with its own work.
+  assert.equal(git(main, "rev-parse", "--abbrev-ref", "HEAD"), "other");
+  assert.equal(readFileSync(join(main, "work-in-progress.txt"), "utf8"), "mine\n");
+  assert.equal(readFileSync(join(main, "files/replace.txt"), "utf8"), "v1\n");
+  // remove-temp never forces: a temporary checkout with changes is kept.
+  const again = cli(wt, ["worktree", "main-checkout"]);
+  writeFileSync(join(again.json.path, "files/replace.txt"), "edited\n");
+  const refused = cli(wt, ["worktree", "remove-temp"]);
+  assert.equal(refused.code, 1);
+  assert.ok(existsSync(join(again.json.path, "files/replace.txt")));
 });

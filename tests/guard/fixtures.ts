@@ -8,7 +8,6 @@ import { dayFromPlannedWorkout } from "../../engine/snapshot.ts";
 import { loadTaxonomy } from "../../engine/taxonomy.ts";
 import { readYamlFile } from "../../engine/yaml-file.ts";
 import type { Block, CoachConfig, Limits, Rules, Snapshot, SnapshotDay, SnapshotSession, Taxonomy } from "../../engine/types.ts";
-import type { GuardInput } from "../../engine/validate.ts";
 
 export const REPO = new URL("../..", import.meta.url).pathname;
 
@@ -124,30 +123,6 @@ export function session(date: string, exercises: { name: string; exerciseId?: st
   };
 }
 
-/** A guard input with sensible defaults: an attended run, no limits, no hold. */
-export function guardInput(over: Partial<GuardInput> & Pick<GuardInput, "tool" | "args" | "snapshot">): GuardInput {
-  return {
-    mode: "interactive",
-    limits: limits(),
-    rules: rules(),
-    tax: tax(),
-    config: config(),
-    hold: null,
-    pending: null,
-    approvals: [],
-    now: NOW,
-    session_id: SESSION,
-    block: block(),
-    pain: [],
-    limits_hash: "0".repeat(64),
-    ...over,
-  };
-}
-
-/**
- * A fake gh on PATH for the approval checks. `gh api -X POST …` (open a PR)
- * prints an html_url; any other `gh api` prints $FAKE_PRS, or fails when it is unset.
- */
 export function fakeGhBin(): string {
   const { chmodSync, mkdtempSync, writeFileSync } = process.getBuiltinModule("node:fs") as typeof import("node:fs");
   const { tmpdir } = process.getBuiltinModule("node:os") as typeof import("node:os");

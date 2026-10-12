@@ -7,6 +7,10 @@ description: Explains why the plan is what it is, by tracing a change from its l
 
 Trace every answer to data. Never guess a reason.
 
+## Where plans live
+
+Read `coach.yaml logger` and follow CLAUDE.md "Where plans live". With `logger: files`, read a day with `node engine/cli.ts plans read --week <date>` instead of `get_planned_workout`, and skip the history reads: `readiness`, `loads` and `weeks` read `plans/` by themselves. The week files are in git, so `git log -p plans/` shows each change.
+
 ## Steps
 
 1. **Find the change.** Ask, if it is not clear: "Which change? A) today, B) a date, C) next week, D) a rule". Find the log entry in `athlete/log/<YYYY-MM>.md` (`## <date> <time> · <op id>`). Read its readiness, rules, change, approval and result lines.
@@ -17,8 +21,9 @@ Trace every answer to data. Never guess a reason.
 6. **Loads and volume**, when asked:
    - Loads: `node engine/cli.ts loads --from-snapshot <date>` after a `get_planned_workout` read of that date. Show the reason for each.
    - Volume: `node engine/cli.ts weeks --from <block start> --to <date>`, then `node engine/cli.ts targets --input .tmp/coach/targets.json` with those `logs`. Show the reference week, the planned sets and the capped sets.
-   - A guard decision: `node engine/cli.ts validate --tool <tool> --args .tmp/coach/call.json`.
-7. **Answer.** Short sentences. First the change, then the cause, then the numbers with the command that made them, then the rule `[ID]` and its source. Use the analyst agent for any number you do not have yet.
+   - A change's size (small or big): `node engine/cli.ts classify --input .tmp/coach/call.json`.
+   - A plan against the limits: `node engine/cli.ts limits check --input .tmp/coach/week.json`.
+7. **Answer.** Short sentences. First the change, then the cause, then the numbers with the command that made them, then the rule `[ID]` and its source. Run the engine command for any number you do not have yet. The analyst agent is optional, for a long read (many dates or weeks); run it in the foreground (`run_in_background: false`).
 
 ## Writes
 

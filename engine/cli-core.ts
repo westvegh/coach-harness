@@ -1,10 +1,11 @@
 // The engine CLI's own commands (contracts §13): readiness --input, volume, limits-hash,
-// snapshot show and safety. engine/cli.ts dispatches here; each command imports its
+// snapshot show, safety and classify. engine/cli.ts dispatches here; each command imports its
 // modules when it runs. The usage lines stay in this file.
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { CoachError } from "./errors.ts";
+import type { LoggerTool } from "./logger.ts";
 import type { NotesHistoryEntry } from "./safety.ts";
 import type { Block, ReadinessInput, Rules, WeekLog, WeekPlan } from "./types.ts";
 
@@ -122,11 +123,12 @@ export async function cmdSnapshot(argv: string[]): Promise<number> {
 /**
  * `safety detect --text <t>`: the matcher's result; writes nothing.
  * `safety scan-notes --since <date>`: scans logged session and exercise notes from the snapshot
- * history (or --input, a JSON list of history entries) dated on or after `since`, and writes
- * the pending file with `source: "session-notes"` on a match (not with --dry-run).
+ * history (or --input, a JSON list of history entries) dated on or after `since`. Pain matches
+ * are reported only. An urgent term newer than its latest clearance writes, commits and
+ * pushes the urgent stop (`source: "note"`; not with --dry-run).
  */
 export async function cmdSafety(argv: string[]): Promise<number> {
-  const [{ detect, recordSessionNotes, scanSessionNotes }, { isCalendarDate }] = await Promise.all([import("./safety.ts"), import("./dates.ts")]);
+  const [{ detect, scanSessionNotes, urgentTermsOf }, { isCalendarDate }, urgent] = await Promise.all([import("./safety.ts"), import("./dates.ts"), import("./urgent.ts")]);
   const { values, positionals } = parseArgs({
     args: argv,
     allowPositionals: true,
@@ -152,16 +154,69 @@ export async function cmdSafety(argv: string[]): Promise<number> {
     let history: unknown;
     if (values.input) history = readJson(values.input);
     else {
+      // logger: files: the notes and felt columns of the week files (contracts §12a). logger: other:
+      // no cache (V2b fix 4); the coach passes that tool's notes with --input.
+      const cs = await import("./coach-snapshot.ts");
+      const fromFiles = cs.filesNotes(root);
       const path = join(root, SNAPSHOT_RELATIVE);
-      history = existsSync(path) ? (readJson(path) as { history?: unknown }).history : [];
+      history = fromFiles ?? (cs.loggerOf(root) === "other" ? [] : existsSync(path) ? (readJson(path) as { history?: unknown }).history : []);
     }
     if (!Array.isArray(history)) throw new CoachError("INPUT_ERROR", "safety scan-notes needs a list of history entries");
-    const matches = scanSessionNotes(history as NotesHistoryEntry[], { since: values.since });
-    const pending = values["dry-run"] ? null : recordSessionNotes(root, matches, values.now);
-    out({ matches, pending_written: pending !== null, pending });
+    // Urgent terms in notes on or before the latest clearance of the same term were cleared.
+    const matches = scanSessionNotes(history as NotesHistoryEntry[], { since: values.since, cleared: urgent.clearedThrough(urgent.readClearances(root)) });
+    const terms = urgentTermsOf(matches);
+    const stop = terms.length > 0 && !values["dry-run"] ? await urgent.recordStop(root, { terms, source: "note", now: values.now }, { push: true }) : null;
+    out({ matches, urgent_terms: terms, urgent_stop: stop });
     return 0;
   }
-  throw new CoachError("USAGE", "usage: safety detect --text <text> | safety scan-notes --since <YYYY-MM-DD> [--input <file>] [--dry-run]");
+  throw new CoachError("USAGE", "usage: safety detect --text <text> | safety scan-notes --since <YYYY-MM-DD> [--input <file>] [--dry-run]  (an urgent term in a note writes, commits and pushes the urgent stop)");
 }
 
 // ---------- end safety ----------
+
+// ---------- classify (contracts §6) ----------
+
+/** classify --exercise "<name>" [--id <exerciseId>] [--muscle <m>] | classify --input <file.json> ({before, after, tool, today?, volume?}). */
+export async function cmdClassify(argv: string[]): Promise<number> {
+  const [{ classifyChange }, { loadConfig }, { localDate }, { readBlock }, { loadRules }, { loadSnapshot }, { classify, loadTaxonomy }] = await Promise.all([
+    import("./classify.ts"),
+    import("./config.ts"),
+    import("./dates.ts"),
+    import("./block.ts"),
+    import("./methods.ts"),
+    import("./snapshot.ts"),
+    import("./taxonomy.ts"),
+  ]);
+  const { values } = parseArgs({
+    args: argv,
+    strict: true,
+    options: { root: { type: "string" }, input: { type: "string" }, exercise: { type: "string" }, id: { type: "string" }, muscle: { type: "string" } },
+  });
+  const root = resolve(values.root ?? ".");
+  const tax = loadTaxonomy({ root });
+  if (values.exercise) {
+    out(classify({ name: values.exercise, exerciseId: values.id ?? null, muscle: values.muscle ?? null }, tax));
+    return 0;
+  }
+  if (!values.input) throw new CoachError("USAGE", "classify needs --exercise <name> or --input <file.json>");
+  const input = readJson(values.input) as Record<string, any>;
+  const config = loadConfig(join(root, "coach.yaml"));
+  const rules = loadRules(join(root, "methods", config.method)) as unknown as Rules;
+  // With logger: files the history is the week files (contracts §12a).
+  const snap = config.logger === "tally" ? loadSnapshot(root) : (await import("./coach-snapshot.ts")).coachSnapshot(root, { cfg: config });
+  const today = typeof input.today === "string" ? input.today : localDate(new Date().toISOString(), config.athlete.timezone);
+  out(
+    classifyChange(input.before ?? null, input.after ?? null, {
+      block: readBlock(root),
+      history: snap?.history ?? [],
+      tool: String(input.tool ?? "plan_workout_day") as LoggerTool,
+      snapshotDay: input.snapshotDay ?? null,
+      tax,
+      rules,
+      config,
+      today,
+      ...(input.volume ? { volume: input.volume } : {}),
+    }),
+  );
+  return 0;
+}

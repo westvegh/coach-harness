@@ -1,5 +1,5 @@
 // Load suggestions from the last logged top set (contracts §15).
-import { convertWeight } from "../adapters/loggers/tally/rebuild.ts";
+import { convertWeight } from "../adapters/loggers/tally/day.ts";
 import { CoachError } from "./errors.ts";
 import { classify, normalizeName } from "./taxonomy.ts";
 import type { CalendarDate, ExerciseEntry, HistoryExercise, Rules, Snapshot, Taxonomy, Units } from "./types.ts";
