@@ -19,7 +19,15 @@ Only the matched terms (for example `hurt` and `region:left-knee`) are stored. Y
 
 ### Holds
 
-A hold pauses training changes. While a hold is active, the coach only adds notes, rest or recovery work. A shorter session (fewer sets, the same or less load) also passes.
+A hold pauses training changes. What it blocks depends on the hold:
+
+- **A regional hold** (it names regions, for example `left-shoulder` and `right-shoulder`) blocks every exercise that loads a held region, and every exercise the coach cannot classify. Other exercises follow the normal rules: your limits, the method rules, the volume and progression checks. Conditioning that loads no named region (a bike, intervals) passes only as recovery work that adds nothing.
+- **A hold with no regions** (for example dizziness or illness) allows only notes, rest or recovery work.
+- **An unanswered safety check** (`athlete/.safety-pending`) works like a hold with no regions, because the regions are not known yet.
+
+Under every hold, a shorter session (fewer sets, the same or less load) and a skip also pass.
+
+When you accept new limits for the held regions in the same live session, the safety agent asks one question: add the limits and end the hold. After your yes, the limits are written first, and then `hold clear --released-by-limits` ends the hold. It refuses when a held region has no limit. The limits keep protecting the region. A hold with no regions, or an urgent hold, is never ended this way.
 
 An **urgent hold** is stricter. The safety agent sets it (`hold set --urgent`) for an urgent warning sign, and a hold whose reason names an urgent sign counts too. Under an urgent hold, or while a pending safety check holds an urgent term, the guard denies every exercise prescription. Only a note on an unchanged day, a rest day or a skip passes. `hold status` prints `urgent: true`.
 

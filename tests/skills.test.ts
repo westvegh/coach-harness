@@ -537,3 +537,75 @@ test("C: the safety agent ends with a copy-exactly question block, and every han
   }
   assert.match(claudeMd, /paste its "Questions for the athlete \(copy exactly\):" block/);
 });
+
+// ---------- P1 fix 3: clickable answers ----------
+
+test("P1 fix 3: the safety agent adds a questions JSON block after the copy-exactly block", () => {
+  const agent = readFileSync(join(REPO, ".claude/agents/safety.md"), "utf8");
+  const output = section(agent.slice(agent.indexOf("---\n", 4) + 4), "Output")!;
+  assert.ok(output.indexOf("Questions for the athlete (copy exactly):") < output.indexOf("fenced JSON block"), "the JSON block comes after the copy-exactly block");
+  for (const f of ["`id`", "`text`", "`options`", "`multi`", "`type`", "`choice`", "`score`", "at most 4", "give each letter that applies", "A per-side score is two questions, one for each side"]) {
+    assert.ok(output.includes(f), `the Output section names ${f}`);
+  }
+  // The example parses, and each question fits AskUserQuestion.
+  const example = /```json\n([\s\S]*?)\n```/.exec(output);
+  assert.ok(example, "an example JSON block");
+  const qs = JSON.parse(example[1]).questions as { id: string; header: string; text: string; options: string[]; multi: boolean; type: string }[];
+  assert.ok(qs.length > 0);
+  for (const q of qs) {
+    assert.ok(q.options.length >= 2 && q.options.length <= 4, `${q.id}: 2 to 4 options`);
+    assert.ok(q.header.length <= 12, `${q.id}: header of 12 characters or less`);
+    assert.ok(["choice", "score"].includes(q.type) && typeof q.multi === "boolean" && q.text.endsWith("?"));
+    if (q.type === "score") assert.deepEqual(q.options, ["0 to 3", "4 to 6", "7 to 10"]);
+  }
+  // Every Ask question has options, so it can be clicked.
+  const ask = section(agent.slice(agent.indexOf("---\n", 4) + 4), "Ask")!;
+  for (const line of ask.split("\n").filter((l) => /^\d+\. /.test(l))) assert.match(line, /Options:|A\) /, `the question has options: ${line}`);
+});
+
+test("P1 fix 3: CLAUDE.md asks with AskUserQuestion (exact text and labels, at most 4 per call) and pastes the block without it", () => {
+  for (const s of [
+    "ask its questions with the AskUserQuestion tool, from its `questions` JSON block",
+    "at most 4 questions per call",
+    "the exact `text` as the question and the exact `options` as the labels",
+    "`multi: true` sets `multiSelect: true`",
+    "Do not reword them",
+    "A `score` question offers its bands (`0 to 3`, `4 to 6`, `7 to 10`)",
+    'the user can type an exact number through "Other"',
+    "when a band answer leaves a rule open, ask for the exact number",
+    "When AskUserQuestion is not available or fails (a print-mode run), paste its",
+  ]) {
+    assert.ok(claudeMd.includes(s), `CLAUDE.md says ${JSON.stringify(s)}`);
+  }
+  // Every skill hand-off that relays questions uses AskUserQuestion first, the pasted block as the fallback.
+  const handoff = /(run|hand off to|hand any current pain to)[^\n]*the `safety` agent/i;
+  let count = 0;
+  for (const s of skills) {
+    for (const line of s.text.split("\n").filter((l) => handoff.test(l) && /Questions for the athlete/.test(l))) {
+      count++;
+      assert.match(line, /ask its questions with the AskUserQuestion tool \(CLAUDE\.md hard rule 1\); without that tool, paste its "Questions for the athlete \(copy exactly\):" block/, `${s.name}: ${line.trim()}`);
+    }
+  }
+  assert.ok(count >= 8, `every hand-off is checked (found ${count})`);
+});
+
+test("P1 fix 3: setup asks the injury regions with AskUserQuestion, multiSelect, then side and movements per region", () => {
+  const interview = steps("setup").get(5)!;
+  inOrder(interview, ["Injuries and pain now or in the past year", "AskUserQuestion, `multiSelect: true`", '"Other" takes a region not listed', "for each chosen region", "which side?", "which movements hurt?", "Without AskUserQuestion"], "setup step 5");
+});
+
+// ---------- P2 item 8 (eval G6): a denied AskUserQuestion is not a declined athlete ----------
+
+test("P2 item 8: an AskUserQuestion call with no answers means the athlete was not asked, in CLAUDE.md and every hand-off", () => {
+  const rule = "An AskUserQuestion call that returns no answers (denied, failed or not available) means the athlete was not asked; paste the copy-exactly block in the same reply";
+  const hardRule1 = claudeMd.split("\n").find((l) => l.startsWith("1. **Safety first.**")) ?? "";
+  assert.ok(hardRule1.includes(rule), "CLAUDE.md hard rule 1 states the rule");
+  let count = 0;
+  for (const s of skills) {
+    for (const line of s.text.split("\n").filter((l) => l.includes("AskUserQuestion"))) {
+      count++;
+      assert.ok(line.includes(rule), `${s.name}: ${line.trim().slice(0, 120)}`);
+    }
+  }
+  assert.ok(count >= 9, `every hand-off line is checked (found ${count})`);
+});

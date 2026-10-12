@@ -4,10 +4,13 @@
 //
 //   node engine/hold.ts init                       (writes the inactive hold only when none exists; exit 3 on an active hold)
 //   node engine/hold.ts set --reason "<short reason>" [--regions a,b] [--by safety-agent] [--urgent]
-//   node engine/hold.ts clear [--approved] [--by user]
+//   node engine/hold.ts clear [--approved] [--by user] [--released-by-limits]
 //   node engine/hold.ts clear-pending [--approved]
 //   node engine/hold.ts status
-import { isUrgentHold } from "./safety.ts";
+import { isUrgentHold, loadSafetyTerms } from "./safety.ts";
+import { loadLimits } from "./limits.ts";
+import { uncoveredRegions } from "./limits-schema.ts";
+import { loadTaxonomy, unknownRegions } from "./taxonomy.ts";
 import { existsSync, linkSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,7 +19,7 @@ import { stringify } from "yaml";
 import { parseInstant } from "./dates.ts";
 import { CoachError } from "./errors.ts";
 import { isPlainObject, readYamlFile } from "./yaml-file.ts";
-import type { Hold, SafetyPending } from "./types.ts";
+import type { Hold, SafetyPending, Taxonomy } from "./types.ts";
 
 export const HOLD_RELATIVE = "athlete/hold.yaml";
 export const PENDING_RELATIVE = "athlete/.safety-pending";
@@ -25,7 +28,12 @@ export const EXIT_NEEDS_APPROVAL = 3;
 const HEADER = "# PROTECTED. Training hold (contracts §10). Set it with `node engine/hold.ts set`.\n# Clearing it needs an interactive yes.\n";
 const KEYS = ["active", "set_at", "reason", "regions", "set_by", "urgent", "cleared_at", "cleared_by"];
 
-export function validateHold(raw: unknown, where = "hold.yaml"): Hold {
+/**
+ * Checks the shape of a hold. With a taxonomy (a new hold from `setHold`), every region id
+ * must be in it too (P2 fix 2). A hold read from the file is not refused for an unknown id:
+ * `holdScope` treats it as a hold with no regions (fail closed).
+ */
+export function validateHold(raw: unknown, where = "hold.yaml", tax?: Taxonomy): Hold {
   const errors: string[] = [];
   if (!isPlainObject(raw)) throw new CoachError("HOLD_INVALID", `${where} is invalid: must be a mapping`);
   for (const k of Object.keys(raw)) if (!KEYS.includes(k)) errors.push(`${k}: unknown key`);
@@ -46,6 +54,10 @@ export function validateHold(raw: unknown, where = "hold.yaml"): Hold {
   }
   const regions = raw.regions ?? [];
   if (!Array.isArray(regions) || regions.some((r) => typeof r !== "string")) errors.push("regions: must be a list of region ids");
+  else if (tax) {
+    const unknown = unknownRegions(regions as string[], tax);
+    if (unknown.length > 0) errors.push(`regions: unknown region id ${unknown.join(", ")}; use an id from \`node engine/cli.ts limits regions\` (sides included), or set the hold with no regions`);
+  }
   if (raw.urgent !== undefined && typeof raw.urgent !== "boolean") errors.push("urgent: must be true or false");
   if (raw.active === true && (typeof raw.set_at !== "string" || typeof raw.reason !== "string")) {
     errors.push("an active hold needs set_at and reason");
@@ -120,12 +132,36 @@ export function initHold(root: string, opts: { beforeCreate?: () => void } = {})
   return { created: true, hold: { ...INACTIVE_HOLD, regions: [] }, path };
 }
 
+/**
+ * The regions a hold holds (P2 fix 2). A region id that the merged taxonomy does not know
+ * makes the hold systemic (no regions): fail closed. `unknown` lists those ids for the report.
+ */
+export function holdScope(hold: Pick<Hold, "regions">, tax: Taxonomy): { regions: string[]; unknown: string[] } {
+  const unknown = unknownRegions(hold.regions, tax);
+  return { regions: unknown.length > 0 ? [] : [...hold.regions], unknown };
+}
+
+/**
+ * The scope for `hold status`: regional or systemic, and any unknown region id (P2 fix 2
+ * reports it: the guard treats that hold as one with no regions). Empty for no active hold.
+ */
+export function statusScope(root: string, hold: Hold | null): { scope?: "regional" | "systemic"; unknown_regions?: string[] } {
+  if (!hold?.active) return {};
+  const { regions, unknown } = holdScope(hold, loadTaxonomy({ root }));
+  return { scope: regions.length > 0 ? "regional" : "systemic", ...(unknown.length > 0 ? { unknown_regions: unknown } : {}) };
+}
+
 export type SetHoldInput = { reason: string; regions?: string[]; by?: string; now?: string; urgent?: boolean };
 
 /**
  * Sets (or extends) the hold. Always allowed: a hold makes training safer. The hold is
  * urgent (launch review finding 3) with --urgent, when the reason says "urgent", or when it extends an
  * urgent hold: extending never makes a hold less strict.
+ *
+ * The scope never narrows by a new event (P2 fix 1): when the active hold is systemic (no
+ * regions, or an unknown region id) or the new event is systemic, the result has no regions.
+ * Regions combine only when both are regional. Only an approved clear removes scope.
+ * A new region id that the merged taxonomy does not know is refused (HOLD_INVALID).
  */
 export function setHold(root: string, input: SetHoldInput): Hold {
   const reason = input.reason?.trim();
@@ -133,7 +169,17 @@ export function setHold(root: string, input: SetHoldInput): Hold {
   const now = input.now ?? new Date().toISOString();
   parseInstant(now, "now");
   const prev = readHold(root);
-  const regions = [...new Set([...(prev?.active ? prev.regions : []), ...(input.regions ?? [])])];
+  const asked = input.regions ?? [];
+  // A taxonomy that does not load cannot check the regions: the hold is set with no regions.
+  let tax: Taxonomy | null = null;
+  try {
+    tax = loadTaxonomy({ root });
+  } catch {
+    tax = null;
+  }
+  if (tax) validateHold({ active: true, set_at: now, reason, regions: asked }, "hold set", tax);
+  const systemic = !tax || asked.length === 0 || (prev?.active === true && holdScope(prev, tax).regions.length === 0);
+  const regions = systemic ? [] : [...new Set([...(prev?.active ? prev.regions : []), ...asked])];
   const hold: Hold = {
     active: true,
     set_at: prev?.active && prev.set_at ? prev.set_at : now,
@@ -184,7 +230,7 @@ export function readPending(root: string): SafetyPending | null {
   return validatePending(raw, p);
 }
 
-export type ClearHoldInput = { approved: boolean; by?: string; now?: string; env?: NodeJS.ProcessEnv };
+export type ClearHoldInput = { approved: boolean; by?: string; now?: string; env?: NodeJS.ProcessEnv; releasedByLimits?: boolean };
 
 /** The markers of an unattended run (contracts §7). Any non-empty value counts. */
 export const UNATTENDED_MARKERS = ["CLAUDE_CODE_REMOTE", "COACH_UNATTENDED"];
@@ -203,6 +249,7 @@ export function clearHold(root: string, input: ClearHoldInput): ClearHoldResult 
   const now = input.now ?? new Date().toISOString();
   parseInstant(now, "now");
   const prev = readHold(root);
+  if (input.releasedByLimits) releaseProblem(root, prev);
   let hold: Hold | null = null;
   if (prev) {
     hold = { ...prev, active: false, cleared_at: now, cleared_by: input.by ?? "user" };
@@ -212,6 +259,31 @@ export function clearHold(root: string, input: ClearHoldInput): ClearHoldResult 
   const pending_removed = existsSync(pending);
   if (pending_removed) rmSync(pending);
   return { hold, pending_removed };
+}
+
+/**
+ * The release rule (P1 fix 2): accepted limits may end a hold only when the hold is active,
+ * regional (every region id known) and not urgent, no safety check is pending (P2 fix 5: any
+ * terms; a pending check is resolved through its own flow), and athlete/limits.yaml covers
+ * every held region. Throws HOLD_NOT_COVERED otherwise; nothing changes.
+ */
+function releaseProblem(root: string, hold: Hold | null): void {
+  const refuse = (why: string) => {
+    throw new CoachError("HOLD_NOT_COVERED", `the limits cannot release this hold: ${why}`);
+  };
+  if (!hold?.active) refuse("no hold is active");
+  if (isUrgentHold(hold)) refuse("the hold is urgent; it needs its own clear");
+  if (hold!.regions.length === 0) refuse("the hold has no regions (a systemic hold); it needs its own clear");
+  const urgent = new Set(loadSafetyTerms().urgent.map((e) => e.term));
+  const pending = readPending(root);
+  const hit = pending?.terms.find((t) => urgent.has(t));
+  if (hit) refuse(`an urgent term is pending (${hit})`);
+  if (pending) refuse(`a safety check is pending (athlete/.safety-pending, terms: ${pending.terms.join(", ") || "none"}); resolve it through its own flow first (hold clear-pending after the user's yes)`);
+  const tax = loadTaxonomy({ root });
+  const unknown = holdScope(hold!, tax).unknown;
+  if (unknown.length > 0) refuse(`the hold names an unknown region id (${unknown.join(", ")}), so it holds like a hold with no regions; it needs its own clear`);
+  const open = uncoveredRegions(hold!, loadLimits(join(root, "athlete/limits.yaml"), tax), tax);
+  if (open.length > 0) refuse(`no limit in athlete/limits.yaml covers ${open.join(", ")}; write the limits first`);
 }
 
 function requireInteractiveYes(input: { approved: boolean; env?: NodeJS.ProcessEnv }, what: string, cmd: string): void {
@@ -247,6 +319,7 @@ export function holdCommand(argv: string[], defaultRoot: string): number {
       by: { type: "string" },
       urgent: { type: "boolean", default: false },
       approved: { type: "boolean", default: false },
+      "released-by-limits": { type: "boolean", default: false },
       now: { type: "string" },
       root: { type: "string" },
     },
@@ -275,7 +348,7 @@ export function holdCommand(argv: string[], defaultRoot: string): number {
     try {
       const res =
         sub === "clear"
-          ? clearHold(root, { approved: values.approved, by: values.by, now: values.now })
+          ? clearHold(root, { approved: values.approved, by: values.by, now: values.now, releasedByLimits: values["released-by-limits"] })
           : clearPending(root, { approved: values.approved });
       process.stdout.write(JSON.stringify({ ok: true, ...res }) + "\n");
       return 0;
@@ -289,12 +362,13 @@ export function holdCommand(argv: string[], defaultRoot: string): number {
     }
   }
   if (sub === "status") {
-    process.stdout.write(JSON.stringify({ ok: true, hold: readHold(root), pending: readPending(root) }) + "\n");
+    const hold = readHold(root);
+    process.stdout.write(JSON.stringify({ ok: true, hold, ...statusScope(root, hold), pending: readPending(root) }) + "\n");
     return 0;
   }
   throw new CoachError(
     "USAGE",
-    "usage: hold init | hold set --reason <text> [--regions a,b] [--by who] [--urgent] | hold clear [--approved] [--by who] | hold clear-pending [--approved] | hold status",
+    "usage: hold init | hold set --reason <text> [--regions a,b] [--by who] [--urgent] | hold clear [--approved] [--by who] [--released-by-limits] | hold clear-pending [--approved] | hold status",
   );
 }
 

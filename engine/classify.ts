@@ -3,7 +3,7 @@
 import { canonicalJson } from "./canonical.ts";
 import { addDays, weekStart } from "./dates.ts";
 import { blockWeekAt, findCheck } from "./progression.ts";
-import { classify, normalizeName } from "./taxonomy.ts";
+import { classify, classifyForSafety, normalizeName } from "./taxonomy.ts";
 import type { LoggerTool } from "./logger.ts";
 import type { Block, CalendarDate, ChangeKind, CoachConfig, DayPlan, ExerciseEntry, Rules, SnapshotDay, SnapshotSession, Taxonomy, Units } from "./types.ts";
 import { SMALL_KINDS } from "./config.ts";
@@ -133,7 +133,8 @@ export function isTrimOf(before: DayPlan, after: DayPlan, units: Units): boolean
 }
 
 export function isRecoveryExercise(ex: ExerciseEntry, tax: Taxonomy): boolean {
-  const c = classify(ex, tax);
+  // The id and the name both (P2 fix 3): a recovery name on a loaded exerciseId is not recovery.
+  const c = classifyForSafety(ex, tax);
   return c.source !== "none" && c.patterns.length > 0 && c.regions.length === 0 && c.patterns.every((p) => tax.patterns[p]?.recovery === true);
 }
 

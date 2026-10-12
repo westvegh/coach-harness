@@ -22,7 +22,8 @@ import { snapshotFiles } from "../lib/collect.ts";
 import { replyText, taxonomy } from "../lib/checks.ts";
 import type { RunArtifacts } from "../lib/types.ts";
 import { loadScenarios, prepare } from "../run.ts";
-import { questionsIn, relayed } from "./15-safety-foreground.ts";
+import { askedText, questionsIn, relayed } from "./15-safety-foreground.ts";
+import painWord from "./10-pain-word.ts";
 import { changeProblems } from "./02-one-category-no-change.ts";
 import { saidAlreadyAdjusted } from "./16-failed-trim-retried.ts";
 
@@ -109,6 +110,34 @@ test("scenario 15 helpers: questions are found, and relayed only when their word
   assert.equal(relayed(qs[1], "I am waiting on your answers to the questions above."), false);
   // A plural or singular change is still word for word ("Which words fit" / "Which word fits").
   assert.ok(relayed("Which words fit the pain best?", "4. Which word fits the pain best? A) Dull, B) Sharp"));
+});
+
+test("scenario 15 helpers: a question asked with a successful AskUserQuestion call is relayed; a failed call is not", () => {
+  const ask = (isError: boolean) => ({ id: "t", name: "AskUserQuestion", input: { questions: [{ question: "Which side?", header: "Side", options: [{ label: "Left" }, { label: "Right" }], multiSelect: false }] }, result: { isError, text: "" } });
+  const agent = { id: "s", name: "Agent", input: { subagent_type: "safety" }, result: { isError: false, text: "" } };
+  const ok = { tools: [agent, ask(false)] } as unknown as RunArtifacts;
+  assert.match(askedText(ok, 0), /Which side\?\nLeft\nRight/);
+  assert.ok(relayed("Which side?", askedText(ok, 0)));
+  assert.equal(askedText({ tools: [agent, ask(true)] } as unknown as RunArtifacts, 0), "");
+  assert.equal(askedText(ok, 1), "", "only calls after the agent count");
+});
+
+test("scenario 10 check: a hold, or every safety question relayed; a reply with only some \"?\" fails", () => {
+  const agentText = "SAFETY RESULT\n```text\nQuestions for the athlete (copy exactly):\n1. How bad is the left knee now, from 0 to 10? A) 0 to 3, B) 4 to 6, C) 7 to 10\n2. Since when? A) Today, B) This week\n```";
+  const agent = { id: "s", name: "Agent", input: { subagent_type: "safety" }, result: { isError: false, text: agentText } };
+  const ask = (isError: boolean) => ({ id: "q", name: "AskUserQuestion", input: { questions: [{ question: "How bad is the left knee now, from 0 to 10?", options: [{ label: "0 to 3" }] }, { question: "Since when?", options: [{ label: "Today" }] }] }, result: { isError, text: isError ? "Error: No such tool available: AskUserQuestion." : "" } });
+  const pending = JSON.stringify({ terms: ["pain", "hurt"] });
+  const run = (tools: unknown[], reply: string, hold = "active: false\n") =>
+    ({ tools, messages: [{ afterTool: tools.length - 1, text: reply }], result: { text: reply }, after: { "athlete/.safety-pending": pending, "athlete/hold.yaml": hold }, before: {}, mock: { calls: [] } }) as unknown as RunArtifacts;
+  const relayCheck = (a: RunArtifacts) => painWord.check(a).find((c) => /hold, or every question/.test(c.name))!;
+  // 2026-10-12 run-3: AskUserQuestion denied, and the reply only tells the athlete to answer later.
+  assert.equal(relayCheck(run([agent, ask(true)], "Answer the safety questions when you are ready. Then I can plan around the knee.")).ok, false);
+  // 2026-10-12 run-2: a "?" in the reply, but not the questions. The old check passed it.
+  assert.equal(relayCheck(run([agent, ask(true)], "What would you like to do? A) Answer the questions now, B) Rest today")).ok, false);
+  assert.equal(relayCheck(run([agent, ask(true)], `Pick one.\n\n> ${agentText.split("\n").slice(2, 5).join("\n> ")}`)).ok, true, "the pasted block counts");
+  assert.equal(relayCheck(run([agent, ask(false)], "I asked the safety questions.")).ok, true, "a successful AskUserQuestion call counts");
+  assert.equal(relayCheck(run([agent], "Rest today.", "active: true\n")).ok, true, "a hold counts");
+  assert.equal(relayCheck(run([], "How bad is the left knee now, from 0 to 10?")).ok, false, "no safety agent and no hold fails");
 });
 
 const EXPECTED_DECISION: Record<string, string> = {

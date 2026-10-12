@@ -271,6 +271,47 @@ test("session-context: hold, pending, due items; no coach.yaml; a malformed hold
   assert.match(bad.stderr, /session-context: HOLD_INVALID/);
 });
 
+test("P2 fix 7: session-context wording follows the guard's precedence: urgent, pending, systemic, regional", () => {
+  const root = instance();
+  const hold = (regions: string, extra = "") => writeFileSync(join(root, "athlete/hold.yaml"), `active: true\nset_at: '2026-10-13T08:00:00-07:00'\nreason: review fixture\nregions: ${regions}\nset_by: safety-agent\n${extra}`);
+  const pendingFile = join(root, "athlete/.safety-pending");
+  const ctx = () => {
+    const r = hook("session-context", root, { session_id: SESSION });
+    assert.equal(r.code, 0, r.stderr);
+    return r.json.hookSpecificOutput.additionalContext as string;
+  };
+  const REGIONAL = /other training follows the normal rules/;
+  // Urgent first: an urgent regional hold allows no exercise, whatever its regions.
+  hold("[left-shoulder, right-shoulder]", "urgent: true\n");
+  let c = ctx();
+  assert.match(c, /HOLD ACTIVE since .*\(regions: left-shoulder, right-shoulder\)\. Urgent: no exercise\. Only a note, a rest day or a skip is allowed/);
+  assert.doesNotMatch(c, REGIONAL);
+  // An urgent pending term wins over a plain regional hold.
+  hold("[left-shoulder]");
+  writeFileSync(pendingFile, JSON.stringify({ at: "2026-10-14T06:00:00-07:00", terms: ["chest pain"], source: "prompt" }));
+  c = ctx();
+  assert.match(c, /SAFETY FIRST: a safety check is pending .*\. Urgent: no exercise/);
+  assert.doesNotMatch(c, REGIONAL);
+  // Then pending: only rest, recovery, trims and notes until the questions are answered.
+  writeFileSync(pendingFile, JSON.stringify({ at: "2026-10-14T06:00:00-07:00", terms: ["pain", "region:left-shoulder"], source: "prompt" }));
+  c = ctx();
+  assert.match(c, /SAFETY FIRST: .*Only rest, recovery, trims and notes until the questions are answered\./);
+  assert.match(c, /HOLD ACTIVE since .*\(regions: left-shoulder\)\. Only rest, recovery, trims and notes until the questions are answered/);
+  assert.doesNotMatch(c, REGIONAL);
+  rmSync(pendingFile);
+  // Then a systemic hold, and a hold with an unknown region id (fail closed, reported).
+  hold("[]");
+  c = ctx();
+  assert.match(c, /\(no regions\)\. Only rest, recovery, trims and notes are allowed/);
+  hold("[shoulders]");
+  c = ctx();
+  assert.match(c, /\(regions: shoulders; unknown region id shoulders, so it holds like a hold with no regions\)\. Only rest, recovery, trims and notes are allowed/);
+  assert.doesNotMatch(c, REGIONAL);
+  // Last, a regional hold.
+  hold("[left-shoulder]");
+  assert.match(ctx(), /\(regions: left-shoulder\)\. Exercises that load a held region, and unclassified ones, are denied; other training follows the normal rules/);
+});
+
 test("session-context: an approved, merged proposal is reported for apply", () => {
   const root = instance();
   const id = "P-20261014-new_block-1";

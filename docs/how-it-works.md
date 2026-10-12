@@ -112,7 +112,7 @@ Your repo is a copy of the template with no link back to it. Each release ships 
 
 ## Safety
 
-A hook reads every message you send. When it finds a pain word or an urgent warning sign, it pauses training changes until you answer a few questions. A hold allows only notes, rest and recovery work. Scheduled runs can never clear a hold.
+A hook reads every message you send. When it finds a pain word or an urgent warning sign, it pauses training changes until you answer a few questions. A hold for a body region blocks only the exercises that load that region. A hold with no region allows only notes, rest and recovery work. Scheduled runs can never clear a hold.
 
 The coach is not medical advice. See [safety-and-privacy.md](safety-and-privacy.md).
 

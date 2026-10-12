@@ -237,3 +237,21 @@ export function classify(ex: ExerciseRef, tax: Taxonomy): Classification {
   }
   return build([], "none", ex.muscle, tax);
 }
+
+/**
+ * The safety classification (P2 fix 3): the exerciseId and the name are classified on their
+ * own and their patterns combine, so a new display name ("Squat" on Incline_Bench_Press)
+ * cannot hide what the exerciseId loads. "none" only when neither one resolves.
+ */
+export function classifyForSafety(ex: ExerciseRef, tax: Taxonomy): Classification {
+  const parts = [classify({ exerciseId: ex.exerciseId, name: "", muscle: ex.muscle }, tax), classify({ name: ex.name, muscle: ex.muscle }, tax)];
+  const known = parts.filter((c) => c.source !== "none");
+  if (known.length === 0) return classify(ex, tax);
+  const source = known.some((c) => c.source === "exercise") ? "exercise" : "keyword";
+  return build(known.flatMap((c) => c.patterns), source, ex.muscle, tax);
+}
+
+/** Region ids that the merged taxonomy does not know (P2 fix 2). */
+export function unknownRegions(regions: string[], tax: Taxonomy): string[] {
+  return regions.filter((r) => !tax.regions.includes(r));
+}

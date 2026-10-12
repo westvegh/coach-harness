@@ -2,6 +2,8 @@
 //
 //   node engine/cli.ts limits server-rules [--resolved <file.json|->] [--file <limits.yaml>]
 //   node engine/cli.ts limits sync-ops --server <file.json|-> [--resolved <file.json|->] [--file <limits.yaml>]
+//   node engine/cli.ts limits schema                (the limits.yaml entry shape and examples)
+//   node engine/cli.ts limits regions               (region ids, and the regions each pattern loads)
 //
 // --resolved: {"<limits.yaml exercise or allow name>": {"exerciseId": "…", "name": "…"}},
 // filled by the skill with one search_exercises call.
@@ -11,13 +13,14 @@ import { isAbsolute, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { CoachError } from "./errors.ts";
 import { compileServerRules } from "./limits-compile.ts";
+import { limitsSchema, regionsReport } from "./limits-schema.ts";
 import type { Resolved } from "./limits-compile.ts";
 import { serverLimitsFromContext, syncOps } from "./limits-sync.ts";
 import { loadLimits } from "./limits.ts";
 import { loadTaxonomy } from "./taxonomy.ts";
 import { isPlainObject } from "./yaml-file.ts";
 
-const USAGE = "usage: limits server-rules [--resolved <file|->] | limits sync-ops --server <file|-> [--resolved <file|->]";
+const USAGE = "usage: limits server-rules [--resolved <file|->] | limits sync-ops --server <file|-> [--resolved <file|->] | limits schema | limits regions";
 
 function out(value: unknown): void {
   process.stdout.write(JSON.stringify(value, null, 2) + "\n");
@@ -61,6 +64,15 @@ export function limitsCommand(cmd: string, argv: string[]): number | null {
     options: { root: { type: "string" }, file: { type: "string" }, resolved: { type: "string" }, server: { type: "string" } },
   });
   const sub = positionals[0];
+  // Read-only facts for the safety agent (P1 fix 4).
+  if (sub === "schema") {
+    out(limitsSchema());
+    return 0;
+  }
+  if (sub === "regions") {
+    out(regionsReport(loadTaxonomy({ root: resolve(values.root ?? ".") })));
+    return 0;
+  }
   if (sub !== "server-rules" && sub !== "sync-ops") throw new CoachError("USAGE", USAGE);
   if (sub === "sync-ops" && !values.server) throw new CoachError("USAGE", "limits sync-ops needs --server <file|-> (a get_training_context result)");
   if (values.server === "-" && values.resolved === "-") throw new CoachError("USAGE", "only one of --server and --resolved can read stdin");

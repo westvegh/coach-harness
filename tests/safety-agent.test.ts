@@ -60,3 +60,43 @@ test("the body states the safety rules", () => {
   }
   for (const q of ["Where is it", "0 to 10", "Since when", "sharp or dull"]) assert.ok(body.includes(q), `question ${q}`);
 });
+
+// ---------- P1 fixes 2 and 4: the release rule, and the facts the agent needs ----------
+
+test("P1 fix 4: the agent text holds the facts and forbids reading the code", () => {
+  const facts = /\n## Facts\n([\s\S]*?)\n## /.exec(body)?.[1] ?? "";
+  assert.ok(facts, "a Facts section");
+  assert.match(facts, /Do not read `engine\/`, `adapters\/` or `docs\/contracts\.md`/);
+  for (const s of ["node engine/cli.ts limits regions", "node engine/cli.ts limits schema", "node engine/cli.ts ids next --kind limit"]) assert.ok(facts.includes(s), `Facts names ${s}`);
+  // One schema example per rule kind, as YAML that the engine accepts.
+  const yamlBlock = /```yaml\n([\s\S]*?)\n```/.exec(facts)?.[1] ?? "";
+  const entries = parse(yamlBlock) as Record<string, unknown>[];
+  assert.ok(entries.some((l) => l.rule === "ban"));
+  assert.ok(entries.some((l) => l.rule === "cap" && typeof l.max_sets_per_week === "number"));
+  assert.ok(entries.some((l) => l.rule === "cap" && typeof l.max_load === "object"));
+  // The hold effects after fix 1.
+  for (const s of ["**Regional hold**", "**Systemic hold**", "**Urgent hold**", "**Pending file**"]) assert.ok(facts.includes(s), `Facts states ${s}`);
+});
+
+test("P1 fix 2: accepted limits release a regional hold in the same question, after the limits are written", () => {
+  assert.match(body, /Add these limits and end the shoulder hold\? The limits keep protecting the shoulders\./);
+  assert.match(body, /node engine\/cli\.ts hold clear --approved --by user --released-by-limits/);
+  assert.match(body, /Never run it before the limits are written/);
+  assert.match(body, /A systemic or urgent hold is never released this way/);
+  assert.match(body, /Never release a systemic or urgent hold with limits/);
+});
+
+// ---------- P2 (the P1 review) ----------
+
+test("P2 fixes 1, 2, 5 and 6: the agent text states the scope rule, the region ids, the pending-first release and the combined exercise", () => {
+  const facts = /\n## Facts\n([\s\S]*?)\n## /.exec(body)?.[1] ?? "";
+  assert.match(facts, /\*\*Scope never narrows\.\*\* A new event never makes an active hold less strict/);
+  assert.match(facts, /`hold set --regions` accepts only ids from `node engine\/cli\.ts limits regions` \(sides included\)\. An unknown id is refused/);
+  assert.match(facts, /also when it is part of a combined exercise/);
+  assert.match(facts, /when any safety check is pending \(`athlete\/\.safety-pending` exists, whatever its terms\)/);
+  assert.match(facts, /an exercise that the engine cannot classify covers nothing/);
+  const clearing = /\n## Clearing\n([\s\S]*?)\n## /.exec(body)?.[1] ?? "";
+  assert.match(clearing, /The release refuses while `athlete\/\.safety-pending` exists/);
+  assert.match(clearing, /run `hold clear-pending --approved` first, then the release/);
+  assert.match(clearing, /When the pending terms name another symptom \(for example dizziness\), go to Ask for that symptom\. Do not release until it is resolved\./);
+});

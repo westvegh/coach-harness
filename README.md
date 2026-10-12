@@ -67,7 +67,7 @@ You can write your own pack. See [docs/adding-a-method.md](docs/adding-a-method.
 ## Safety and privacy
 
 - A hook reads every message you send. A pain word or an urgent warning sign pauses training changes until you answer a few questions.
-- A hold allows only notes, rest and recovery work. An urgent warning sign allows no exercise at all: only notes, rest days and skips. Only you can clear a hold, in a live session.
+- A hold for a body region (a shoulder, say) blocks only the exercises that load that region; other training goes on. A hold with no region, or an unanswered safety check, allows only notes, rest and recovery work. An urgent warning sign allows no exercise at all: only notes, rest days and skips. Only you can clear a hold, in a live session.
 - Your injury limits are enforced in code. The model cannot edit them.
 - Your data stays in your private repository, your logger, and on your Mac. The harness has no server.
 - A git pre-push hook blocks a push of athlete files to a public repository. It cannot stop you from making the repository public later in GitHub's settings, so keep it private.

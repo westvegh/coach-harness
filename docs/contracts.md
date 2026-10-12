@@ -269,7 +269,9 @@ guard(input: { tool: LoggerTool; args: unknown; mode: "interactive" | "unattende
    - Skip and delete are denied until T2 (`logger.capabilities.versionedSkipDelete`). In interactive mode they return `ask` instead.
 4. **Rebuild.** `rebuild(tool, args, snapshot) → {days: DayPlan[] (after), week: WeekPlan}` uses the logger adapter's rebuild functions.
 5. **Safety.**
-   - A `pending` safety file or an active `hold`: every write is denied unless every after-day is a recovery or rest day. Skip is always allowed: it is safer.
+   - A `pending` safety file, or an active `hold` with no `regions` (a systemic symptom): every write is denied unless every after-day is a recovery or rest day. Skip is always allowed: it is safer.
+   - An active `hold` with `regions` (a regional hold), and no pending file: a day that is unchanged, a trim, or a recovery day that adds no work passes as above. On any other day, an exercise that loads a held region (`classify` + `regionMatches`, the same test as check-in pain) is denied, and so is an unclassified exercise (fail closed). An exercise that loads no named region (zone 2, intervals) passes only when it is a recovery exercise that adds no work to itself (`addsWork`). Every other exercise follows the normal rules (limits, hard rules, consent).
+   - An urgent event (§23 "Urgent state") comes first: no exercise at all, whatever the regions.
    - Today's check-in pain at or above `pain_threshold` in a region: exercises that load that region are denied.
 6. **Limits.**
    - **Ban:** an exercise whose patterns or name match the limit is denied. Exceptions in the `allow` list beat patterns.
@@ -345,9 +347,13 @@ nextWeekTargets(block: Block, ref: WeekLog | null, rules: Rules): Targets       
 
 - **`athlete/.safety-pending`** (written by `safety-detect`): `{at, terms: string[], source: "prompt" | "session-notes"}`. The user's text is never stored.
 - **`athlete/hold.yaml`:** `{active, set_at, reason, regions, set_by, urgent?, cleared_at?, cleared_by?}`. `urgent: true` marks an urgent warning sign (§23).
+- **Hold effects** (§7 step 5): a hold with `regions` is regional (it blocks only the exercises that load a held region, and unclassified ones); a hold without regions is global (rest, recovery, trims and notes only); an urgent hold allows no exercise; the pending file is global, because its regions are not known yet.
+- **Release on accepted limits:** a regional hold that is not urgent may be cleared once `athlete/limits.yaml` covers every held region (a limit on the same region or its parent side-less region). `hold clear --approved --by user --released-by-limits` checks this and refuses otherwise (exit 1, `HOLD_NOT_COVERED`, nothing changes). The safety agent asks for both in one question ("Add these limits and end the shoulder hold?"), and runs the clear only after the limits are written.
 - **`engine/hold.ts`:**
   - `set` is always allowed.
   - `clear` exits with a code the guard maps to `ask`: the `guard-files` hook allows `node engine/hold.ts clear` only in interactive mode, and asks first.
+  - `clear --released-by-limits` adds the release check above.
+- **Facts for the safety agent:** `node engine/cli.ts limits schema` prints the `limits.yaml` entry shape with an example of each rule kind; `node engine/cli.ts regions` prints the region ids and, for each pattern, the regions it loads.
 - **Term list:** in `engine/safety-terms.yaml`, with two lists: `urgent` (chest pain, fainting, …) and `pain` (pain, hurts, tweak, …), plus region words.
 
 ## 11. Signals

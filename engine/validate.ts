@@ -3,7 +3,7 @@
 import { matchApproval, type ApprovalRecord } from "./approvals.ts";
 import { canonicalJson } from "./canonical.ts";
 import { validateBlock } from "./block.ts";
-import { NEW_EXERCISE_WEEKS, addsWork, classifyChange, isRecoveryDay, isTrimOf, isUserDay, mergeClassified, sameExercise, toUnits, topWeight, type Classified } from "./classify.ts";
+import { NEW_EXERCISE_WEEKS, addsWork, classifyChange, isRecoveryDay, isRecoveryExercise, isTrimOf, isUserDay, mergeClassified, sameExercise, toUnits, topWeight, type Classified } from "./classify.ts";
 import { addDays, localDate, parseInstant, weekStart } from "./dates.ts";
 import { CoachError } from "./errors.ts";
 import { loadLogger, type DayChange, type LoggerAdapter, type LoggerTool } from "./logger.ts";
@@ -11,7 +11,8 @@ import { blockWeekAt, findCheck, referenceWeek, volumeIncreaseViolations, DEFAUL
 import { opIdProblem } from "./opid.ts";
 import { isUrgentHold, loadSafetyTerms } from "./safety.ts";
 import { SNAPSHOT_MAX_AGE_MIN, snapshotProblems } from "./snapshot.ts";
-import { classify, normalizeName, regionMatches } from "./taxonomy.ts";
+import { classify, classifyForSafety, normalizeName, regionMatches } from "./taxonomy.ts";
+import { holdScope } from "./hold.ts";
 import { hardSets, weeklySetsByMuscle } from "./volume.ts";
 import type {
   Block,
@@ -409,7 +410,14 @@ function run(i: GuardInput): Verdict {
       safety.push(`${urgent}: ${c.date} gets no exercise; only a note, a rest day or a skip is allowed (stop exercising; see a clinician)`);
     }
   } else if ((i.pending || i.hold?.active) && !isSkip) {
-    const why = i.pending ? "a safety check is pending (athlete/.safety-pending)" : `a training hold is active (${i.hold?.reason ?? "no reason"})`;
+    // A hold with regions is regional (P1): it denies only the exercises that load a held
+    // region, and unclassified ones (fail closed). A hold without regions (a systemic
+    // symptom) and the pending file (regions not known yet) stay global. A region id that the
+    // taxonomy does not know makes the hold global too (P2 fix 2), and the reason says so.
+    const scope = i.hold?.active ? holdScope(i.hold, i.tax) : { regions: [], unknown: [] };
+    const unknownNote = scope.unknown.length > 0 ? `; unknown region id ${scope.unknown.join(", ")}, so it holds like a hold with no regions` : "";
+    const why = i.pending ? "a safety check is pending (athlete/.safety-pending)" : `a training hold is active (${i.hold?.reason ?? "no reason"}${unknownNote})`;
+    const held = !i.pending ? scope.regions : [];
     for (const c of changes) {
       const after = afterPlans.get(c.date);
       if (!after || after.status === "skipped") continue;
@@ -418,14 +426,36 @@ function run(i: GuardInput): Verdict {
       // a trim (fewer or equal sets, load and reps) is safer: allowed under a hold.
       // A recovery day passes only when it adds no work to an exercise it keeps.
       if (sameContent || (isRecoveryDay(after, i.tax) && addsWork(before, after, units) === null) || (before && after.date === before.date && isTrimOf(before, after, units))) continue;
-      safety.push(`${why}: ${c.date} must be a recovery or rest day`);
+      if (held.length === 0) {
+        safety.push(`${why}: ${c.date} must be a recovery or rest day`);
+        continue;
+      }
+      for (const ex of after.exercises) {
+        // The exerciseId and the name both (P2 fix 3): a new name cannot hide a held region.
+        const cl = classifyForSafety(ex, i.tax);
+        if (cl.source === "none") {
+          safety.push(`${why}: ${ex.name} (${c.date}) is unclassified under a regional hold; classify it first`);
+          continue;
+        }
+        // The taxonomy names no region for conditioning (zone 2, intervals), but a bike or
+        // an interval run still loads a knee. So under a regional hold such an exercise passes
+        // only as a recovery exercise that adds no work to itself (the recovery-day test).
+        // Each pattern on its own (P2 fix 6): another pattern's regions never exempt it.
+        const regionless = cl.patterns.filter((p) => i.tax.patterns[p].loads.length === 0 && (cl.regions.length === 0 || !i.tax.patterns[p].recovery));
+        if (regionless.length > 0) {
+          const extra = isRecoveryExercise(ex, i.tax) ? addsWork(before, { ...after, exercises: [ex] }, units) : "not a recovery exercise";
+          if (extra) safety.push(`${why}: ${ex.name} (${c.date}) loads no named region in ${regionless.join(", ")}, so under a regional hold it must be a recovery exercise that adds no work (${extra})`);
+        }
+        const hit = held.find((r) => regionMatches(r, cl.regions, i.tax));
+        if (hit) safety.push(`${why}: ${ex.name} (${c.date}) loads a held region (${hit}); remove it, or the day must be a recovery or rest day`);
+      }
     }
   }
   const painful = (i.pain ?? []).filter((p) => p.score >= i.limits.pain_threshold);
   if (painful.length > 0 && !isSkip) {
     for (const day of afterDays) {
       for (const ex of day.exercises) {
-        const c = classify(ex, i.tax);
+        const c = classifyForSafety(ex, i.tax);
         if (c.source === "none") {
           safety.push(`check-in pain today and ${ex.name} (${day.date}) is unclassified; classify it first`);
           continue;

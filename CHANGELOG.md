@@ -2,6 +2,15 @@
 
 All notable changes to this project are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [semantic versioning](https://semver.org/).
 
+## [0.1.1]
+
+### Changed
+
+- **Holds on a body part are regional.** A hold with regions blocks only exercises that load a held region (and exercises the coach cannot classify). Leg days go ahead under a shoulder hold. A hold with no region (for example dizziness) still pauses all training, and an urgent hold still allows no exercise.
+- **Accepted limits can end a regional hold.** When the limits you accept cover every held region, the coach offers to end the hold in the same question.
+- **Clickable safety answers.** The safety questions use Claude Code's question picker, with the same wording. Injury regions are multi-select.
+- **A faster safety agent.** It knows the limits format and the hold rules, and no longer reads the engine code.
+
 ## [0.1.0]
 
 The first public release.

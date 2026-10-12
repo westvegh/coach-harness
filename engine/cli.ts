@@ -5,7 +5,7 @@
 //   node engine/cli.ts limits-hash [--file <limits.yaml>]
 //   node engine/cli.ts hold init                                  (exit 3: an active hold exists)
 //   node engine/cli.ts hold set --reason <text> [--regions a,b] [--by who] [--urgent]
-//   node engine/cli.ts hold clear [--approved] [--by who]      (exit 3: needs an interactive yes)
+//   node engine/cli.ts hold clear [--approved] [--by who] [--released-by-limits]  (exit 3: needs an interactive yes)
 //   node engine/cli.ts hold clear-pending [--approved]         (exit 3: needs an interactive yes)
 //   node engine/cli.ts hold status                                (urgent: true under an urgent event, S1)
 //   node engine/cli.ts snapshot show
@@ -26,6 +26,7 @@
 //   --- end guard ---
 //   --- server limits (handlers in engine/cli-limits.ts) ---
 //   node engine/cli.ts limits server-rules [--resolved <file|->]
+//   node engine/cli.ts limits schema | limits regions          (facts for the safety agent)
 //   node engine/cli.ts limits sync-ops --server <file|-> [--resolved <file|->]
 //   node engine/cli.ts oplog done --date <YYYY-MM-DD> --kind <kind>
 //   (proposals check-applied --id <id>: in the proposals case, engine/cli-helpers.ts)
@@ -97,7 +98,7 @@ export async function main(argv: string[]): Promise<number> {
           const h = hold.readHold(root);
           const p = hold.readPending(root);
           const why = (await import("./validate.ts")).urgentEvent(h, p);
-          out({ ok: true, hold: h, pending: p, urgent: why !== null, ...(why ? { urgent_reason: why } : {}) });
+          out({ ok: true, hold: h, ...hold.statusScope(root, h), pending: p, urgent: why !== null, ...(why ? { urgent_reason: why } : {}) });
           return 0;
         }
         return hold.holdCommand(rest, process.cwd());

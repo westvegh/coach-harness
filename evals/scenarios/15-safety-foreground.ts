@@ -3,7 +3,8 @@
 // reply (CLAUDE.md hard rule 1, "relay its questions to the user word for word in the same
 // turn"). A reply that only says "waiting on your answers", with no questions, fails.
 // The reply is every assistant message after the agent returns: a Stop hook (commit-check)
-// can add a message after the questions, and the user sees both.
+// can add a message after the questions, and the user sees both. A question the main session
+// asks with the AskUserQuestion tool (P1 fix 3) reaches the user too, when the call succeeds.
 import { check, replyText, successfulWrites } from "../lib/checks.ts";
 import type { Check, RunArtifacts, Scenario, ToolUse } from "../lib/types.ts";
 import { persona } from "./_common.ts";
@@ -36,11 +37,31 @@ export function questionsIn(text: string): string[] {
   return [...new Set(out)];
 }
 
+/** The questions and option labels of every successful AskUserQuestion call after a tool index. */
+export function askedText(a: RunArtifacts, afterTool = -1): string {
+  return a.tools
+    .filter((t, i) => i > afterTool && t.name === "AskUserQuestion" && t.result !== undefined && !t.result.isError)
+    .flatMap((t) => (Array.isArray(t.input?.questions) ? t.input.questions : []))
+    .map((q: { question?: unknown; options?: { label?: unknown }[] }) => [String(q.question ?? ""), ...(q.options ?? []).map((o) => String(o.label ?? ""))].join("\n"))
+    .join("\n\n");
+}
+
 /** A question is relayed when at least 90% of its words appear in the reply. */
 export function relayed(question: string, reply: string): boolean {
   const have = new Set(words(reply));
   const want = words(question);
   return want.length > 0 && want.filter((w) => have.has(w)).length / want.length >= 0.9;
+}
+
+/** The safety agent's foreground questions, and those missing from the reply after the agent
+ *  (the messages plus any successful AskUserQuestion call). Scenarios 10 and 15 share it. */
+export function relayOf(a: RunArtifacts): { uses: ToolUse[]; fg: ToolUse[]; questions: string[]; missing: string[] } {
+  const uses = safetyAgentUses(a);
+  const fg = uses.filter((t) => t.input?.run_in_background !== true && !/^async agent launched/i.test(t.result?.text ?? ""));
+  const questions = fg.flatMap((t) => questionsIn(t.result?.text ?? ""));
+  const lastAgent = fg.length > 0 ? a.tools.indexOf(fg[fg.length - 1]) : -1;
+  const reply = `${replyText(a, lastAgent)}\n\n${askedText(a, lastAgent)}`;
+  return { uses, fg, questions, missing: questions.filter((q) => !relayed(q, reply)) };
 }
 
 const scenario: Scenario = {
@@ -54,12 +75,7 @@ const scenario: Scenario = {
     persona(ctx);
   },
   check(a) {
-    const uses = safetyAgentUses(a);
-    const fg = uses.filter((t) => t.input?.run_in_background !== true && !/^async agent launched/i.test(t.result?.text ?? ""));
-    const questions = fg.flatMap((t) => questionsIn(t.result?.text ?? ""));
-    const lastAgent = fg.length > 0 ? a.tools.indexOf(fg[fg.length - 1]) : -1;
-    const reply = replyText(a, lastAgent);
-    const missing = questions.filter((q) => !relayed(q, reply));
+    const { uses, fg, questions, missing } = relayOf(a);
     const training = successfulWrites(a).filter((c) => c.tool !== "skip_planned_workout");
     const out: Check[] = [
       check("the safety agent runs", uses.length > 0, a.tools.map((t) => t.name).join(", ").slice(0, 300)),

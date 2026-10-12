@@ -8,8 +8,10 @@ import { loadApprovals } from "../../engine/approvals.ts";
 import { loadConfig } from "../../engine/config.ts";
 import { localDate, weekdayOf, weekStart } from "../../engine/dates.ts";
 import { readBlock, readPending } from "../../engine/guard-context.ts";
-import { readHold } from "../../engine/hold.ts";
+import { holdScope, readHold } from "../../engine/hold.ts";
 import { scanRepo } from "../../engine/privacy.ts";
+import { isUrgentHold, loadSafetyTerms } from "../../engine/safety.ts";
+import { loadTaxonomy } from "../../engine/taxonomy.ts";
 import { blockWeekAt } from "../../engine/progression.ts";
 import { loadSnapshot, snapshotAgeMinutes } from "../../engine/snapshot.ts";
 import { context, hookNow, projectRoot, readInput, runHook } from "./lib.ts";
@@ -27,11 +29,32 @@ runHook("session-context", () => {
   const today = localDate(now, cfg.athlete.timezone);
   const lines: string[] = [`coach-harness: today is ${today} (${weekdayOf(today)}) in ${cfg.athlete.timezone}.`];
 
-  // Safety first.
+  // Safety first. One effect, in the guard's precedence (P2 fix 7): urgent, then pending,
+  // then a systemic hold, then a regional hold.
   const hold = readHold(root);
   const pending = readPending(root);
-  if (pending) lines.push(`SAFETY FIRST: a safety check is pending since ${pending.at} (terms: ${pending.terms.join(", ") || "none"}). Only recovery or rest writes are allowed. Ask about the symptom before anything else.`);
-  if (hold?.active) lines.push(`HOLD ACTIVE since ${hold.set_at}: ${hold.reason}${hold.regions.length ? ` (regions: ${hold.regions.join(", ")})` : ""}. Only recovery or rest writes are allowed; clearing needs the user's interactive yes.`);
+  if (pending || hold?.active) {
+    const terms = loadSafetyTerms();
+    const urgentTerms = new Set(terms.urgent.map((e) => e.term));
+    const urgent = pending?.terms.some((t) => urgentTerms.has(t)) || (hold?.active === true && isUrgentHold(hold, terms));
+    const scope = hold?.active ? holdScope(hold, loadTaxonomy({ root })) : { regions: [], unknown: [] };
+    const effect = urgent
+      ? "Urgent: no exercise. Only a note, a rest day or a skip is allowed"
+      : pending
+        ? "Only rest, recovery, trims and notes until the questions are answered"
+        : scope.regions.length === 0
+          ? "Only rest, recovery, trims and notes are allowed"
+          : "Exercises that load a held region, and unclassified ones, are denied; other training follows the normal rules";
+    if (pending) lines.push(`SAFETY FIRST: a safety check is pending since ${pending.at} (terms: ${pending.terms.join(", ") || "none"}). ${effect}. Ask about the symptom before anything else.`);
+    if (hold?.active) {
+      const regions = scope.unknown.length
+        ? `regions: ${hold.regions.join(", ")}; unknown region id ${scope.unknown.join(", ")}, so it holds like a hold with no regions`
+        : hold.regions.length
+          ? `regions: ${hold.regions.join(", ")}`
+          : "no regions";
+      lines.push(`HOLD ACTIVE since ${hold.set_at}: ${hold.reason} (${regions}). ${effect}; clearing needs the user's interactive yes.`);
+    }
+  }
 
   // What is due.
   const due: string[] = [];
