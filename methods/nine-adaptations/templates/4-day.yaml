@@ -11,9 +11,17 @@ pack: nine-adaptations
 version: 1
 name: four-day
 days: 4
+# Plain lines for the athlete: why the week looks as it does (the setup and block
+# skills show them before the week table). At most 25 words each; no rule ids.
+why:
+  - "Four days split the qualities: whole-body lifting, long easy endurance, high-rep endurance work, and intervals near your maximum heart rate."
+  - "Your goal gets the most sets. The other qualities get a smaller dose, so you keep them while the goal improves."
+  - "Each build week adds about 5% more sets, and never more than 10% over the week before."
+  - "Every sixth week is lighter: about 70% of the sets and loads, so your body can recover and adapt."
 week:
   - day: 1
     focus: "Whole-body lifting, 5 to 10 reps"
+    why: "Whole-body lifting at 5 to 10 reps builds strength and size in one session."
     slots:
       - { pattern: plyometric, adaptation: power, sets: 3, reps: 3, rest_s: 180, note: "jumps or throws, every rep as fast as possible" }
       - { pattern: squat, adaptation: strength, sets: 3, reps: 5, rest_s: 180 }
@@ -24,11 +32,13 @@ week:
       - { pattern: horizontal_pull, adaptation: hypertrophy, sets: 3, reps: [8, 10], rest_s: 120 }
   - day: 2
     focus: "Long-duration endurance"
+    why: "A long, easy session at a pace where you can breathe through your nose builds your aerobic base."
     slots:
       - { pattern: zone2_cardio, adaptation: long_duration, sets: 1, duration: [2400, 3600], rest_s: 0, note: "nasal-breathing pace; swim, ride, run or hike" }
       - { pattern: mobility, adaptation: recovery, sets: 1, duration: 600, rest_s: 0 }
   - day: 3
     focus: "Muscular endurance, 11 to 30 reps"
+    why: "Many lighter reps build muscular endurance with less stress on your joints."
     slots:
       - { pattern: lunge, adaptation: muscular_endurance, sets: 3, reps: [12, 20], rest_s: 60 }
       - { pattern: horizontal_push, adaptation: muscular_endurance, sets: 5, reps: [15, 30], rest_s: 60, note: "push-ups or light presses" }
@@ -40,6 +50,7 @@ week:
       - { pattern: rear_delt, adaptation: muscular_endurance, sets: 2, reps: [15, 25], rest_s: 45 }
   - day: 4
     focus: "Moderate intervals, then a maximal-heart-rate finish"
+    why: "Moderate intervals, then a few minutes near your maximum heart rate, raise your aerobic ceiling."
     slots:
       - { pattern: intervals, adaptation: anaerobic_capacity, sets: 12, duration: 60, rest_s: 60, note: "1 min at about 85-90% max heart rate, 1 min easy" }
       - { pattern: intervals, adaptation: max_aerobic, sets: 1, duration: [300, 360], rest_s: 0, note: "5-6 min near maximal heart rate" }

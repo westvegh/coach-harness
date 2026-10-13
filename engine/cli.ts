@@ -3,7 +3,7 @@
 //   node engine/cli.ts readiness --input <file.json>
 //   node engine/cli.ts volume --input <file.json>
 //   node engine/cli.ts limits-hash [--file <limits.yaml>]
-//   node engine/cli.ts snapshot show
+//   node engine/cli.ts snapshot show | snapshot reset
 //   node engine/cli.ts safety detect --text <text>
 //   node engine/cli.ts safety scan-notes --since <YYYY-MM-DD> [--input <history.json>] [--dry-run] [--now <instant>]
 //   node engine/cli.ts classify --exercise "<name>" | --input <file.json>
@@ -30,13 +30,14 @@
 //   --- engine helpers (handlers in engine/cli-helpers2.ts; contracts §22) ---
 //   node engine/cli.ts readiness --date <date> [--now <instant>]
 //   node engine/cli.ts weeks --from <date> --to <date>
-//   node engine/cli.ts block draft [--template <id>] --weeks <n> [--input <file.json>]
+//   node engine/cli.ts block draft [--template <id>] --weeks <n> [--input <file.json>] [--out <dir>]
+//   node engine/cli.ts block write --input <dir>/block.json
 //   node engine/cli.ts ids next --kind block|limit|proposal [--change <kind>]
 //   node engine/cli.ts signals refresh
 //   node engine/cli.ts lint-methods [--pack <name>] [--volume]
 //   node engine/cli.ts <command> --help        (one usage line for each E3 command)
 //   node engine/cli.ts --help                  (the usage and every E3 usage line; also `help`)
-//   node engine/cli.ts help <command>          (the same as <command> --help)
+//   node engine/cli.ts help <command> [<subcommand>]   (the usage and input shape; every command has one)
 //   --- end engine helpers ---
 //
 //   --- files logger (handlers in engine/cli-plans.ts; contracts §12a) ---
@@ -60,7 +61,7 @@ import { CoachError } from "./errors.ts";
 // commands never load the Oura adapter or the lint. The dispatchers below are
 // light themselves; their commands import lazily too.
 // The help text and the command lists of the E1 and E3 dispatchers (engine/cli-help.ts).
-import { HELP, HELPER_COMMANDS, helpCommand, isHelpers2Command } from "./cli-help.ts";
+import { HELP, HELPER_COMMANDS, helpCommand, helpFor, isHelpers2Command } from "./cli-help.ts";
 // The bodies of readiness --input, volume, limits-hash, snapshot, safety and classify (engine/cli-core.ts).
 const core = () => import("./cli-core.ts");
 
@@ -78,12 +79,12 @@ export async function main(argv: string[]): Promise<number> {
       return 0;
     }
     // `help <command>`: the same as `<command> --help` (V3b: the coach tried it; one allow rule covers it).
+    // V4: every command and subcommand has help (`help safety scan-notes`).
     if (cmd === "help") {
       const words = rest.join(" ").trim().split(/\s+/);
-      const key = HELP[words.join(" ")] ? words.join(" ") : words[0];
-      const usage = HELP[key];
-      if (!usage) throw new CoachError("USAGE", `no help for ${JSON.stringify(rest.join(" "))}; run: node engine/cli.ts help`);
-      out({ command: key, usage });
+      const h = helpFor(words);
+      if (!h) throw new CoachError("USAGE", `no help for ${JSON.stringify(rest.join(" "))}; run: node engine/cli.ts help`);
+      out(h);
       return 0;
     }
     // ---- Engine helpers the skills need (contracts §22), in engine/cli-helpers2.ts ----

@@ -94,7 +94,8 @@ export type Slot = {
   note?: string;
 };
 
-export type TemplateDay = { day: number; focus: string; slots: Slot[] };
+/** `why`: one plain line on why the day looks as it does (optional; shown to the athlete). */
+export type TemplateDay = { day: number; focus: string; slots: Slot[]; why?: string };
 
 export type Template = {
   pack: string;
@@ -104,6 +105,9 @@ export type Template = {
   week: TemplateDay[];
   // Set multiplier per adaptation, per emphasis. Missing adaptations mean 1.
   emphasis: Record<Emphasis, Partial<Record<Adaptation, number>>>;
+  // Optional plain lines for the athlete on why the week looks as it does (the setup and
+  // block skills show them before the week table). The lint checks their length.
+  why?: string[];
 };
 
 export type MethodPack = {
@@ -264,8 +268,10 @@ export function parseTemplate(raw: unknown, file = "template"): Template {
       if (!isNum(s.rest_s) || s.rest_s < 0) fail(file, `${at}: rest_s must be a number of seconds`);
       return s as unknown as Slot;
     });
-    return { day: d.day as number, focus: d.focus, slots };
+    if (d.why !== undefined && (typeof d.why !== "string" || d.why.trim() === "")) fail(file, `${where}: why must be one line of text`);
+    return { day: d.day as number, focus: d.focus, slots, ...(typeof d.why === "string" ? { why: d.why.trim() } : {}) };
   });
+  if (raw.why !== undefined && (!Array.isArray(raw.why) || raw.why.some((l) => typeof l !== "string" || l.trim() === ""))) fail(file, "why must be a list of lines");
   if (!isObj(raw.emphasis)) fail(file, "emphasis must be a mapping");
   for (const e of EMPHASES) {
     const row = raw.emphasis[e];
@@ -285,6 +291,7 @@ export function parseTemplate(raw: unknown, file = "template"): Template {
     name: raw.name,
     week,
     emphasis: raw.emphasis as Template["emphasis"],
+    ...(Array.isArray(raw.why) ? { why: (raw.why as string[]).map((l) => l.trim()) } : {}),
   };
 }
 

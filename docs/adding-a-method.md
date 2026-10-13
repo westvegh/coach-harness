@@ -18,7 +18,7 @@ The file format is in [methods/README.md](../methods/README.md) and in [contract
    - Mark a rule `hard` only when it has a `check` that the engine runs. The guard denies writes that break a hard rule.
    - Use only the check types in [methods/README.md](../methods/README.md). A new check type needs engine support first.
 4. **Write the prose** in `principles/*.md`. Cite each rule inline, for example `[NA-PROG-001]`. Every rule must be cited, and every cited ID must exist.
-5. **Write the templates** `templates/3-day.yaml`, `4-day.yaml` and `5-day.yaml`. Each slot names a movement pattern from `engine/movements.yaml`, an adaptation, sets, reps or duration, and rest. List all five emphases.
+5. **Write the templates** `templates/3-day.yaml`, `4-day.yaml` and `5-day.yaml`. Each slot names a movement pattern from `engine/movements.yaml`, an adaptation, sets, reps or duration, and rest. List all five emphases. Optional: a top-level `why:` list of 3 to 5 plain lines for the athlete (the split, why work outside the goal stays, how the block builds, the lighter week), and a one-line `why` on each day. The setup and block skills show them before the week table as "Why this week". Keep each line at 25 words or fewer, with no rule ids and no file paths; the lint checks both. A pack may leave them out.
 6. **Write `METHOD.md`** (what the method is, who it is for, credit and a disclaimer) and `assessments.md` (field tests).
 7. **Run the lint:**
 

@@ -4,7 +4,8 @@
 //
 //   readiness --date <YYYY-MM-DD> [--now <instant>]
 //   weeks --from <YYYY-MM-DD> --to <YYYY-MM-DD>
-//   block draft [--template <id>] --weeks <n> [--input <file.json>] [--now <instant>]
+//   block draft [--template <id>] --weeks <n> [--input <file.json>] [--out <dir>] [--now <instant>]
+//   block write --input <dir>/block.json
 //   ids next --kind block|limit [--now <instant>]
 //   signals refresh
 //   lint-methods [--pack <name>] [--volume]                         (exit 1: the pack has errors)
@@ -44,6 +45,7 @@ function args(argv: string[]) {
       kind: { type: "string" },
       pack: { type: "string" },
       volume: { type: "boolean" },
+      out: { type: "string" },
     },
   });
 }
@@ -96,39 +98,100 @@ async function cmdWeeks(a: Args): Promise<number> {
   return 0;
 }
 
+const BLOCK_USAGE = "usage: block draft [--template <id>] --weeks <n> [--input <file.json>] [--out <dir>] | block write --input <dir>/block.json";
+
+/**
+ * The draft's settings. With coach.yaml: method, units, timezone and logger from it; days from
+ * --template, else coach.yaml; emphasis from the input, else coach.yaml. Before coach.yaml
+ * exists (setup), the input gives all six. An error only names a value with no source.
+ */
+export function draftSettings(cfg: CoachConfig | null, input: BlockDraftInput, template: string | undefined) {
+  const missing: string[] = [];
+  const method = cfg?.method ?? input.method;
+  const units = cfg?.athlete.units ?? input.units;
+  const timezone = cfg?.athlete.timezone ?? input.timezone;
+  const logger = cfg ? cfg.logger : input.logger;
+  const fromTemplate = template !== undefined && /^\d+-day$/.test(template) ? Number(template.split("-")[0]) : undefined;
+  const days = fromTemplate ?? cfg?.template.days ?? input.days;
+  const emphasis = input.emphasis ?? cfg?.template.emphasis;
+  if (typeof method !== "string" || !/^[a-z0-9][a-z0-9._-]*$/.test(method)) missing.push("method (a folder under methods/)");
+  if (units !== "lbs" && units !== "kg") missing.push("units (lbs or kg)");
+  if (typeof timezone !== "string" || timezone === "") missing.push("timezone (for example America/Los_Angeles)");
+  else {
+    try {
+      new Intl.DateTimeFormat("en-US", { timeZone: timezone });
+    } catch {
+      missing.push(`timezone (${timezone} is not a timezone)`);
+    }
+  }
+  if (!["tally", "files", "none", "other"].includes(String(logger))) missing.push("logger (tally, files or none)");
+  if (template === undefined && ![3, 4, 5].includes(Number(days))) missing.push("days (3, 4 or 5) or --template");
+  if (typeof emphasis !== "string") missing.push("emphasis (all-around, strength, hypertrophy, endurance or general-health)");
+  if (missing.length > 0) {
+    throw new CoachError(cfg ? "INPUT_ERROR" : "MISSING_FILE", `block draft needs ${missing.join(", ")}${cfg ? "" : ": coach.yaml does not exist yet, so the --input file must give them (node engine/cli.ts help block draft)"}`);
+  }
+  return { method: method as string, units: units as "lbs" | "kg", timezone: timezone as string, logger: logger as "tally" | "files" | "none" | "other", days: Number(days), emphasis: emphasis as CoachConfig["template"]["emphasis"] };
+}
+
 async function cmdBlockDraft(a: Args): Promise<number> {
-  if (a.positionals[0] !== "draft") throw new CoachError("USAGE", "usage: block draft [--template <id>] --weeks <n> [--input <file.json>]");
+  if (a.positionals[0] === "write") return cmdBlockWrite(a);
+  if (a.positionals[0] !== "draft") throw new CoachError("USAGE", BLOCK_USAGE);
   const root = rootOf(a);
-  const cfg = await config(root);
-  const [{ draftBlock, templateIdFor, todayIn }, { loadTemplates }, { loadTaxonomy }] = await Promise.all([import("./block-draft.ts"), import("./methods.ts"), import("./taxonomy.ts")]);
-  const packDir = join(root, "methods", cfg.method);
-  const templates = loadTemplates(packDir);
-  const id = a.values.template ?? templateIdFor(cfg.template.days);
-  const template = templates[id];
-  if (!template) throw new CoachError("USAGE", `methods/${cfg.method} has no template ${id} (have: ${Object.keys(templates).join(", ")})`);
-  const weeks = Number(a.values.weeks);
-  if (!a.values.weeks || !Number.isInteger(weeks)) throw new CoachError("USAGE", "block draft needs --weeks <n>");
+  const cfg = await maybeConfig(root);
   const input = a.values.input ? readJsonFile(a.values.input) : {};
   if (!isPlainObject(input)) throw new CoachError("INPUT_ERROR", "block draft --input must be a JSON object");
-  // Logged weeks from the snapshot: week 1 is capped against the reference week.
-  const [{ coachSnapshot }, { snapshotWeeks }] = await Promise.all([import("./coach-snapshot.ts"), import("./weeks.ts")]);
-  const snap = coachSnapshot(root, { now: await nowOf(a), cfg });
+  const set = draftSettings(cfg, input as BlockDraftInput, a.values.template);
+  const [{ draftBlock, effectiveStep, templateIdFor, todayIn }, { loadTemplates }, { loadTaxonomy }] = await Promise.all([import("./block-draft.ts"), import("./methods.ts"), import("./taxonomy.ts")]);
+  const packDir = join(root, "methods", set.method);
+  if (!existsSync(join(packDir, "rules.yaml"))) throw new CoachError("MISSING_FILE", `methods/${set.method}/rules.yaml is missing`);
+  const templates = loadTemplates(packDir);
+  const id = a.values.template ?? templateIdFor(set.days);
+  const template = templates[id];
+  if (!template) throw new CoachError("USAGE", `methods/${set.method} has no template ${id} (have: ${Object.keys(templates).join(", ")})`);
+  const weeks = Number(a.values.weeks);
+  if (!a.values.weeks || !Number.isInteger(weeks)) throw new CoachError("USAGE", "block draft needs --weeks <n>");
+  const now = await nowOf(a);
+  // Logged weeks: week 1 is capped against the reference week. Before coach.yaml exists, the
+  // input's logger says where they are: tally (the cache), files (plans/), none (no history; a
+  // leftover Tally cache is ignored).
+  const [{ coachSnapshot }, { snapshotWeeks }, { loadSnapshot }, { filesSnapshot }] = await Promise.all([import("./coach-snapshot.ts"), import("./weeks.ts"), import("./snapshot.ts"), import("./plans-files.ts")]);
+  const snap = cfg
+    ? coachSnapshot(root, { now, cfg })
+    : set.logger === "tally"
+      ? loadSnapshot(root)
+      : set.logger === "files"
+        ? filesSnapshot(root, { units: set.units, timezone: set.timezone, now })
+        : null;
+  const rules = (await import("./methods.ts")).loadRules(packDir) as unknown as Rules;
   const draft = draftBlock(
     template,
     weeks,
     {
       tax: loadTaxonomy({ root }),
-      rules: await packRules(root, cfg),
-      units: cfg.athlete.units,
-      method: cfg.method,
-      today: todayIn(cfg.athlete.timezone, a.values.now),
-      emphasis: cfg.template.emphasis,
+      rules,
+      units: set.units,
+      method: set.method,
+      today: todayIn(set.timezone, a.values.now),
+      emphasis: set.emphasis,
       templateId: id,
-      history: snap ? snapshotWeeks(snap, cfg.athlete.units) : undefined,
+      history: snap ? snapshotWeeks(snap, set.units) : undefined,
     },
     input as BlockDraftInput,
   );
-  out({ template: id, ...draft });
+  if (!a.values.out) {
+    out({ template: id, ...draft });
+    return 0;
+  }
+  const { draftWhy, writeDraftFiles } = await import("./block-files.ts");
+  const weekdays = draft.block.days.map((d) => d.day);
+  out(writeDraftFiles(a.values.out, { template: id, ...draft }, draftWhy(template, weekdays), effectiveStep(rules, input as BlockDraftInput)));
+  return 0;
+}
+
+async function cmdBlockWrite(a: Args): Promise<number> {
+  if (!a.values.input) throw new CoachError("USAGE", "block write needs --input <dir>/block.json (the block from block draft --out)");
+  const { writeBlock } = await import("./block-files.ts");
+  out(writeBlock(rootOf(a), readJsonFile(a.values.input)));
   return 0;
 }
 

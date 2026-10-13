@@ -48,7 +48,15 @@ On the basic path, setup asks five screens of questions. You click your answers 
 4. **Plans and data:** where your plans go, and the services that get your data.
 5. **Week 1:** the coach shows the week as a table. You click "Write it".
 
-When a Tally server is connected, the coach uses it without a question. Four optional paths add a screen or a typed answer, only when you choose them: "Show details" on the data question, "I'll type a short summary" for your training history, a body region that limits your training now, and "Change something" on week 1. In our evals, scripted answers on the basic path reached week 1 in 5 screens, with Tally and with plans in files.
+When a Tally server is connected, the coach uses it without a question. If you say you do not use Tally, the coach leaves it out, even when it is connected.
+
+Without Tally history, the coach asks about your recent training. It offers a workout export it found in Downloads or on your Desktop (from Strong, Hevy or Fitbod, for example), steps to export one from your app, two quick questions (how long you have trained and how many days a week), or "Skip". The coach reads only the file you choose.
+
+Before the week 1 table, the coach says in a few lines why the week looks as it does: the split, how the next weeks build, and what your limits change.
+
+Optional paths add a screen only when you choose them: "Show details" on the data question, an export from another app, the two quick questions, a body region that limits your training now, and "Change something" on week 1. In our evals, scripted answers on the basic path reached week 1 in 5 screens, with Tally and with plans in files.
+
+When you state a lasting preference, such as a rep range or an exercise you dislike, the coach writes it in your athlete brief and follows it in later plans.
 
 Setup also checks that your repository is private before the first push, and installs a git hook that refuses a push of your athlete files to a public repository.
 

@@ -1,6 +1,6 @@
 {
   "name": "coach-harness",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "description": "A strength and conditioning coach for Claude Code: plans from a cited method, follows your limits, stops on urgent warning signs, and records every change in git.",
   "license": "MIT",

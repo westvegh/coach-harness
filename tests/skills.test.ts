@@ -308,7 +308,8 @@ test("week classifies each change in code and routes big changes to step 11", ()
 });
 
 test("the plan follows the limits: week checks the drafted week with limits check; today checks today", () => {
-  assert.match(steps("week").get(8)!, /node engine\/cli\.ts limits check --input \.tmp\/coach\/week\.json/);
+  // V4: the week file from block draft --out.
+  assert.match(steps("week").get(8)!, /node engine\/cli\.ts limits check --input <the week file>/);
   assert.match(steps("today").get(2)!, /node engine\/cli\.ts limits check --input \.tmp\/coach\/today\.json/);
   assert.match(steps("audit").get(3)!, /\*\*Limits review\*\* \(advisory\)[^\n]*node engine\/cli\.ts limits check/);
   assert.match(claudeMd, /4\. \*\*Follow the limits\.\*\*/);
@@ -569,7 +570,7 @@ function screenTable(): ScreenRow[] {
 }
 
 /** A scripted path: the facts and the athlete's answers that decide which screens appear. */
-type Path = { tally: boolean; tallySessions: number; painNotes: boolean; region: boolean; details: boolean; change: boolean; dayExists: boolean; history: "tally" | "csv" | "skip" | "summary" };
+type Path = { tally: boolean; tallySessions: number; painNotes: boolean; region: boolean; details: boolean; change: boolean; dayExists: boolean; history: "tally" | "csv" | "skip" | "export" | "questions"; newExports?: number };
 
 /** Which screens a path meets, from each row's "Asked when" text; an unknown condition fails the test. */
 function screensFor(p: Path): string[] {
@@ -588,6 +589,13 @@ function screensFor(p: Path): string[] {
           return p.change;
         case "a Tally day already exists on a week-1 date":
           return p.tally && p.dayExists;
+        // V4: the optional history paths.
+        case 'the athlete chooses "Export from another app"':
+          return p.history === "export";
+        case "the rescan finds two or more new exports":
+          return p.history === "export" && (p.newExports ?? 1) !== 1;
+        case 'the athlete chooses "Answer two quick questions"':
+          return p.history === "questions";
         default:
           throw new Error(`setup screen ${r.name}: unknown condition "${r.when}"`);
       }
@@ -612,7 +620,11 @@ test("V2b fix 5: setup reaches week 1 in at most 5 AskUserQuestion calls on the 
   // The optional paths the athlete chooses add one screen each, and the skill says so.
   assert.equal(screensFor({ ...BASE_PATH, details: true }).length, 6);
   assert.equal(screensFor({ ...BASE_PATH, change: true }).length, 6);
-  assert.match(skill("setup").body, /"Show details", "I'll type a short summary", "Change something" and a limiting region are optional paths the athlete chooses/);
+  assert.match(skill("setup").body, /"Show details", "Export from another app", "Answer two quick questions", "Change something" and a limiting region are optional paths the athlete chooses/);
+  // V4: the export path adds two screens (three when the rescan finds several files); the quick questions add one.
+  assert.equal(screensFor({ ...BASE_PATH, history: "export" }).length, 7);
+  assert.equal(screensFor({ ...BASE_PATH, history: "export", newExports: 2 }).length, 8);
+  assert.equal(screensFor({ ...BASE_PATH, history: "questions" }).length, 6);
   // Every screen in the table is tagged in the steps, every tag is in the table, and every question with options sits in a tagged step.
   const st = section(skill("setup").body, "Steps")!;
   const tags = [...st.matchAll(/screen: ([A-Z][A-Za-z0-9 ]+?)\)/g)].map((m) => m[1]);
@@ -680,7 +692,7 @@ test("V2 setup: no step numbers, template syntax, rule IDs or code paths in quot
 test("V2b fix 6: plans and data: Tally without a logger question; else the connected tools by name (Files first, 4 options at most); allow-server for the chosen tool; the Tally account question bounded", () => {
   const p = steps("setup").get(5)!;
   assert.match(steps("setup").get(1)!, /\*\*Find other tools\.\*\*[^\n]*connected MCP servers that are not Tally[^\n]*Keep at most two, by their plain names\./);
-  assert.match(p, /\*\*Where plans go\*\*, only when no Tally server answered: "Where should your plans go\?" with "Files in this repo \(Recommended\)" first[^\n]*then "Tally"[^\n]*then each connected tool found in step 1 by its plain name, for example "Google Sheets"[^\n]*Four options at most\./);
+  assert.match(p, /\*\*Where plans go\*\*, only when no Tally server answered and the athlete did not say they do not use Tally: "Where should your plans go\?" with "Files in this repo \(Recommended\)" first[^\n]*then "Tally"[^\n]*then each connected tool found in step 1 by its plain name, for example "Google Sheets"[^\n]*Four options at most\./);
   assert.doesNotMatch(p, /"A tool you already use"/);
   assert.match(p, /A connected tool: run `node engine\/cli\.ts allow-server --server <server>` for it, then `logger: other`/);
   assert.match(p, /"Which Tally account holds your training\?" with at most four options, one per server, newest last session first/);
@@ -688,10 +700,11 @@ test("V2b fix 6: plans and data: Tally without a logger question; else the conne
   assert.match(p, /"Yes", "Show details"/);
   assert.match(p, /Tally, but no server answered: `logger: files` for now\./);
   assert.match(p, /say "I can't reach that tool from here, so your plans go in a spreadsheet file in this repo for now\." and use `logger: files`\./);
-  // The history question: the found CSV files by name, a summary, skip.
-  assert.match(p, /"Do you have a record of your recent training\?" with one option per file from `history-files` \(at most two[^\n]*then "I'll type a short summary", then "Skip"\. "Other" takes a path/);
+  // The history question (V4): the newest export by name, the export path, the quick questions, skip.
+  assert.match(p, /"Do you have a record of your recent training\?" with the newest export from `history-files` when there is one \(named by the file and its folder[^\n]*then "Export from another app", "Answer two quick questions", "Skip"\. "Other" takes a path/);
+  assert.doesNotMatch(skill("setup").text, /I'll type a short summary/);
   assert.match(steps("setup").get(1)!, /node engine\/cli\.ts history-files/);
-  assert.match(p, /A file: read it with the Read tool[^\n]*Do not keep a copy of the file\./);
+  assert.match(p, /\*\*Read an export:\*\* read only the file the athlete chose, with the Read tool[^\n]*only its last 8 weeks[^\n]*Do not keep a copy of the file/);
   assert.match(steps("setup").get(1)!, /node engine\/cli\.ts allow-server --server <server>` first \(then its tools need no permission prompt\), then call its `get_training_context`/);
 });
 
@@ -700,7 +713,8 @@ test("V2 setup week 1: one method line; the week as a table; write it", () => {
   assert.match(w, /"The coach plans from one method: fitness as nine qualities \(strength, size, endurance and others\), from Andy Galpin's public teaching\. You chose strength, so that gets the most sets\."/);
   assert.match(w, /\*\*The table\.\*\* Show week 1 in one table/);
   assert.match(w, /"Week 1 is ready\. Write it\?" with "Write it to Tally" \(with Tally\), "Write it to a spreadsheet file" \(with files\)[^\n]*"Change something"/);
-  assert.match(w, /\*\*Files:\*\*[^\n]*node engine\/cli\.ts plans write --input \.tmp\/coach\/week1\.json[^\n]*"Week 1 is in plans\/2026-W43\.csv in this folder\./);
+  // V4: the week file from block draft --out goes to plans write as it is.
+  assert.match(w, /\*\*Files:\*\*[^\n]*node engine\/cli\.ts plans write --input \.tmp\/coach\/b1\/week-1\.json[^\n]*"Week 1 is in plans\/2026-W43\.csv in this folder\./);
   assert.match(w, /\*\*Tally:\*\*[^\n]*`plan_workout_day` with `ifAbsent: true`[^\n]*`expectedVersion` and `replace: true`/);
   assert.match(w, /\*\*Another tool:\*\*[^\n]*following its own instructions[^\n]*node engine\/cli\.ts logger set files/);
   assert.match(steps("setup").get(8)!, /End with one line: "Later you can add recovery data \(Oura or Apple Health\), daily and weekly automation, injury history or assessments\. Just ask\."/);
@@ -854,7 +868,8 @@ test("V3b fix 2: setup names the Write or Edit tool next to every file it writes
   for (const m of appends) assert.match(m[1], /^ to `athlete\/log\/setup\.md` \(Edit tool\)/, m[0]);
   assert.match(t, /Fill `athlete\/brief\.md` from the answers, with the Write tool/);
   assert.match(t, /Write `coach\.yaml` last, with the Write tool/);
-  for (const f of ["draft.json", "loads.json", "week1.json"]) assert.match(t, new RegExp(`write \`\\.tmp/coach/${f.replace(".", "\\.")}\` with the Write tool`), f);
+  // V4: the draft input and the normalized export are the only JSON setup writes by hand.
+  for (const f of ["b1/draft.json", "history.json"]) assert.match(t, new RegExp(`write \`\\.tmp/coach/${f.replace(".", "\\.")}\` with the Write tool`, "i"), f);
   assert.match(t, /Keep its printed output \(no redirect\)/);
 });
 

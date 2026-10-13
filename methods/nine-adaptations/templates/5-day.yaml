@@ -11,9 +11,18 @@ pack: nine-adaptations
 version: 1
 name: five-day
 days: 5
+# Plain lines for the athlete: why the week looks as it does (the setup and block
+# skills show them before the week table). At most 25 words each; no rule ids.
+why:
+  - "Five days repeat the three-day rotation with fewer rest days."
+  - "Lifting splits into lower-body and upper-body days, so each muscle gets about 48 hours to recover between hard sessions."
+  - "Your goal gets the most sets. The other qualities get a smaller dose, so you keep them while the goal improves."
+  - "Each build week adds about 5% more sets, and never more than 10% over the week before."
+  - "Every sixth week is lighter: about 70% of the sets and loads, so your body can recover and adapt."
 week:
   - day: 1
     focus: "Speed and power, then lower-body hypertrophy"
+    why: "Fast jumps first while you are fresh, then lower-body lifts for muscle size."
     slots:
       - { pattern: plyometric, adaptation: power, sets: 3, reps: 3, rest_s: 180, note: "jumps, every rep as fast as possible" }
       - { pattern: squat, adaptation: hypertrophy, sets: 4, reps: [6, 10], rest_s: 150 }
@@ -24,6 +33,7 @@ week:
       - { pattern: shrug, adaptation: hypertrophy, sets: 2, reps: [10, 15], rest_s: 60 }
   - day: 2
     focus: "Upper-body strength, then anaerobic intervals"
+    why: "Heavy upper-body lifts for strength, then hard intervals on a different day from the maximal effort."
     slots:
       - { pattern: horizontal_push, adaptation: strength, sets: 4, reps: [3, 5], rest_s: 180 }
       - { pattern: horizontal_pull, adaptation: strength, sets: 4, reps: [3, 5], rest_s: 180, note: "superset with the push" }
@@ -33,12 +43,14 @@ week:
       - { pattern: intervals, adaptation: anaerobic_capacity, sets: 6, duration: 30, rest_s: 30, note: "30 s hard, 30 s easy" }
   - day: 3
     focus: "Long-duration endurance"
+    why: "A long, easy session at a pace where you can breathe through your nose builds your aerobic base."
     slots:
       - { pattern: zone2_cardio, adaptation: long_duration, sets: 1, duration: [2700, 3600], rest_s: 0, note: "nasal-breathing pace" }
       - { pattern: mobility, adaptation: recovery, sets: 1, duration: 600, rest_s: 0 }
       - { pattern: breathing, adaptation: recovery, sets: 1, duration: 300, rest_s: 0 }
   - day: 4
     focus: "Lower-body strength, then upper-body hypertrophy"
+    why: "Heavy lower-body lifts for strength, then upper-body lifts for muscle size."
     slots:
       - { pattern: plyometric, adaptation: power, sets: 3, reps: 3, rest_s: 180, note: "throws or short sprints" }
       - { pattern: squat, adaptation: strength, sets: 3, reps: [3, 5], rest_s: 180 }
@@ -49,6 +61,7 @@ week:
       - { pattern: elbow_flexion, adaptation: hypertrophy, sets: 2, reps: [10, 15], rest_s: 60, note: "superset with the lateral raise" }
   - day: 5
     focus: "Muscular endurance, then a maximal aerobic effort"
+    why: "Many lighter reps for endurance, then one hard effort near your maximum heart rate."
     slots:
       - { pattern: horizontal_push, adaptation: muscular_endurance, sets: 3, reps: [15, 30], rest_s: 60, note: "push-ups" }
       - { pattern: horizontal_pull, adaptation: muscular_endurance, sets: 2, reps: [12, 20], rest_s: 60 }

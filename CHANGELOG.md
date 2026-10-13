@@ -2,6 +2,27 @@
 
 All notable changes to this project are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [semantic versioning](https://semver.org/).
 
+## [0.2.2]
+
+Setup polish, from a full setup run on v0.2.1. The guiding rule: fewer waits, fewer screens, no typed answers.
+
+### Changed for the athlete
+
+- **Shorter waits in setup.** The coach no longer reads engine code to learn how to call its own commands. `block draft` writes each week as one file that every command takes, and every command has help (`node engine/cli.ts help <command>`).
+- **"Why this week."** Before the week 1 table, the coach gives 3 to 5 plain lines: the split, why work outside your goal stays, how the next weeks build, the lighter week, and what your limits and preferences change.
+- **Training history without Tally.** The history question offers only files that look like a workout export (an exercise column and a sets, reps or weight column), not the newest CSV of any kind. New options: "Export from another app" (steps for Strong and Hevy; general steps for other apps) and "Answer two quick questions" (how long you have trained, how many days a week lately), each with "Skip". The free-text summary is gone. JEFIT and Apple Health exports are not supported.
+- **Setup without Tally on request.** Say "I don't use Tally", and setup leaves Tally out, even when a Tally connector is connected.
+- **Preferences persist.** A lasting preference (a rep range, an exercise you like or dislike, a schedule, equipment) goes in your athlete brief under "Preferences". The week, block, today and audit steps follow it. The audit lists it as your choice.
+- **Tally at the end of setup.** With plans in files or another tool, setup ends with one line about Tally and its App Store link. The one Tally mention after your third hand-logged session also has the link.
+
+### Fixed
+
+- **The note scan now sees Tally notes.** The snapshot dropped session and exercise notes, so the scan for warning signs in your logged notes could never find anything on Tally. It keeps both now.
+- **Two Tally connections.** With two Tally servers connected, the scan could read the wrong account. Setup now asks which account holds your training, empties the cache, and reads only that account. The cache holds one Tally connection at a time: a read from another connection starts a new cache.
+- **History pages.** Two sessions on the same date on different history pages no longer replace each other.
+- **Lighter weeks keep their loads.** `loads --fill` applies the deload factor once, so a deload week no longer gets full loads back from the load suggestions.
+- `block write` replaces the manual archive step, refuses under the urgent stop, and never leaves a half-written block.
+
 ## [0.2.1]
 
 ### Fixed

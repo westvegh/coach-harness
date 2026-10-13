@@ -82,8 +82,9 @@ test("limits-hash with --file and with the default path", () => {
   assert.equal(cli(["limits-hash", "--root", tempRoot()]).code, 1);
 });
 
-test("the removed v0.1 commands are gone: hold, validate, proposals, block write", () => {
-  for (const args of [["hold", "status"], ["validate", "--tool", "x", "--args", "y"], ["proposals", "list"], ["block", "write", "--input", "x"]]) {
+// V4 brings back `block write` as a new command (it owns the archive step); the others stay gone.
+test("the removed v0.1 commands are gone: hold, validate, proposals", () => {
+  for (const args of [["hold", "status"], ["validate", "--tool", "x", "--args", "y"], ["proposals", "list"]]) {
     const r = cli(args);
     assert.equal(r.code, 2, args.join(" "));
     assert.equal(r.json.error.code, "USAGE", args.join(" "));
@@ -133,7 +134,7 @@ test("V3b fix 2: `help <command>` prints the usage of <command>, as `<command> -
   const run = (...a: string[]) => spawnSync(process.execPath, [join(REPO, "engine/cli.ts"), ...a], { encoding: "utf8" });
   const viaHelp = JSON.parse(run("help", "loads").stdout);
   assert.deepEqual(viaHelp, JSON.parse(run("loads", "--help").stdout));
-  assert.equal(JSON.parse(run("help", "block", "draft").stdout).command, "block");
+  assert.equal(JSON.parse(run("help", "block", "draft").stdout).command, "block draft");
   assert.ok(JSON.parse(run("help").stdout).commands.loads);
   const bad = run("help", "nope");
   assert.notEqual(bad.status, 0);

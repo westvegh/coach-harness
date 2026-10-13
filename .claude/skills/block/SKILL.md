@@ -7,43 +7,50 @@ description: Plans a new training block (usually 5 build weeks and a deload week
 
 A block is the plan for the next 4 to 8 weeks: the weekly frame, the week kinds and the sets per muscle. It follows `engine/types.ts Block` (contracts §16.5).
 
-Today is `TZ=<coach.yaml athlete.timezone> date +%F`, or in an unattended run `local.date` in the `window-check --kind weekly` output. Put engine input files in `.tmp/coach/`.
+Today is `TZ=<coach.yaml athlete.timezone> date +%F`, or in an unattended run `local.date` in the `window-check --kind weekly` output.
 
 ## Where plans live
 
-Read `coach.yaml logger` in step 1 and follow CLAUDE.md "Where plans live". The steps name the Tally tools. With `logger: files`: in step 4, use plain exercise names that fit the equipment (no `search_exercises`); in step 10, write the week's days (with the loads) with one `node engine/cli.ts plans write --input .tmp/coach/week1.json` (`{days}`), with no reads, `expectedVersion` or `opId` first, then read the week back with `plans read`. `block draft` reads the logged weeks in `plans/` by itself. With `logger: other`: write each day through that tool, by its own instructions, and read it back. When it does not answer, say so in one line, run `node engine/cli.ts logger set files`, and write the week to files.
+Read `coach.yaml logger` in step 1 and follow CLAUDE.md "Where plans live". The steps give the command lines for each logger. With `logger: files`: in step 4, use plain exercise names that fit the equipment (no `search_exercises`); in step 10, `plans write` writes the week file as it is. `block draft` reads the logged weeks in `plans/` by itself. With `logger: other`: write each day through that tool, by its own instructions, and read it back. When it does not answer, say so in one line, run `node engine/cli.ts logger set files`, and write the week to files.
+
+## The working folder
+
+Every file of this skill is in `.tmp/coach/b1/`. `block draft --out .tmp/coach/b1` writes `block.json` (the block) and one `week-<n>.json` per block week: `{week: {week_start, kind, load_factor, days}}`. That one week file goes to every command: `loads --fill`, `limits check`, `volume`, `plans write` and `tally-days`. Never build a week input by hand, and never read engine source to learn a shape: `node engine/cli.ts help <command>` gives it.
 
 ## Steps
 
-1. **Mode and safety.** Run `node engine/cli.ts mode`. Read `coach.yaml logger` (see "Where plans live"). Unattended: follow the Unattended section instead of these steps. Run `node engine/cli.ts urgent status`. Under the urgent stop, plan no block: give the urgent-care text and ask the `safety` skill's clear question (its step 6). Read `athlete/limits.yaml`: the block follows every limit.
+1. **Mode and safety.** Run `node engine/cli.ts mode`. Read `coach.yaml logger` (see "Where plans live"). Unattended: follow the Unattended section instead of these steps. Run `node engine/cli.ts urgent status`. Under the urgent stop, plan no block: give the urgent-care text and ask the `safety` skill's clear question (its step 6). Read `athlete/limits.yaml`: the block follows every limit. Read the "Preferences" lines in `athlete/brief.md`.
 2. **Assessments.** Read `methods/<method>/assessments.md`. Ask "Run the assessment week first? A) yes, B) use my recent results, C) skip this time".
-   - A: plan the test week from `assessments.md` (fresh tests first, fatiguing tests last). Write it as `test` week days, in the same way as step 8.
+   - A: plan the test week from `assessments.md` (fresh tests first, fatiguing tests last). Write it as `test` week days, in the same way as step 10.
    - B: ask for the recent results, one test at a time, with the units.
    - Record the results in `athlete/brief.md` under "Best recent lifts or tests". Compare with the athlete's own earlier results, not with norms.
 3. **Goals and frame.** Read `athlete/brief.md` and `coach.yaml template`. Ask "Keep <days> days a week and the <emphasis> emphasis? A) yes, B) change days, C) change emphasis". A change of days or emphasis is a `method_change`: it needs this yes, and it updates `coach.yaml template` after the yes.
-4. **Exercises.** Read `methods/<method>/templates/<days>-day.yaml`. For each slot (`"<day>.<slot>"`), choose an exercise for its pattern: keep the athlete's current exercise when there is one, else find one with `search_exercises`. Never choose one that a limit in `athlete/limits.yaml` bans.
-5. **Draft.** Get the block id with `node engine/cli.ts ids next --kind block`. Write `.tmp/coach/draft.json`: `{id, start (the next Monday), emphasis, exercises, loads?}`; add `targets` only when the athlete chose other week-1 sets. Run `node engine/cli.ts block draft --weeks <n> --input .tmp/coach/draft.json`, with `n` from `deload_every_weeks` in `methods/<method>/rules.yaml` ([NA-PROG-005]; 6 gives 5 build weeks and a deload). Add a test week first when step 2 chose A.
-   - The engine does the arithmetic: slot sets (emphasis, rounding, minimums), the weekly step capped by [NA-PROG-001], and the deload sets and loads ([NA-PROG-006]). Use its numbers only.
-   - With `ready: false`, choose an exercise for each `unresolved` slot and run it again.
-   - Read its `warnings` (for example a muscle that a 1-set minimum puts above its target) and show them.
-6. **Targets.** Each entry in `weeks` holds `targets`, `sets_by_muscle` and `days`. The `block` object is the `athlete/block.yaml` content. Do not add up sets yourself.
-7. **Audit.** Run the `audit` skill on the draft block and week 1 (give it each week's `sets_by_muscle`). It checks the limits too. Fix every hard finding and every limits conflict. List the soft findings.
-8. **Approval.** Show the block: the frame (days and focus), the week kinds, the targets per muscle, the audit result, and week 1 in a table. Ask "A) yes, write the block and week 1, B) change something, C) not now".
-9. **Write the block.** After the athlete's yes, move the old `athlete/block.yaml` (if it has an id) to `athlete/blocks/<old id>.yaml`. Write the `block` object from `block draft` to `athlete/block.yaml`, as printed. Run `node engine/cli.ts commit --message "block <id>: <days>-day <emphasis>, start <date> (<rule IDs>)"`. A nonzero exit: stop, and say in one line that the commit failed and why.
-10. **Write week 1** (or the test week): every day in the `days` of that `block draft` week. For each day:
-    - Read `get_training_context`, `get_planned_workout` for every date of that week (empty dates too), and `get_workout_history` from 8 weeks before today to today (follow `nextCursor` to the last page). All reads must be under 15 minutes old at each write.
-    - Loads: write `.tmp/coach/loads.json` (`{exercises}` of the drafted day) and run `node engine/cli.ts loads --input .tmp/coach/loads.json`. Use its `suggestedWeight` values.
-    - Each drafted exercise becomes one Tally exercise: `exerciseId` and `name` as drafted, `suggestedSets` = the number of entries in its `sets`, `suggestedReps` and `suggestedWeight` from its first set.
-    - Empty date: `plan_workout_day` with `ifAbsent: true`. A day exists: ask "Replace it? A) yes, B) no"; after a yes, `plan_workout_day` with `expectedVersion` and `replace: true`.
-    - Add `opId` from `node engine/cli.ts opid --date <date> --kind new_block --input .tmp/coach/call.json` when `adapters/loggers/tally/adapter.yaml` says `capabilities.opId: true`.
-    - Read the day back.
-    - After the last day, read every date of the week back and compare the count of written days with the drafted days. Write a missing day once more; if it is still missing, tell the user the date and the reason.
+4. **Exercises.** Read `methods/<method>/templates/<days>-day.yaml`. For each slot (`"<day>.<slot>"`), choose an exercise for its pattern: keep the athlete's current exercise when there is one, follow the "Preferences" lines (an exercise the athlete likes or dislikes), else find one with `search_exercises`. Never choose one that a limit in `athlete/limits.yaml` bans.
+5. **Draft.** Run these in order, one per Bash call:
+   - `node engine/cli.ts ids next --kind block`.
+   - Write `.tmp/coach/b1/draft.json` with the Write tool: `{"id", "start" (the next Monday), "emphasis", "exercises": {"<pattern or day.slot>": {"name", "exerciseId"?}}, "loads"?}`. Add `targets` only when the athlete chose other week-1 sets.
+   - `node engine/cli.ts block draft --weeks <n> --input .tmp/coach/b1/draft.json --out .tmp/coach/b1`, with `n` from `deload_every_weeks` in `methods/<method>/rules.yaml` ([NA-PROG-005]; 6 gives 5 build weeks and a deload). Add a test week first when step 2 chose A.
+   - It prints a summary: `ready`, `unresolved`, `warnings`, `rule_ids`, `capped`, `progression`, `why` and per week `{week, kind, week_start, load_factor, file, sets_by_muscle}`. The engine does the arithmetic: slot sets (emphasis, rounding, minimums), the weekly step capped by [NA-PROG-001], and the deload sets ([NA-PROG-006]). Use its numbers only. Do not add up sets yourself.
+   - With `ready: false`, choose an exercise for each `unresolved` slot and run the draft again. Read its `warnings` and show the ones that matter.
+6. **Preferences.** Apply each "Preferences" line of `athlete/brief.md` to `.tmp/coach/b1/week-1.json` with the Edit tool (for example a rep range: the `reps` of each set of the exercises it names), and to the matching slots in `.tmp/coach/b1/block.json`. A preference never breaks a limit and never raises sets above the draft.
+7. **Loads.** First refresh the logged history: with Tally, read `get_workout_history` from 8 weeks before today to today with `limit: 10`, following `nextCursor` to the last page; with files, nothing to do. Then run `node engine/cli.ts loads --input .tmp/coach/b1/week-1.json --fill`. It fills each hard set from the logged history and applies the week's `load_factor` (a lighter week) once, in the file. Add `--history .tmp/coach/history.json` only when the athlete chose a new training export in this session (it replaces the logged weeks); never for an export from an earlier session. An exercise with no history keeps its load: say "the first sessions set the loads".
+8. **Audit.** Run the `audit` skill on week 1 without its scope question: `node engine/cli.ts limits check --input .tmp/coach/b1/week-1.json`, then `node engine/cli.ts volume --input .tmp/coach/b1/week-1.json`, then read the method rules. Fix every hard finding and every limits conflict in the week file, and run both checks again. List the soft findings. A preference the athlete chose is listed as "athlete chose", not fixed.
+9. **Approval.** Show:
+   - The frame (days and focus), the week kinds and the targets per muscle, in plain words.
+   - **Why this week**: 3 to 5 short bullets in plain words: the summary's `why.week` lines that apply, how weeks 2 to the end build (from `progression`: about <step × 100>% more sets each build week, then a lighter week), what the athlete's limits change, the loads note, and any preference the plan follows.
+   - Week 1 in one table: the day, the focus, and each exercise with sets × reps and load.
+   - Ask "A) yes, write the block and week 1, B) change something, C) not now".
+10. **Write the block and week 1.** After the athlete's yes, one command per Bash call. Run `tally-days` (or `plans write`) only after the last change to the week file; after any later change, run it again.
+    - `node engine/cli.ts block write --input .tmp/coach/b1/block.json`. It archives the old block (a block with another id goes to `athlete/blocks/`) and writes `athlete/block.yaml`. A nonzero exit: stop, and say in one line why.
+    - `node engine/cli.ts commit --message "block <id>: <days>-day <emphasis>, start <date> (<rule IDs>)"`. A nonzero exit: stop, and say in one line that the commit failed and why.
+    - **Files:** `node engine/cli.ts plans write --input .tmp/coach/b1/week-1.json`, then `node engine/cli.ts plans read --week <week 1 start>`.
+    - **Tally:** `node engine/cli.ts tally-days --input .tmp/coach/b1/week-1.json`. It prints one `plan_workout_day` input per date. Read `get_training_context` and `get_planned_workout` for every date of the week (empty dates too); all reads must be under 15 minutes old at each write. For each printed day, call `plan_workout_day` with the printed input as it is, adding only: `ifAbsent: true` for an empty date; for a day that exists, ask "Replace it? A) yes, B) no", and after a yes `expectedVersion` and `replace: true`; and `opId` from `node engine/cli.ts opid --date <date> --kind new_block --input .tmp/coach/call.json` (`{tool, args}`, written with the Write tool) when `adapters/loggers/tally/adapter.yaml` says `capabilities.opId: true`. Read each day back. After the last day, read every date of the week back and compare the count of written days with the drafted days. Write a missing day once more; if it is still missing, tell the user the date and the reason.
 11. **Log, commit and push.** Append a log entry `## <today> <HH:MM> · block <id>` with the frame, the targets and the rule IDs. Run `node engine/cli.ts commit --message "block <id>: week 1 written"` (a nonzero exit: stop, and say in one line that the commit failed and why), then `git pull --rebase` and `node engine/cli.ts push`.
 
 ## Writes
 
-- `athlete/block.yaml` and `athlete/blocks/<old id>.yaml` (the previous block) (interactive yes only).
-- `athlete/brief.md` (test results), `athlete/log/<YYYY-MM>.md`, `.tmp/coach/*.json`.
+- `athlete/block.yaml` and `athlete/blocks/<old id>.yaml` (the previous block), only through `node engine/cli.ts block write` (interactive yes only).
+- `athlete/brief.md` (test results), `athlete/log/<YYYY-MM>.md`, `.tmp/coach/b1/*.json`.
 - `coach.yaml` `template` key, only after a yes to a frame change.
 - Tally: the first week with `plan_workout_day` (`ifAbsent: true`, or `expectedVersion` after a yes).
 - With `logger: files`: the first week in `plans/<YYYY>-W<ww>.csv`, only through `node engine/cli.ts plans write`. With `logger: other`: the first week in that tool.

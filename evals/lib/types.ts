@@ -22,6 +22,8 @@ export type SetupContext = {
   ghPulls(prs: unknown[]): void;
   /** Runs git in root. */
   git(...args: string[]): string;
+  /** The folder COACH_HISTORY_HOME points at (Downloads/ and Desktop/ exist; V4). */
+  historyHome: string;
 };
 
 /** A scripted answer for AskUserQuestion (lib/answerer.mjs): regexes on the question text and an option label. */
@@ -41,9 +43,11 @@ export type Screen = {
 export type Turn = { prompt: string | ((ctx: { today: string }) => string); resume?: boolean };
 
 /** Where each turn of a run starts, and the watched files after it. */
-export type TurnRecord = { firstTool: number; firstMessage: number; firstScreen: number; mockCalls: number; after: Record<string, string | null>; costUsd: number | null; exitCode?: number | null; isError?: boolean };
+/** `commits`: the commits on HEAD since the instance, at the end of the turn (V4b). */
+export type TurnRecord = { firstTool: number; firstMessage: number; firstScreen: number; mockCalls: number; after: Record<string, string | null>; costUsd: number | null; exitCode?: number | null; isError?: boolean; commits?: string[] };
 
-export type ToolUse = { id: string; name: string; input: any; result?: { isError: boolean; text: string } };
+/** `at` and `resultAt`: when the runner received the tool use and its result (epoch ms; V4). */
+export type ToolUse = { id: string; name: string; input: any; result?: { isError: boolean; text: string }; at?: number; resultAt?: number };
 
 /** Everything a run leaves behind. Checks are pure functions of this. */
 export type RunArtifacts = {
@@ -90,6 +94,10 @@ export type RunArtifacts = {
   instance?: { exportSha: string; exportDirty: boolean; fresh: boolean };
   /** Fresh scenarios: the hook bootstrap probes run before the model (lib/probes.ts). */
   bootstrap?: BootstrapState;
+  /** The model the run used (V4: the setup scenarios pin one). */
+  model?: string;
+  /** The instance root and the COACH_HISTORY_HOME folder of the run (V4: reads outside them fail the history scenarios). */
+  paths?: { root: string; historyHome: string };
 };
 
 /** A check result; `data` holds facts the report shows (for example which path a run took). */
@@ -123,6 +131,8 @@ export type Scenario = {
   tally?: boolean;
   /** Extra tools to allow (beyond the defaults). */
   allowedTools?: string[];
+  /** The model for this scenario's runs (V4: the setup runs pin claude-opus-5-5); else the runner's --model. */
+  model?: string;
   /**
    * A fresh copy of the template: no node_modules (the model runs `npm ci` as setup says).
    * The runner probes the hook bootstrap before the model runs (RunArtifacts.bootstrap).

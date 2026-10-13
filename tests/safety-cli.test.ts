@@ -59,5 +59,5 @@ test("safety scan-notes needs --since, and is a no-op without a snapshot", () =>
   const dir = tempRoot();
   assert.equal(cli(["safety", "scan-notes", "--root", dir]).code, 2);
   const r = cli(["safety", "scan-notes", "--since", "2026-10-10", "--root", dir]);
-  assert.deepEqual(r.json, { matches: [], urgent_terms: [], urgent_stop: null });
+  assert.deepEqual(r.json, { server: null, sessions: 0, matches: [], urgent_terms: [], urgent_stop: null });
 });

@@ -1,6 +1,6 @@
 // athlete/.cache/snapshot.json (contracts §9): load, merge logger responses, age check.
 // Only the capture-reads hook writes it. The guard reads it.
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { decodeTallyVersion, encodeTallyVersion } from "../adapters/loggers/tally/version.ts";
 import { isCalendarDate, parseInstant } from "./dates.ts";
@@ -67,6 +67,14 @@ export function saveSnapshot(root: string, snap: Snapshot): void {
   const tmp = `${p}.tmp-${process.pid}`;
   writeFileSync(tmp, JSON.stringify(snap, null, 2) + "\n");
   renameSync(tmp, p);
+}
+
+/** Empties the snapshot cache (`snapshot reset`): the next read starts a new one. True when a file was removed. */
+export function resetSnapshot(root: string): boolean {
+  const p = join(root, SNAPSHOT_RELATIVE);
+  if (!existsSync(p)) return false;
+  rmSync(p, { force: true });
+  return true;
 }
 
 export function emptySnapshot(session_id: string, now: Instant, timezone: string): Snapshot {
@@ -217,7 +225,12 @@ export function dayFromPlannedWorkout(r: Record<string, unknown>, now: Instant):
   return day;
 }
 
-function historySession(s: Record<string, unknown>): SnapshotSession | null {
+const text = (v: unknown) => (typeof v === "string" && v.trim() !== "" ? v : undefined);
+/** The first start-time field a history session carries. */
+const startOf = (s: Record<string, unknown>) => text(s.startedAt) ?? text(s.startTime) ?? text(s.started_at) ?? text(s.start);
+
+/** A history session as the snapshot keeps it: sets, and the session and exercise notes (V4: the note scan reads them). */
+function historySession(s: Record<string, unknown>, server?: string): SnapshotSession | null {
   if (!isCalendarDate(s.date)) return null;
   const unit = s.weightUnit === "kg" || s.weightUnit === "lbs" ? (s.weightUnit as Units) : undefined;
   const exercises: HistoryExercise[] = (Array.isArray(s.exercises) ? s.exercises : []).filter(isPlainObject).map((e) => ({
@@ -229,8 +242,39 @@ function historySession(s: Record<string, unknown>): SnapshotSession | null {
       reps: typeof x.reps === "number" ? x.reps : null,
       rpe: typeof x.rpe === "number" ? x.rpe : null,
     })),
+    ...(text(e.notes) ? { notes: e.notes as string } : {}),
   }));
-  return { date: s.date, ...(typeof s.name === "string" ? { name: s.name } : {}), ...(unit ? { weightUnit: unit } : {}), exercises };
+  const id = text(s.id) ?? text(s.sessionId) ?? text(s.workoutId);
+  const start = startOf(s);
+  return {
+    date: s.date,
+    ...(typeof s.name === "string" ? { name: s.name } : {}),
+    ...(unit ? { weightUnit: unit } : {}),
+    exercises,
+    ...(text(s.notes) ? { notes: s.notes as string } : {}),
+    ...(id ? { id } : {}),
+    ...(start ? { startedAt: start } : {}),
+    ...(server ? { server } : {}),
+  };
+}
+
+/**
+ * A session's identity across history pages (V4): its id when the result has one, else its
+ * date, name and start time. Two sessions on one date with different names or start times stay
+ * apart; the same session read twice (a repeated page) is one.
+ */
+export function sessionKey(s: SnapshotSession): string {
+  // Not the server: two connections to one account return the same sessions, which must not count twice.
+  return s.id ? `id:${s.id}` : `at:${s.date}|${s.name ?? ""}|${s.startedAt ?? ""}`;
+}
+
+/** True when a payload is a usable result for the tool (a read that passes its schema, or a write's object result). */
+function validResult(tool: string, p: unknown): boolean {
+  if (!isPlainObject(p)) return false;
+  if (tool === "get_planned_workout") return validPlannedDay(p);
+  if (tool === "get_training_context") return validTrainingContext(p);
+  if (tool === "get_workout_history") return validHistory(p);
+  return true;
 }
 
 export type MergeInput = {
@@ -242,6 +286,11 @@ export type MergeInput = {
   now: Instant;
   /** The athlete's timezone (coach.yaml). */
   timezone: string;
+  /**
+   * The MCP server the tool belongs to (between mcp__ and the tool), recorded on the snapshot (V4).
+   * V4b: the snapshot belongs to one server; a read from another server starts a new snapshot.
+   */
+  server?: string;
 };
 
 /**
@@ -251,10 +300,15 @@ export type MergeInput = {
  * version removes the day, so the next write must read it again.
  */
 export function mergeResponse(prev: Snapshot | null, m: MergeInput): Snapshot {
+  // A snapshot from another session, or from another server (V4b: the last server read wins), is replaced.
+  const sameServer = !prev?.server || !m.server || prev.server === m.server;
+  // Only a valid result from another server replaces the snapshot; a failed read from it changes nothing.
+  if (prev && prev.session_id === m.session_id && !sameServer && !validResult(m.tool, responsePayload(m.response))) return structuredClone(prev);
   const snap: Snapshot =
-    prev && prev.session_id === m.session_id ? structuredClone(prev) : emptySnapshot(m.session_id, m.now, m.timezone);
+    prev && prev.session_id === m.session_id && sameServer ? structuredClone(prev) : emptySnapshot(m.session_id, m.now, m.timezone);
   snap.captured_at = m.now;
   snap.timezone = m.timezone;
+  if (m.server) snap.server = m.server;
   const payload = responsePayload(m.response);
   const input = isPlainObject(m.input) ? m.input : {};
   // A Tally training limit refused the write: nothing was written, so every day the
@@ -327,8 +381,12 @@ export function mergeResponse(prev: Snapshot | null, m: MergeInput): Snapshot {
       break;
     }
     case "get_workout_history": {
-      const sessions = (Array.isArray(r.sessions) ? r.sessions : []).filter(isPlainObject).map(historySession).filter((s): s is SnapshotSession => s !== null);
-      const dates = new Set(sessions.map((s) => s.date));
+      const sessions = (Array.isArray(r.sessions) ? r.sessions : [])
+        .filter(isPlainObject)
+        .map((x) => historySession(x, m.server))
+        .filter((s): s is SnapshotSession => s !== null);
+      // V4: merge by session identity, so a page never removes another page's session on the same date.
+      const keys = new Set(sessions.map(sessionKey));
       const prev = snap.history_coverage;
       const str = (v: unknown) => (isCalendarDate(v) ? v : undefined);
       if (typeof input.cursor === "string") {
@@ -337,7 +395,13 @@ export function mergeResponse(prev: Snapshot | null, m: MergeInput): Snapshot {
       } else {
         snap.history_coverage = { captured_at: m.now, complete: typeof r.nextCursor !== "string", ...(str(input.since) ? { since: str(input.since) } : {}), ...(str(input.until) ? { until: str(input.until) } : {}) };
       }
-      snap.history = [...snap.history.filter((s) => !dates.has(s.date)), ...sessions].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+      // V4b: a 0.2.1 snapshot's sessions have no id, start time or server; one on a page's date
+      // is the same session read again under the old rule, so it goes (a new capture always has a server).
+      const pageDates = new Set(sessions.map((x) => x.date));
+      snap.history = snap.history.filter((x) => !(pageDates.has(x.date) && !x.id && !x.startedAt && !x.server));
+      const seen = new Set<string>();
+      const page = sessions.filter((s) => (seen.has(sessionKey(s)) ? false : (seen.add(sessionKey(s)), true)));
+      snap.history = [...snap.history.filter((s) => !keys.has(sessionKey(s))), ...page].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
       break;
     }
     case "update_planned_workout": {

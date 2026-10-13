@@ -340,7 +340,8 @@ export type VolumeViolation = {
 // ---------- §9 snapshot ----------
 
 export type HistorySet = { weight: number | null; reps: number | null; rpe: number | null };
-export type HistoryExercise = { exerciseId: string; name: string; muscle: string; sets: HistorySet[] };
+/** `notes`: the exercise note Tally returns (kept for the note scan, V4). */
+export type HistoryExercise = { exerciseId: string; name: string; muscle: string; sets: HistorySet[]; notes?: string };
 
 /**
  * One exercise as the logger stores it (for Tally: the get_planned_workout shape, with
@@ -370,7 +371,12 @@ export type SnapshotDay = {
 };
 
 /** A logged session, as captured from the logger's history read. */
-export type SnapshotSession = { date: CalendarDate; name?: string; weightUnit?: Units; exercises: HistoryExercise[] };
+/**
+ * A logged session, as captured from the logger's history read. `notes` (the session note) and
+ * the exercise notes feed the note scan; `id` and `startedAt` identify a session across pages;
+ * `server` is the MCP server that returned it (V4).
+ */
+export type SnapshotSession = { date: CalendarDate; name?: string; weightUnit?: Units; exercises: HistoryExercise[]; notes?: string; id?: string; startedAt?: string; server?: string };
 
 /** A future day the logger listed in its training context (no exercise detail, no version). */
 export type PlannedListing = { dayName: string; source: string; userModified: boolean; skipped: boolean; exerciseCount: number };
@@ -395,6 +401,8 @@ export type Snapshot = {
   weightUnitSource?: string;
   /** Files logger only: rows or cells the engine could not read; the history is then incomplete (V2b fix 1). */
   warnings?: string[];
+  /** The MCP server of the last captured read (the part of the tool name between mcp__ and the tool; V4). */
+  server?: string;
 };
 
 // ---------- §10 the urgent stop ----------

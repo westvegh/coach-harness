@@ -186,6 +186,9 @@ export function runClaude(o: ClaudeOptions): Promise<ClaudeRun> {
     const onEvent = (ev: any) => {
       // After an abort nothing more is read: the process is being killed.
       if (run.aborted) return;
+      // V4: every stream event carries its receive time (the setup checks measure the waits).
+      const now = Date.now();
+      if (ev && typeof ev === "object") ev._rt = now;
       run.events.push(ev);
       if (first) {
         // Hook events (SessionStart) come before the init event; anything else is an abort.
@@ -198,7 +201,7 @@ export function runClaude(o: ClaudeOptions): Promise<ClaudeRun> {
       if (ev.type === "assistant" && Array.isArray(ev.message?.content)) {
         for (const b of ev.message.content) {
           if (b.type === "tool_use") {
-            const t: ToolUse = { id: b.id, name: b.name, input: b.input };
+            const t: ToolUse = { id: b.id, name: b.name, input: b.input, at: now };
             byId.set(b.id, t);
             run.tools.push(t);
           }
@@ -206,7 +209,11 @@ export function runClaude(o: ClaudeOptions): Promise<ClaudeRun> {
       }
       if (ev.type === "user" && Array.isArray(ev.message?.content)) {
         for (const b of ev.message.content) {
-          if (b.type === "tool_result" && byId.has(b.tool_use_id)) byId.get(b.tool_use_id)!.result = { isError: b.is_error === true, text: resultText(b.content) };
+          if (b.type === "tool_result" && byId.has(b.tool_use_id)) {
+            const t = byId.get(b.tool_use_id)!;
+            t.result = { isError: b.is_error === true, text: resultText(b.content) };
+            t.resultAt = now;
+          }
         }
       }
       if (ev.type === "result") {

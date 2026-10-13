@@ -332,7 +332,8 @@ test("V2b fix 5: history-files offers the two newest CSV files in ~/Downloads an
   const home = mkdtempSync(join(tmpdir(), "coach-home-"));
   for (const [rel, age] of [["Downloads/strong.csv", 30], ["Desktop/hevy_export.CSV", 10], ["Downloads/old.csv", 900], ["Downloads/notes.txt", 1], ["Documents/other.csv", 1], ["Downloads/sub/deep.csv", 1]] as const) {
     mkdirSync(join(home, rel, ".."), { recursive: true });
-    writeFileSync(join(home, rel), "Date,Exercise\n");
+    // V4: only files whose header looks like a workout export are listed.
+    writeFileSync(join(home, rel), "Date,Exercise,Reps\n");
     const t = new Date(Date.now() - age * 60_000);
     utimesSync(join(home, rel), t, t);
   }

@@ -11,11 +11,11 @@
 //   commit --message <text>                      commit the coach's own paths (athlete/, plans/, coach.yaml) only
 //   tally-mention [--sessions <n>]               mention Tally once, after the third session logged by hand
 //   logger set tally|files|other                 where plans live (the fallback to files, "move my plans to Tally")
-//   history-files                                the two newest .csv files in ~/Downloads and ~/Desktop (a training export)
+//   history-files                                the two newest workout CSV exports (by header) in ~/Downloads and ~/Desktop
 //
 // Every command takes --root <dir> (default: the current directory).
 import { execFileSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, copyFileSync, existsSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
@@ -36,7 +36,7 @@ export const ATHLETE_TEMPLATES = ["brief.md", "limits.yaml", "baselines.json", "
 export const COACH_PATHS = ["athlete", "plans", "coach.yaml"] as const;
 
 /** The one Tally line for an athlete who logs by hand (v0.2 "Tally mention"). Said once, never repeated. */
-export const TALLY_MENTION_TEXT = "If logging by hand gets old: Tally logs sets on your phone at the gym, and I read them back. Say 'switch to Tally' to try it.";
+export const TALLY_MENTION_TEXT = "If logging by hand gets old: Tally logs sets on your iPhone at the gym, and I read them back. Get it here: https://apps.apple.com/us/app/tally-workout-app/id6758911546. Say 'switch to Tally' to try it.";
 export const TALLY_MENTION_AFTER = 3;
 
 function out(value: unknown): void {
@@ -249,10 +249,74 @@ export async function setLogger(root: string, value: string | undefined): Promis
 export const HISTORY_FOLDERS = ["Downloads", "Desktop"] as const;
 export const HISTORY_OFFERED = 2;
 
+/** Whole column names (normalized) that mark a workout export: an exercise column and a set column. */
+export const EXERCISE_COLUMNS = ["exercise", "exercise name", "exercise title"] as const;
+export const SET_COLUMNS = ["reps", "weight", "set order", "set index", "sets"] as const;
+/** The most of a file read to find its header line. */
+export const HEADER_BYTES = 4096;
+
 /**
- * The newest `.csv` files directly in ~/Downloads and ~/Desktop (no subfolders), at most two,
- * for setup's history question. Names and times only; the coach reads the chosen file with the
- * Read tool, which the `Read(~/Downloads/*.csv)` and `Read(~/Desktop/*.csv)` allow rules cover.
+ * A column name in one form: lowercase, trimmed, quotes gone, `_` and runs of spaces as one
+ * space, and a unit suffix dropped ("Weight (kg)", "weight_kg", "Duration(s)").
+ */
+export function normalizeColumn(name: string): string {
+  let c = name.trim().replace(/^"(.*)"$/, "$1").replace(/""/g, '"').toLowerCase();
+  c = c.replace(/[_\s]+/g, " ").trim();
+  c = c.replace(/\s*[([][^)\]]*[)\]]\s*$/, "").trim();
+  c = c.replace(/ (kg|kgs|lb|lbs|km|mi|m|s|sec|secs|seconds|min|mins|minutes)$/, "").trim();
+  return c;
+}
+
+/** The header fields of one line: the delimiter (comma, semicolon or tab) that splits it most, quotes respected. */
+export function headerFields(line: string): string[] {
+  const split = (d: string) => {
+    const out: string[] = [];
+    let cur = "";
+    let q = false;
+    for (const ch of line) {
+      if (ch === '"') q = !q;
+      if (ch === d && !q) {
+        out.push(cur);
+        cur = "";
+      } else cur += ch;
+    }
+    out.push(cur);
+    return out;
+  };
+  return [",", ";", "\t"].map(split).sort((a, b) => b.length - a.length)[0];
+}
+
+/** True when a header line looks like a workout export: a whole exercise column and a whole set column. */
+export function isWorkoutHeader(line: string): boolean {
+  const cols = new Set(headerFields(line.replace(/^\uFEFF/, "")).map(normalizeColumn));
+  return EXERCISE_COLUMNS.some((c) => cols.has(c)) && SET_COLUMNS.some((c) => cols.has(c));
+}
+
+/** The first line of a file, at most HEADER_BYTES; null when it cannot be read. */
+function fileFirstLine(path: string): string | null {
+  let fd: number | null = null;
+  try {
+    fd = openSync(path, "r");
+    const buf = Buffer.alloc(HEADER_BYTES);
+    const n = readSync(fd, buf, 0, HEADER_BYTES, 0);
+    const text = buf.subarray(0, n).toString("utf8");
+    // V4b: no line end within the bound, and more file after it: the header was cut, so it cannot match.
+    if (n === HEADER_BYTES && !/\r|\n/.test(text)) return null;
+    return text.split(/\r?\n|\r/)[0] ?? "";
+  } catch {
+    return null;
+  } finally {
+    if (fd !== null) closeSync(fd);
+  }
+}
+
+/**
+ * Likely workout exports directly in ~/Downloads and ~/Desktop (no subfolders), at most two, newest
+ * first, for setup's history question (V4). Only the first line (at most 4 KB) of each regular
+ * `.csv` file is read; symlinks are skipped. A file is listed only when its header has a whole
+ * exercise column and a whole set column. Names, folders and times only: never a header's
+ * contents, and never the name of a file that does not match. The coach reads the chosen file
+ * with the Read tool (the `Read(~/Downloads/*.csv)` and `Read(~/Desktop/*.csv)` allow rules).
  * COACH_HISTORY_HOME replaces the home folder (tests and evals: no real file name in a run).
  */
 export function historyFiles(home = process.env.COACH_HISTORY_HOME || homedir()): { files: { path: string; name: string; folder: string; modified: string }[] } {
@@ -267,9 +331,13 @@ export function historyFiles(home = process.env.COACH_HISTORY_HOME || homedir())
     }
     for (const name of names) {
       if (!/\.csv$/i.test(name)) continue;
+      const path = join(dir, name);
       try {
-        const st = statSync(join(dir, name));
-        if (st.isFile()) found.push({ path: join(dir, name), name, folder, modified: st.mtime.toISOString(), ms: st.mtimeMs });
+        const st = lstatSync(path);
+        if (st.isSymbolicLink() || !st.isFile()) continue;
+        const head = fileFirstLine(path);
+        if (head === null || !isWorkoutHeader(head)) continue;
+        found.push({ path, name, folder, modified: st.mtime.toISOString(), ms: st.mtimeMs });
       } catch {
         /* gone or unreadable: skip */
       }

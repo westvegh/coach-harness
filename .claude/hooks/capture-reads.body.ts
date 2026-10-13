@@ -19,6 +19,11 @@ runHook("capture-reads", () => {
   // The hook matches Tally tools only, so it reads the Tally adapter whatever coach.yaml logger says (v0.2).
   const adapter = loadAdapterConfig("tally");
   if (!new RegExp(adapter.capture_matcher).test(input.tool_name)) return;
+  // V4b: no prefix filter (a cloud routine names the same connector differently). The snapshot
+  // belongs to one server: a read from another server starts a new snapshot (engine/snapshot.ts).
+  // The server: the part of the tool name between mcp__ and the last __ (the tool).
+  const cut = input.tool_name.lastIndexOf("__");
+  const server = input.tool_name.startsWith("mcp__") && cut > 5 ? input.tool_name.slice(5, cut) : undefined;
   let prev: Snapshot | null = null;
   try {
     prev = loadSnapshot(root);
@@ -32,6 +37,7 @@ runHook("capture-reads", () => {
     session_id: input.session_id,
     now: hookNow(),
     timezone: cfg?.athlete.timezone ?? "UTC",
+    ...(server ? { server } : {}),
   });
   saveSnapshot(root, snap);
 });

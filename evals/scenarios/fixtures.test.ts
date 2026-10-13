@@ -27,9 +27,9 @@ import { saidAlreadyAdjusted } from "./16-failed-trim-retried.ts";
 
 const scenarios = await loadScenarios();
 
-test("20 scenarios (07, 08a, 08b, 13, 14 and 15 tested guard denials and went in v0.2), unique names", () => {
-  assert.equal(scenarios.length, 20);
-  assert.equal(new Set(scenarios.map((s) => s.name)).size, 20);
+test("24 scenarios (07, 08a, 08b, 13, 14 and 15 tested guard denials and went in v0.2; V4 added 26 to 29), unique names", () => {
+  assert.equal(scenarios.length, 24);
+  assert.equal(new Set(scenarios.map((s) => s.name)).size, 24);
 });
 
 /** Every file under root, relative (node_modules and .git not entered). */
@@ -291,7 +291,7 @@ test("V3c fix 13: scenario 25 compares every done_ field, keeps the original row
     fillDone(inst.root, { date: fri, asPlanned: true });
     const after = snapshotFiles(inst.root);
     const cfg = (t: string | null) => ({ ...turn1, "coach.yaml": (t ?? "") + "tally_mentioned: true\n" });
-    const LINE = "If logging by hand gets old: Tally logs sets on your phone at the gym, and I read them back. Say 'switch to Tally' to try it.";
+    const LINE = "If logging by hand gets old: Tally logs sets on your iPhone at the gym, and I read them back. Get it here: https://apps.apple.com/us/app/tally-workout-app/id6758911546. Say 'switch to Tally' to try it.";
     const art = (afterFiles: Record<string, string | null>, t1: string, t2: string) =>
       ({ today: ctx.today, before, after: afterFiles, tools: [], messages: [{ afterTool: 0, text: t1 }, { afterTool: 0, text: t2 }], result: { text: t2 },
         turns: [{ firstTool: 0, firstMessage: 0, after: cfg(turn1["coach.yaml"]) }, { firstTool: 0, firstMessage: 1, after: afterFiles }] }) as unknown as RunArtifacts;
@@ -305,4 +305,75 @@ test("V3c fix 13: scenario 25 compares every done_ field, keeps the original row
   } finally {
     rmSync(inst.dir, { recursive: true, force: true });
   }
+});
+
+// ---------- V4: the setup measures and the new scenarios fail on synthetic bad transcripts ----------
+
+const tool = (name: string, input: unknown, extra: Record<string, unknown> = {}) => ({ id: `t${Math.random()}`, name, input, result: { isError: false, text: "ok" }, ...extra });
+const art = (over: Partial<RunArtifacts>): RunArtifacts =>
+  ({ scenario: "x", run: 0, mode: "interactive", today: "2026-10-12", tz: "America/Los_Angeles", seed: { days: {} }, mock: { days: {}, calls: [] }, before: {}, after: {}, commits: [], branches: ["main"], pushedMain: [], gh: [], tools: [], prompts: [], verdicts: [], screens: [], result: { text: "", isError: false, turns: 0, costUsd: 0, durationMs: 0, exitCode: 0, aborted: null }, ...over }) as unknown as RunArtifacts;
+
+test("V4 G1: engine source reads count Read, grep, sed, cat and scripts on engine/*.ts or docs/contracts.md; running the CLI and listing names do not", async () => {
+  const { sourceReads } = await import("./_setup.ts");
+  const n = (...tools: unknown[]) => sourceReads(art({ tools: tools as RunArtifacts["tools"] })).length;
+  assert.equal(n(tool("Read", { file_path: "/x/inst/engine/block-draft.ts" })), 1);
+  assert.equal(n(tool("Bash", { command: "grep -n slot engine/block-draft.ts" })), 1);
+  assert.equal(n(tool("Bash", { command: "sed -n 1,40p engine/loads.ts" })), 1);
+  assert.equal(n(tool("Bash", { command: "cat docs/contracts.md" })), 1);
+  assert.equal(n(tool("Bash", { command: "node -e \"console.log(require('fs').readFileSync('engine/plans-files.ts','utf8'))\"" })), 1);
+  assert.equal(n(tool("Grep", { pattern: "DayInput", path: "engine" })), 1);
+  assert.equal(n(tool("Bash", { command: "node engine/cli.ts help block draft" }), tool("Bash", { command: "ls engine" }), tool("Bash", { command: "find engine -name '*.ts'" }), tool("Read", { file_path: "athlete/brief.md" })), 0);
+  // V4b fix 8: a folder read and a glob read count; the CLI by its absolute path does not.
+  assert.equal(n(tool("Bash", { command: "grep -rn loads engine" })), 1);
+  assert.equal(n(tool("Bash", { command: "cat engine/*.ts" })), 1);
+  assert.equal(n(tool("Bash", { command: "node /tmp/coach-eval-x/repo/engine/cli.ts help loads" }), tool("Bash", { command: "node engine/cli.ts loads --input .tmp/coach/b1/week-1.json --fill" })), 0);
+});
+
+test("V4 G1: the setup check fails at 6 screens and on a source read; the measures report the longest wait", async () => {
+  const files = scenarios.find((s) => s.name === "24-setup-files")!;
+  const screen = (q: string) => ({ at: "", questions: [{ question: q, multiSelect: false, options: ["a", "b"] }], answers: { [q]: "a" }, unanswered: [], clicks: 1, typed: 0 });
+  const six = art({ screens: [1, 2, 3, 4, 5, 6].map((i) => screen(`q${i}?`)) });
+  assert.equal(files.check(six).find((c) => /at most 5 screens/.test(c.name))?.ok, false);
+  assert.equal(files.check(art({ screens: [screen("q?")] })).find((c) => /at most 5 screens/.test(c.name))?.ok, true);
+  const reading = art({ tools: [tool("Read", { file_path: "engine/loads.ts" })] as RunArtifacts["tools"] });
+  assert.equal(files.check(reading).find((c) => c.name === "engine source reads: 0")?.ok, false);
+  const { longestWait } = await import("./_setup.ts");
+  const ask = (q: string, at: number, resultAt: number) => tool("AskUserQuestion", { questions: [{ question: q }] }, { at, resultAt });
+  const w = longestWait(art({ tools: [ask("Basics?", 0, 1000), ask("Goal?", 11_000, 12_000), ask("Week 1?", 252_000, 253_000)] as RunArtifacts["tools"] }));
+  assert.deepEqual(w, { seconds: 240, after: "Goal?" });
+});
+
+test("V4 G2-G4: the new scenarios fail on bad transcripts", async () => {
+  const get = (n: string) => scenarios.find((s) => s.name === n)!;
+  const failed = (n: string, a: RunArtifacts, name: RegExp) => get(n).check(a).filter((c) => name.test(c.name) && !c.ok).length > 0;
+  // 26: a Tally read is a Tally call.
+  assert.ok(failed("26-setup-no-tally", art({ tools: [tool("mcp__tallymock__get_training_context", {})] as RunArtifacts["tools"] }), /0 Tally tool calls/));
+  assert.ok(!failed("26-setup-no-tally", art({}), /0 Tally tool calls/));
+  // 27: a read outside the run, and a file not offered.
+  const paths = { root: "/tmp/coach-eval-x/repo", historyHome: "/tmp/coach-eval-x/home" };
+  const outside = art({ paths, tools: [tool("Read", { file_path: "/opt/someone/Downloads/other.csv" }), tool("Read", { file_path: "/tmp/coach-eval-x/home/Downloads/strong_workouts.csv" })] as RunArtifacts["tools"] });
+  assert.ok(failed("27-setup-history-export", outside, /no read outside/));
+  assert.ok(!failed("27-setup-history-export", art({ paths, tools: [tool("Read", { file_path: "/tmp/coach-eval-x/home/Downloads/strong_workouts.csv" }), tool("Read", { file_path: "athlete/brief.md" })] as RunArtifacts["tools"] }), /no read outside/));
+  assert.ok(failed("27-setup-history-export", art({}), /offered by name/));
+  // V4b fix 8: a relative path that climbs out, and an absolute path under any prefix, fail.
+  assert.ok(failed("27-setup-history-export", art({ paths, tools: [tool("Read", { file_path: "../../../elsewhere/private.csv" })] as RunArtifacts["tools"] }), /no read outside/));
+  assert.ok(failed("27-setup-history-export", art({ paths, tools: [tool("Bash", { command: "cat /opt/elsewhere/private.csv" })] as RunArtifacts["tools"] }), /no read outside/));
+  assert.ok(!failed("27-setup-history-export", art({ paths, tools: [tool("Bash", { command: "node engine/cli.ts history-files 2>/dev/null" }), tool("Read", { file_path: "/private/tmp/coach-eval-x/home/Downloads/strong_workouts.csv" })] as RunArtifacts["tools"] }), /no read outside/));
+  // 28: the two questions on two screens.
+  const sc = (q: string) => ({ at: "", questions: [{ question: q, multiSelect: false, options: ["a", "b"] }], answers: {}, unanswered: [], clicks: 1, typed: 0 });
+  assert.ok(failed("28-setup-quick-questions", art({ screens: [sc("How long have you trained regularly?"), sc("How many days a week have you trained lately?")] }), /one screen/));
+  // 29: the range not in the brief, and a main lift outside it.
+  const brief = "# Athlete brief\n\n## Preferences\n\n- Rep ranges and other choices: 8 to 12 reps on main lifts (athlete chose)\n";
+  const next = "2026-10-19";
+  const p29 = art({ turns: [{ firstTool: 0, firstMessage: 0, firstScreen: 0, mockCalls: 0, after: { "athlete/brief.md": brief }, costUsd: 0 }, { firstTool: 0, firstMessage: 1, firstScreen: 0, mockCalls: 0, after: {}, costUsd: 0 }], messages: [{ afterTool: 0, text: "Saved." }, { afterTool: 0, text: "Audit: 8 to 12 reps — athlete chose." }], commits: [{ sha: "a", subject: "x", files: ["athlete/brief.md"] }], mock: { calls: [], days: { [next]: { exercises: [{ exerciseId: "Barbell_Squat", name: "Barbell Back Squat", suggestedSets: 3, suggestedReps: 5 }, { exerciseId: "Barbell_Bench_Press", name: "Bench Press", suggestedSets: 3, suggestedReps: 8, repsMax: 12 }, { name: "Romanian Deadlift", suggestedSets: 3, suggestedReps: 10 }] } } } as unknown as RunArtifacts["mock"] });
+  assert.ok(failed("29-preference-persists", p29, /main lift next week uses 8 to 12/), "a squat at 5 reps fails");
+  assert.ok(!failed("29-preference-persists", p29, /brief records the rep range/));
+  assert.ok(failed("29-preference-persists", art({}), /brief records the rep range/));
+  // V4b fix 9: three good lifts, one squat with no reps, "Your preference is saved. No audit was run." fails.
+  const good = (name: string, id: string) => ({ exerciseId: id, name, suggestedSets: 3, suggestedReps: 8, repsMax: 12 });
+  const loose = art({ turns: [{ firstTool: 0, firstMessage: 0, firstScreen: 0, mockCalls: 0, after: { "athlete/brief.md": brief }, costUsd: 0, commits: [] }, { firstTool: 0, firstMessage: 1, firstScreen: 0, mockCalls: 0, after: {}, costUsd: 0 }], messages: [{ afterTool: 0, text: "Saved." }, { afterTool: 0, text: "Your preference is saved. No audit was run." }], commits: [{ sha: "a", subject: "x", files: ["athlete/brief.md"] }], mock: { calls: [], days: { [next]: { exercises: [good("Bench Press", "Barbell_Bench_Press"), good("Romanian Deadlift", "Romanian_Deadlift"), good("Seated Cable Row", "Seated_Cable_Row"), { exerciseId: "Barbell_Squat", name: "Barbell Back Squat", suggestedSets: 3 }] } } } as unknown as RunArtifacts["mock"] });
+  for (const name of [/main lift next week/, /the audit ran/, /athlete chose/, /committed in turn 1/]) assert.ok(failed("29-preference-persists", loose, name), String(name));
+  // The good transcript: every lift in range, the audit call and line, the turn-1 commit.
+  const okArt = art({ ...loose, turns: [{ ...loose.turns![0], commits: ["a"] }, loose.turns![1]], tools: [tool("Bash", { command: "node engine/cli.ts limits check --input .tmp/coach/wk/week-2.json" })] as RunArtifacts["tools"], messages: [{ afterTool: 0, text: "Saved." }, { afterTool: 0, text: "| athlete chose | 8-12 reps |" }], mock: { calls: [], days: { [next]: { exercises: [good("Bench Press", "Barbell_Bench_Press"), good("Romanian Deadlift", "Romanian_Deadlift"), good("Seated Cable Row", "Seated_Cable_Row")] } } } as unknown as RunArtifacts["mock"] });
+  assert.deepEqual(get("29-preference-persists").check(okArt).filter((c) => !c.ok).map((c) => c.name), []);
 });

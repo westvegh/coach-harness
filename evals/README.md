@@ -63,6 +63,12 @@ A scenario with `answers` gets a PreToolUse hook on AskUserQuestion (`lib/answer
 - Each call is one **screen**; each option label chosen is one **click**; a typed answer counts apart. `artifacts.json` has them under `screens`.
 - A question with no matching rule, or no matching option, is unanswered: the hook denies the call, and the run fails "every question had a scripted answer".
 
+### Setup measures (V4)
+
+The setup scenarios (23, 24, 26 to 28) pin `claude-opus-5-5` (the scenario's `model`; other scenarios use `--model`). Every run records its model in `artifacts.json` and the summary. Besides the pass checks (at most 5 screens on the basic path, 0 typed answers, **0 engine source reads**: a Read, `cat`, `sed`, `head`, `grep`, `rg` or a script on `engine/*.ts` or `docs/contracts.md`; running `node engine/cli.ts` and listing names do not count), each run reports wall time, the count of Bash calls and the longest wait from an answer to the next screen. The runner stamps every stream event with its receive time (`_rt`), and each tool use with `at` and `resultAt`.
+
+`SetupContext.historyHome` is the `COACH_HISTORY_HOME` folder of the run; scenario 27 writes its fixture export there. `artifacts.paths` holds the instance root and that folder, so a check can fail any read outside them.
+
 ### Follow-up turns
 
 `turns` adds prompts after the first one. Each turn is a new `claude -p` on the same instance; `resume: true` continues the same session (`--resume`). `artifacts.turns` records where each turn starts and the watched files after it.
@@ -98,8 +104,12 @@ Print mode ignores the project's `permissions.allow` rules in a folder whose tru
 | 20 | `20-limits-ban` | interactive | Limits followed: a ban on overhead pressing, next week planned and checked with `limits check`. |
 | 21 | `21-limits-sets-cap` | interactive | Limits followed: knee-loading sets capped at 8 a week (the block plans 16). |
 | 22 | `22-limits-load-cap` | interactive | Limits followed: hinges capped at 135 lbs (the block has 155). |
-| 23 | `23-setup-tally` | interactive, fresh | Setup with scripted clicks and mock Tally: week 1 in at most 6 screens, 0 typed answers. |
+| 23 | `23-setup-tally` | interactive, fresh | Setup with scripted clicks and mock Tally: week 1 in at most 5 screens, 0 typed answers, 0 engine source reads. |
 | 24 | `24-setup-files` | interactive, fresh | The same with no Tally server: week 1 lands in `plans/`. |
+| 26 | `26-setup-no-tally` | interactive, fresh | Mock Tally connected and "I don't use Tally": 0 Tally calls, `logger: files`, week 1 in `plans/`, at most 5 screens. |
+| 27 | `27-setup-history-export` | interactive, fresh | A Strong export in the fixture Downloads folder: offered by name, chosen, read, in the brief; no read outside the run. |
+| 28 | `28-setup-quick-questions` | interactive, fresh | "Answer two quick questions": both on one screen, both answers in the brief. |
+| 29 | `29-preference-persists` | interactive, 2 turns | A rep range stated in turn 1 is in the brief; turn 2 plans next week with it, and the audit lists it as the athlete's choice. |
 | 25 | `25-files-logger` | interactive, 2 turns | `logger: files`: a chat report fills the `done_` columns; the Tally line once after the third logged session, never in the fourth. |
 
 v0.2 removed the scenarios that tested guard denials: 07, 08a, 08b, 13, 14 (a stale-snapshot denial) and 15. 05 and 10 were rewritten: no guard and no safety agent.

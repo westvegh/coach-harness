@@ -102,7 +102,14 @@ export async function cmdLimitsHash(argv: string[]): Promise<number> {
 export async function cmdSnapshot(argv: string[]): Promise<number> {
   const { values, positionals } = opts(argv);
   const { parseInstant } = await import("./dates.ts");
-  if (positionals[0] !== "show") throw new CoachError("USAGE", "usage: snapshot show");
+  if (positionals[0] === "reset") {
+    // V4: the snapshot is a cache; setup empties it after the Tally account question.
+    const { resetSnapshot } = await import("./snapshot.ts");
+    const root = resolve(values.root ?? ".");
+    out({ reset: true, removed: resetSnapshot(root), path: join(root, SNAPSHOT_RELATIVE) });
+    return 0;
+  }
+  if (positionals[0] !== "show") throw new CoachError("USAGE", "usage: snapshot show | snapshot reset");
   const path = join(resolve(values.root ?? "."), SNAPSHOT_RELATIVE);
   if (!existsSync(path)) {
     out({ exists: false, path });
@@ -152,6 +159,7 @@ export async function cmdSafety(argv: string[]): Promise<number> {
     const root = resolve(values.root ?? ".");
     if (!values.since || !isCalendarDate(values.since)) throw new CoachError("USAGE", "safety scan-notes needs --since <YYYY-MM-DD>");
     let history: unknown;
+    let server: string | string[] | null = null;
     if (values.input) history = readJson(values.input);
     else {
       // logger: files: the notes and felt columns of the week files (contracts §12a). logger: other:
@@ -160,13 +168,19 @@ export async function cmdSafety(argv: string[]): Promise<number> {
       const fromFiles = cs.filesNotes(root);
       const path = join(root, SNAPSHOT_RELATIVE);
       history = fromFiles ?? (cs.loggerOf(root) === "other" ? [] : existsSync(path) ? (readJson(path) as { history?: unknown }).history : []);
+      // V4: which Tally connection the scanned sessions came from, so the coach can check it read the chosen account.
+      if (!fromFiles && Array.isArray(history)) {
+        const servers = [...new Set(history.map((h) => (isPlainObject(h) && typeof h.server === "string" ? h.server : null)).filter((x): x is string => x !== null))].sort();
+        server = servers.length === 0 ? null : servers.length === 1 ? servers[0] : servers;
+      }
     }
     if (!Array.isArray(history)) throw new CoachError("INPUT_ERROR", "safety scan-notes needs a list of history entries");
     // Urgent terms in notes on or before the latest clearance of the same term were cleared.
     const matches = scanSessionNotes(history as NotesHistoryEntry[], { since: values.since, cleared: urgent.clearedThrough(urgent.readClearances(root)) });
     const terms = urgentTermsOf(matches);
     const stop = terms.length > 0 && !values["dry-run"] ? await urgent.recordStop(root, { terms, source: "note", now: values.now }, { push: true }) : null;
-    out({ matches, urgent_terms: terms, urgent_stop: stop });
+    const scanned = (history as NotesHistoryEntry[]).filter((h) => isPlainObject(h) && (!values.since || String(h.date) >= values.since)).length;
+    out({ server, sessions: scanned, matches, urgent_terms: terms, urgent_stop: stop });
     return 0;
   }
   throw new CoachError("USAGE", "usage: safety detect --text <text> | safety scan-notes --since <YYYY-MM-DD> [--input <file>] [--dry-run]  (an urgent term in a note writes, commits and pushes the urgent stop)");

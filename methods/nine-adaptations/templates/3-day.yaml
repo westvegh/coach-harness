@@ -21,9 +21,17 @@ pack: nine-adaptations
 version: 1
 name: three-day
 days: 3
+# Plain lines for the athlete: why the week looks as it does (the setup and block
+# skills show them before the week table). At most 25 words each; no rule ids.
+why:
+  - "Three days rotate power and size, strength with hard conditioning, and long easy endurance, so every quality gets trained each week."
+  - "Your goal gets the most sets. The other qualities get a smaller dose, so you keep them while the goal improves."
+  - "Each build week adds about 5% more sets, and never more than 10% over the week before."
+  - "Every sixth week is lighter: about 70% of the sets and loads, so your body can recover and adapt."
 week:
   - day: 1
     focus: "Speed and power, then hypertrophy"
+    why: "Fast jumps or throws come first while you are fresh, then lifts for muscle size."
     slots:
       - { pattern: plyometric, adaptation: power, sets: 3, reps: 3, rest_s: 180, note: "jumps or throws, every rep as fast as possible" }
       - { pattern: squat, adaptation: hypertrophy, sets: 3, reps: [6, 10], rest_s: 150 }
@@ -34,6 +42,7 @@ week:
       - { pattern: lateral_raise, adaptation: hypertrophy, sets: 3, reps: [12, 20], rest_s: 60 }
   - day: 2
     focus: "Strength, then high-heart-rate conditioning"
+    why: "Heavy lifts for strength, then short hard intervals for your heart and lungs."
     slots:
       - { pattern: hinge, adaptation: strength, sets: 3, reps: [3, 5], rest_s: 180 }
       - { pattern: horizontal_push, adaptation: strength, sets: 4, reps: [3, 5], rest_s: 180 }
@@ -44,6 +53,7 @@ week:
       - { pattern: intervals, adaptation: anaerobic_capacity, sets: 6, duration: 30, rest_s: 30, note: "30 s hard, 30 s easy; bike, rower or sprint" }
   - day: 3
     focus: "Long-duration endurance"
+    why: "A long, easy session at a pace where you can breathe through your nose builds your aerobic base."
     slots:
       - { pattern: zone2_cardio, adaptation: long_duration, sets: 1, duration: [2400, 3600], rest_s: 0, note: "nasal-breathing pace" }
       - { pattern: mobility, adaptation: recovery, sets: 1, duration: 600, rest_s: 0 }

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "repo": "https://github.com/westvegh/coach-harness",
-  "release": "0.2.1",
+  "release": "0.2.2",
   "files": {
     ".claude/agents/analyst.md": {
       "mode": "100644",
@@ -17,7 +17,7 @@
     },
     ".claude/hooks/capture-reads.body.ts": {
       "mode": "100644",
-      "blob": "b7f0660722c2755a64d92506357b0bea87e663c1"
+      "blob": "ee3b31bd47aa3cec7b8fe5830a2620db8c26111c"
     },
     ".claude/hooks/capture-reads.ts": {
       "mode": "100644",
@@ -69,11 +69,11 @@
     },
     ".claude/settings.json": {
       "mode": "100644",
-      "blob": "9cfe2c68b56aa0c167e1c00d1feac7ea31b34610"
+      "blob": "ccad0443c0892f4b3968869f76a60348a276beba"
     },
     ".claude/skills/audit/SKILL.md": {
       "mode": "100644",
-      "blob": "4d84faa2bffdbbf5aed85da56cb8ef86096587d4"
+      "blob": "092e194b4e92120661b535b8bc3eeb2d41e1ec00"
     },
     ".claude/skills/automation/SKILL.md": {
       "mode": "100644",
@@ -81,7 +81,7 @@
     },
     ".claude/skills/block/SKILL.md": {
       "mode": "100644",
-      "blob": "e75f2f35904c5266124cad092f9dea6aaef87d00"
+      "blob": "3af8e8737c3078d75c7f190d5ee82c0298b91783"
     },
     ".claude/skills/check-in/SKILL.md": {
       "mode": "100644",
@@ -89,7 +89,7 @@
     },
     ".claude/skills/explain/SKILL.md": {
       "mode": "100644",
-      "blob": "2b4ef59e4913e8944d9e0018586aa728b18855f3"
+      "blob": "3e052f02f90d5e915f8c5d55bb0cf28cc3d6ce8a"
     },
     ".claude/skills/injury-history/SKILL.md": {
       "mode": "100644",
@@ -117,11 +117,11 @@
     },
     ".claude/skills/setup/SKILL.md": {
       "mode": "100644",
-      "blob": "7ac95bdd713cd6c12685b404631c562c7b494f54"
+      "blob": "478c2fa023eea77c6ba9ed1e34ce13aa5434c9dd"
     },
     ".claude/skills/today/SKILL.md": {
       "mode": "100644",
-      "blob": "c8e00e38a3f2d73dea6ecbe02f53312b0293c7ea"
+      "blob": "cc5d5c82659af2ca22c514ea534b3aa62306fd21"
     },
     ".claude/skills/update/SKILL.md": {
       "mode": "100644",
@@ -129,7 +129,7 @@
     },
     ".claude/skills/week/SKILL.md": {
       "mode": "100644",
-      "blob": "b6615729f5ec5c17e77c9cf8ff5ff9761206791b"
+      "blob": "67292f60b5b77380dacb0ee844ebd7c5a8faf018"
     },
     ".github/ISSUE_TEMPLATE/bug.yml": {
       "mode": "100644",
@@ -157,11 +157,11 @@
     },
     "CHANGELOG.md": {
       "mode": "100644",
-      "blob": "4ed7035563a1ef0b66c29eec9ccf21e9acbdecf8"
+      "blob": "34ce98e624958109820eec5ce91d41f43c9f99bb"
     },
     "CLAUDE.md": {
       "mode": "100644",
-      "blob": "d3c7dd0e8c2cd07070e418b887764b37dc072238"
+      "blob": "46197b115f49b0304a5424cd9282568379cdd8d2"
     },
     "CONTRIBUTING.md": {
       "mode": "100644",
@@ -173,7 +173,7 @@
     },
     "README.md": {
       "mode": "100644",
-      "blob": "4dde015d05ce267697028d18af59b975595473c5"
+      "blob": "c9ab8d581ce7feb318aae6a6f0e725205d3c6948"
     },
     "SECURITY.md": {
       "mode": "100644",
@@ -261,19 +261,19 @@
     },
     "docs/adding-a-method.md": {
       "mode": "100644",
-      "blob": "a9772773693a29f7529e2c9f3361b3d7b48f7d6d"
+      "blob": "48e3830838de0901ca344c902d8e2b37f5808d46"
     },
     "docs/contracts.md": {
       "mode": "100644",
-      "blob": "46515f8911585a2eddbb7252b083ad211ade8917"
+      "blob": "8fd1ec1f1415f1f0bf986f1b7e980e48589e63f3"
     },
     "docs/how-it-works.md": {
       "mode": "100644",
-      "blob": "d001cff71fb6a2fedba4f877df78558a056650c4"
+      "blob": "8551e91358f1a990299a840b1e2958370a4be38d"
     },
     "docs/safety-and-privacy.md": {
       "mode": "100644",
-      "blob": "aad12f73ac4fcb6031c8d08719fb7aa2a3213d9d"
+      "blob": "39f9f344babc5a9d3b6f1209ce9af2acd7360ef8"
     },
     "docs/safety.md": {
       "mode": "100644",
@@ -301,7 +301,11 @@
     },
     "engine/block-draft.ts": {
       "mode": "100644",
-      "blob": "6b377ee63a024d64764de4db2593292ae6e19796"
+      "blob": "fe23b5e6503f0a9eb4a7b8af38775b410e41ee20"
+    },
+    "engine/block-files.ts": {
+      "mode": "100644",
+      "blob": "2d792458a67f7193d8e6cb3ae032ebc957931fc0"
     },
     "engine/block.ts": {
       "mode": "100644",
@@ -317,7 +321,7 @@
     },
     "engine/cli-core.ts": {
       "mode": "100644",
-      "blob": "298c269a94dd6c80bd75b119968ba0f05d0cd1de"
+      "blob": "24438de83abb645343df441238c5ca560b6e17d5"
     },
     "engine/cli-git.ts": {
       "mode": "100644",
@@ -325,15 +329,15 @@
     },
     "engine/cli-help.ts": {
       "mode": "100644",
-      "blob": "3835c060e9e8dfa0a26a6896619294abc8332471"
+      "blob": "47b01ca25c96d2559679b63e3d5e55c28bba8a3d"
     },
     "engine/cli-helpers.ts": {
       "mode": "100644",
-      "blob": "64393ee676a3ea00b6c055425e336ea907b1466e"
+      "blob": "a5eb19ece52ff0800efbdb57a51df9b63318e75a"
     },
     "engine/cli-helpers2.ts": {
       "mode": "100644",
-      "blob": "84347f30e07ccf569804a15446c4e6f8902f00c2"
+      "blob": "168c60d8d94b8b704092cfcea9ace41865225abb"
     },
     "engine/cli-limits.ts": {
       "mode": "100644",
@@ -349,7 +353,7 @@
     },
     "engine/cli-setup.ts": {
       "mode": "100644",
-      "blob": "99906585fde4efd32a0717ffbeaa236995479adb"
+      "blob": "626bf50689386c94c6f726a0577124755c758504"
     },
     "engine/cli-update.ts": {
       "mode": "100644",
@@ -357,7 +361,7 @@
     },
     "engine/cli.ts": {
       "mode": "100644",
-      "blob": "b851c24efda46e552fa62eadc642ed980c493b21"
+      "blob": "f27c5be5eb90c0112f62795672d91c973d758d4e"
     },
     "engine/coach-snapshot.ts": {
       "mode": "100644",
@@ -409,7 +413,7 @@
     },
     "engine/lint-methods.ts": {
       "mode": "100644",
-      "blob": "81752aa58370d35426230ec78be2339e80b61520"
+      "blob": "79c963d04e600df1e8548299ad385887505ab475"
     },
     "engine/loads.test.ts": {
       "mode": "100644",
@@ -429,7 +433,7 @@
     },
     "engine/methods.ts": {
       "mode": "100644",
-      "blob": "5fa573b5036afd4afe824f3ba1ea9cb356e3dc5b"
+      "blob": "723e7d71c1b2f1ee12c70164a174123b455d2549"
     },
     "engine/mode.test.ts": {
       "mode": "100644",
@@ -521,7 +525,7 @@
     },
     "engine/snapshot.ts": {
       "mode": "100644",
-      "blob": "86d3fe115b5e29b951859cc43a76ebdd40c94c81"
+      "blob": "49598250f294bbd9505dcf40f771d47ef075de43"
     },
     "engine/tally-shape.ts": {
       "mode": "100644",
@@ -537,7 +541,7 @@
     },
     "engine/types.ts": {
       "mode": "100644",
-      "blob": "c27323d4f5783c7346677b840f344f3157bd2877"
+      "blob": "ad696b22acd4c2a7a24261aa6a4acf9d81d19d93"
     },
     "engine/update.ts": {
       "mode": "100644",
@@ -555,6 +559,10 @@
       "mode": "100644",
       "blob": "82c50d57564a4ffce19f3e255f2d2458083745eb"
     },
+    "engine/week-file.ts": {
+      "mode": "100644",
+      "blob": "d8033f50133fb99c6a60a7e2377b6f2e4e259240"
+    },
     "engine/weeks.ts": {
       "mode": "100644",
       "blob": "d70e1b4d6b6111bce9ff8a823c517f55fc7f6873"
@@ -569,7 +577,7 @@
     },
     "evals/README.md": {
       "mode": "100644",
-      "blob": "48673fe831b834d33ef24feb3741f33bcbb428f3"
+      "blob": "3cde04413f7651b9aed9a3ed29f743596698f6de"
     },
     "evals/golden/01-pwd-new-date.json": {
       "mode": "100644",
@@ -729,7 +737,7 @@
     },
     "evals/lib/checks.ts": {
       "mode": "100644",
-      "blob": "665ef85d509f683565c60dfbdee074e2ebd6733e"
+      "blob": "ea64a2a2144d768845c58d5113da0e8c4c0b37f1"
     },
     "evals/lib/claude.test.ts": {
       "mode": "100644",
@@ -737,7 +745,7 @@
     },
     "evals/lib/claude.ts": {
       "mode": "100644",
-      "blob": "1a1b96783a86f4fdb2874fa15e7b1398141a05f1"
+      "blob": "e5798397fb3ce5be507cbfa498a723a4979921a7"
     },
     "evals/lib/collect.ts": {
       "mode": "100644",
@@ -761,7 +769,7 @@
     },
     "evals/lib/types.ts": {
       "mode": "100644",
-      "blob": "ae3f1edc784663379c6322792a463328c7b95d29"
+      "blob": "da90a663cdb1c1ed1d4da8b9983fab6ff2df158b"
     },
     "evals/mock-tally/client.ts": {
       "mode": "100644",
@@ -781,7 +789,7 @@
     },
     "evals/run.ts": {
       "mode": "100644",
-      "blob": "05d156e67a47d07b4cf08d3e04a0440067c1726d"
+      "blob": "840503bcf6f448b5bc548fab9e6147e5a002601a"
     },
     "evals/scenarios/01-setup-scripted.ts": {
       "mode": "100644",
@@ -863,6 +871,22 @@
       "mode": "100644",
       "blob": "8c47ff50afec5c01b5238deeb886c50ea517048a"
     },
+    "evals/scenarios/26-setup-no-tally.ts": {
+      "mode": "100644",
+      "blob": "844c6e87898939549dae3d2e21e785256f9fbfbf"
+    },
+    "evals/scenarios/27-setup-history-export.ts": {
+      "mode": "100644",
+      "blob": "e722464a7b9120f01b4da1ff3de44e8d210642d0"
+    },
+    "evals/scenarios/28-setup-quick-questions.ts": {
+      "mode": "100644",
+      "blob": "05a98291e9a5d99a2732997393add7da378d901d"
+    },
+    "evals/scenarios/29-preference-persists.ts": {
+      "mode": "100644",
+      "blob": "a7f33c69dcb604a11b43750b5d29bbd8d851b11f"
+    },
     "evals/scenarios/_common.ts": {
       "mode": "100644",
       "blob": "d6c8c47f0922451d3026e93bc265c93d7506ea94"
@@ -873,11 +897,11 @@
     },
     "evals/scenarios/_setup.ts": {
       "mode": "100644",
-      "blob": "e66ba6fae300b30db25d82b61abe011e92ecd881"
+      "blob": "3cab7d303644423c74ba0afb3e4db5d1b6df1f02"
     },
     "evals/scenarios/fixtures.test.ts": {
       "mode": "100644",
-      "blob": "50e68dcaf5e79ab58cfadfd95955f663af687448"
+      "blob": "04b842d3f69bf60b197c184389849106a5855edc"
     },
     "git-hooks/pre-push": {
       "mode": "100755",
@@ -937,23 +961,23 @@
     },
     "methods/nine-adaptations/templates/3-day.yaml": {
       "mode": "100644",
-      "blob": "69fd499d8b8e358bc6ce29e4639223af269abcf3"
+      "blob": "1c195e8aee2ab486dd896ee0cb28a04a0954cd13"
     },
     "methods/nine-adaptations/templates/4-day.yaml": {
       "mode": "100644",
-      "blob": "7235c394932b828bf5dcf37bc467ab92bd58f3d8"
+      "blob": "4ff265101eae83f7f92dd86ace3737731c969f63"
     },
     "methods/nine-adaptations/templates/5-day.yaml": {
       "mode": "100644",
-      "blob": "f9221f0e8b899f7445300150160c491adc987cc7"
+      "blob": "328679aed03aba06173281365a575cbc2c9c3b14"
     },
     "package-lock.json": {
       "mode": "100644",
-      "blob": "e648d3a51e590ff82cc9b29fff947fcacc8a038f"
+      "blob": "88520949f2b8b46717f6fb3ed57f596b91813ec2"
     },
     "package.json": {
       "mode": "100644",
-      "blob": "5beae98ca27ed59517f75c741a5991309205fef2"
+      "blob": "b399d70b11adf3e76d0329a1cd5740d2260fb5b0"
     },
     "scripts/bench-cli.ts": {
       "mode": "100644",
@@ -993,7 +1017,7 @@
     },
     "templates/athlete/brief.md": {
       "mode": "100644",
-      "blob": "f2dde74cd700e7e8ad618ad68435bd6205971cd7"
+      "blob": "2edd2498e5ed73d89283e97b68628b771383784e"
     },
     "templates/athlete/limits.yaml": {
       "mode": "100644",
@@ -1013,7 +1037,7 @@
     },
     "tests/cli.test.ts": {
       "mode": "100644",
-      "blob": "ba1d6d01f4f042a01d00ed775a93aa12dba5ce3a"
+      "blob": "43fb3f5a97505e30dc9044bda74d2320615019e3"
     },
     "tests/e3/block-draft.test.ts": {
       "mode": "100644",
@@ -1073,7 +1097,11 @@
     },
     "tests/hooks/settings.test.ts": {
       "mode": "100644",
-      "blob": "3aa004b3782d34885097d1a561853676559a94b8"
+      "blob": "10d565e44cb356241adf510af66db00763cafc68"
+    },
+    "tests/hooks/v4-capture.test.ts": {
+      "mode": "100644",
+      "blob": "2a148316f88c6eca2f596c10a4527a8ab3e506d8"
     },
     "tests/legacy.test.ts": {
       "mode": "100644",
@@ -1097,7 +1125,7 @@
     },
     "tests/safety-cli.test.ts": {
       "mode": "100644",
-      "blob": "4a65e2dc825409c0acc1cdd5a77f6eb8aa508db0"
+      "blob": "3f01f720a53b6c449d0ca628e771c979c05b9a70"
     },
     "tests/safety-text.test.ts": {
       "mode": "100644",
@@ -1105,7 +1133,7 @@
     },
     "tests/setup-v2.test.ts": {
       "mode": "100644",
-      "blob": "e507a3b1a0cdc853573a911ccabc9a23ef33d921"
+      "blob": "1b30994339aea65d14e311285f9fbb1a55356113"
     },
     "tests/signals/checkin-and-signals.test.ts": {
       "mode": "100644",
@@ -1145,7 +1173,7 @@
     },
     "tests/skills.test.ts": {
       "mode": "100644",
-      "blob": "76957a3df964362e76038d72143cca6b579e0651"
+      "blob": "a1389dde590eef242e4b61de1cfd07b578eeb1b5"
     },
     "tests/update.test.ts": {
       "mode": "100644",
@@ -1154,6 +1182,14 @@
     "tests/urgent.test.ts": {
       "mode": "100644",
       "blob": "c9c4c85d47bf7e2e585b7a8a9930b52accb2fca5"
+    },
+    "tests/v4-engine.test.ts": {
+      "mode": "100644",
+      "blob": "2d3311687b45bb3353a13db9cdfc85e132649b13"
+    },
+    "tests/v4-skills.test.ts": {
+      "mode": "100644",
+      "blob": "78521ab06d599d9029b66154ed832da2618334cf"
     },
     "tsconfig.json": {
       "mode": "100644",

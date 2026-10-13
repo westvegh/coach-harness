@@ -12,6 +12,7 @@
 ## Training history
 
 - Years of training:
+- Days a week lately:
 - Recent program:
 - Best recent lifts or tests:
 
@@ -25,6 +26,7 @@
 
 - Exercises the athlete likes:
 - Exercises the athlete dislikes:
+- Rep ranges and other choices:
 
 ## Health notes
 

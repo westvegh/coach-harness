@@ -123,6 +123,30 @@ export function weeklySetsPerMuscle(
   return { sets, unknown };
 }
 
+/** The most words a `why` line may have (V4: plain lines for the athlete). */
+export const WHY_MAX_WORDS = 25;
+/** A rule id in any pack's form (NA-PROG-001), or a code path: neither belongs in athlete text. */
+const WHY_FORBIDDEN = /\b[A-Z]{2,}-[A-Z]+-\d{3}\b|\b[\w-]+\/[\w./-]+|\.(ya?ml|ts|json|md)\b/;
+
+/**
+ * The optional `why` lines (V4): 3 to 5 for the week, one per day, each at most 25 words, with
+ * no rule id and no code path. A pack may leave them out. Lint only: never a runtime check.
+ */
+export function whyProblems(name: string, t: Template): string[] {
+  const out: string[] = [];
+  const line = (where: string, l: string) => {
+    const words = l.trim().split(/\s+/).length;
+    if (words > WHY_MAX_WORDS) out.push(`templates/${name}.yaml ${where}: ${words} words; at most ${WHY_MAX_WORDS}`);
+    if (WHY_FORBIDDEN.test(l)) out.push(`templates/${name}.yaml ${where}: no rule ids or code paths in athlete text`);
+  };
+  if (t.why !== undefined) {
+    if (t.why.length < 3 || t.why.length > 5) out.push(`templates/${name}.yaml why: ${t.why.length} lines; give 3 to 5`);
+    t.why.forEach((l, i) => line(`why line ${i + 1}`, l));
+  }
+  for (const d of t.week) if (d.why !== undefined) line(`day ${d.day} why`, d.why);
+  return out;
+}
+
 function countBounds(c: number | [number, number]): [number, number] {
   return typeof c === "number" ? [c, c] : c;
 }
@@ -205,6 +229,7 @@ export function lintPack(packDir: string, opts: { taxonomyPath?: string } = {}):
       }
     }
     for (const p of unknownPatterns) errors.push(`templates/${name}.yaml: unknown pattern ${p}`);
+    errors.push(...whyProblems(name, t));
 
     // Soft: slot reps and rest against the pack's ranges (warnings only).
     for (const day of t.week) {

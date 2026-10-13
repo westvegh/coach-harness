@@ -76,6 +76,10 @@ Setup asks one data question that names each recipient: Anthropic (Claude), GitH
 
 Git records every change to `athlete/`, `plans/` and `coach.yaml`: the coach commits after each change, and a Stop hook commits any changed file under those paths that is left. Each Tally write also gets a summary line in your athlete log (`athlete/log/`), which is committed; the Tally day itself is not in git. A change the coach makes in another tool you connected is not recorded.
 
+### A training export at setup
+
+Without Tally history, setup looks for a workout export in `~/Downloads` and `~/Desktop`. It reads only the first line (the column names) of each `.csv` file there, and lists only files whose columns look like a workout export. It never prints the column names, and never names a file that does not match. The coach reads the full contents of one file only: the one you choose, and only its last 8 weeks. It writes a short summary to `athlete/brief.md` and a normalized copy to `.tmp/coach/history.json` (scratch, not committed). That file content goes to Anthropic as part of the conversation.
+
 ### The Apple Health Shortcut
 
 The Shortcut runs on your phone and uses a fine-grained GitHub token that can write to one repository only. The token stays in the Shortcut on your phone. Revoke it on GitHub at any time. The guide is `adapters/signals/apple-health-shortcut/SHORTCUT.md`.

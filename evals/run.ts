@@ -57,6 +57,7 @@ export function prepare(s: Scenario, opts: { allowDirty?: boolean; proxy?: boole
     read: (rel) => readFileSync(join(inst.root, rel), "utf8"),
     ghPulls: (prs) => writeFileSync(inst.ghPulls, JSON.stringify(prs) + "\n"),
     git: (...args) => git(inst.root, ...args),
+    historyHome: inst.historyHome,
   };
   s.setup(ctx);
   // Before any commit and before the model: the hooks of a fresh copy, with built-ins only.
@@ -79,10 +80,12 @@ export function prepare(s: Scenario, opts: { allowDirty?: boolean; proxy?: boole
   return { inst, ctx, seed: JSON.parse(JSON.stringify(ctx.mock)), instanceSha, bootstrap };
 }
 
-export type RunRecord = { scenario: string; run: number; status: "pass" | "fail" | "error"; checks: Check[]; missingSkills: string[]; error?: string; costUsd: number | null; durationMs: number; dir: string };
+export type RunRecord = { scenario: string; run: number; status: "pass" | "fail" | "error"; checks: Check[]; missingSkills: string[]; error?: string; costUsd: number | null; durationMs: number; dir: string; model?: string };
 
 export async function runOnce(s: Scenario, n: number, opts: { model: string; timeoutMs: number; outDir: string; keep: boolean; allowDirty?: boolean; proxy?: boolean }): Promise<RunRecord> {
   const missing = missingSkills(s);
+  // V4: a scenario may pin its model (the setup runs use West's model).
+  const model = s.model ?? opts.model;
   const out = join(opts.outDir, opts.proxy ? `${s.name}+proxy` : s.name, `run-${n}`);
   mkdirSync(out, { recursive: true });
   const { inst, ctx, seed, instanceSha, bootstrap } = prepare(s, { allowDirty: opts.allowDirty, proxy: opts.proxy });
@@ -101,7 +104,7 @@ export async function runOnce(s: Scenario, n: number, opts: { model: string; tim
     const claude = await runClaude({
       cwd: inst.root,
       prompt,
-      model: opts.model,
+      model,
       mcpConfig: inst.mcpConfig,
       unattended: s.mode === "unattended",
       // The permission proxy allows no tool beyond the project's own settings.
@@ -127,6 +130,7 @@ export async function runOnce(s: Scenario, n: number, opts: { model: string; tim
     record.exitCode = claude.exitCode;
     record.isError = claude.isError;
     record.after = snapshotFiles(inst.root, s.watch);
+    record.commits = git(inst.root, "rev-list", "HEAD", `^${instanceSha}`).split("\n").filter(Boolean);
     records.push(record);
     if (claude.aborted) {
       all.aborted = claude.aborted;
@@ -161,12 +165,14 @@ export async function runOnce(s: Scenario, n: number, opts: { model: string; tim
     turns: records,
     ...(opts.proxy ? { proxy: true, trusted: !UNTRUSTED.test(all.stderr) } : {}),
     instance: { exportSha: exp.sha, exportDirty: exp.dirty, fresh: !!s.fresh },
+    model,
+    paths: { root: inst.root, historyHome: inst.historyHome },
     ...(bootstrap ? { bootstrap } : {}),
   };
   writeFileSync(join(out, "artifacts.json"), JSON.stringify(artifacts, null, 2) + "\n");
   let rec: RunRecord;
   if (claude.aborted) {
-    rec = { scenario: opts.proxy ? `${s.name}+proxy` : s.name, run: n, status: "error", checks: [], missingSkills: missing, error: claude.aborted, costUsd: claude.costUsd, durationMs: claude.durationMs, dir: out };
+    rec = { scenario: opts.proxy ? `${s.name}+proxy` : s.name, run: n, status: "error", checks: [], missingSkills: missing, error: claude.aborted, costUsd: claude.costUsd, durationMs: claude.durationMs, dir: out, model };
   } else {
     let checks: Check[];
     try {
@@ -174,7 +180,7 @@ export async function runOnce(s: Scenario, n: number, opts: { model: string; tim
     } catch (e) {
       checks = [{ name: "check function", ok: false, detail: (e as Error).stack ?? String(e) }];
     }
-    rec = { scenario: opts.proxy ? `${s.name}+proxy` : s.name, run: n, status: checks.every((c) => c.ok) ? "pass" : "fail", checks, missingSkills: missing, costUsd: claude.costUsd, durationMs: claude.durationMs, dir: out };
+    rec = { scenario: opts.proxy ? `${s.name}+proxy` : s.name, run: n, status: checks.every((c) => c.ok) ? "pass" : "fail", checks, missingSkills: missing, costUsd: claude.costUsd, durationMs: claude.durationMs, dir: out, model };
   }
   writeFileSync(join(out, "checks.json"), JSON.stringify(rec, null, 2) + "\n");
   // Claude Code keeps an auto-memory folder per project path; remove the temp instance's one.
@@ -231,12 +237,14 @@ async function pool<T, R>(items: T[], size: number, fn: (t: T) => Promise<R>): P
 export function summarize(records: RunRecord[]): string {
   const by = new Map<string, RunRecord[]>();
   for (const r of records) by.set(r.scenario, [...(by.get(r.scenario) ?? []), r]);
-  const lines = ["| scenario | pass | fail | error | missing skills | failed checks |", "|---|---|---|---|---|---|"];
+  const lines = ["| scenario | model | pass | fail | error | cost | missing skills | failed checks |", "|---|---|---|---|---|---|---|---|"];
   for (const [name, rs] of by) {
     const count = (s: string) => rs.filter((r) => r.status === s).length;
     const failed = [...new Set(rs.flatMap((r) => r.checks.filter((c) => !c.ok).map((c) => c.name)))];
     const errs = [...new Set(rs.filter((r) => r.error).map((r) => r.error!.slice(0, 80)))];
-    lines.push(`| ${name} | ${count("pass")}/${rs.length} | ${count("fail")} | ${count("error")} | ${rs[0].missingSkills.join(", ") || "-"} | ${[...failed, ...errs].join("; ") || "-"} |`);
+    const models = [...new Set(rs.map((r) => r.model ?? "?"))].join(", ");
+    const c = rs.reduce((n, r) => n + (r.costUsd ?? 0), 0);
+    lines.push(`| ${name} | ${models} | ${count("pass")}/${rs.length} | ${count("fail")} | ${count("error")} | $${c.toFixed(2)} | ${rs[0].missingSkills.join(", ") || "-"} | ${[...failed, ...errs].join("; ") || "-"} |`);
   }
   const cost = records.reduce((n, r) => n + (r.costUsd ?? 0), 0);
   lines.push("", `Runs: ${records.length}. Reported cost: $${cost.toFixed(2)}.`);
@@ -309,7 +317,7 @@ async function main(): Promise<void> {
   const outDir = join(REPO, "evals/results", stamp);
   mkdirSync(outDir, { recursive: true });
   const jobs = scenarios.flatMap((s) => Array.from({ length: runs }, (_, i) => ({ s, n: i + 1 })));
-  console.log(`${jobs.length} runs (${scenarios.length} scenarios x ${runs}), model ${values.model}, export ${exp.sha.slice(0, 7)}${exp.dirty ? " (dirty)" : ""}, results in ${outDir}`);
+  console.log(`${jobs.length} runs (${scenarios.length} scenarios x ${runs}), model ${[...new Set(scenarios.map((s) => s.model ?? values.model))].join(", ")}, export ${exp.sha.slice(0, 7)}${exp.dirty ? " (dirty)" : ""}, results in ${outDir}`);
   const records = await pool(jobs, Number(values.parallel), async ({ s, n }) => {
     const r = await runOnce(s, n, { model: values.model!, timeoutMs: Number(values["timeout-min"]) * 60_000, outDir, keep: values.keep!, allowDirty: values["allow-dirty"], proxy: values.proxy });
     console.log(`${r.status.toUpperCase()} ${s.name} run ${n}${r.error ? ` (${r.error})` : ""}${r.checks.filter((c) => !c.ok).map((c) => `\n    x ${c.name}${c.detail ? `: ${c.detail.slice(0, 200)}` : ""}`).join("")}`);

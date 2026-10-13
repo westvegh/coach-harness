@@ -73,6 +73,10 @@ export const ALLOW_RULES = [
     "worktree main-checkout",
     "worktree remove-temp",
     "history-files",
+    // V4: the block write, the Tally day inputs, the snapshot reset (loads --fill and block draft --out fall under loads * and block draft *).
+    "block write *",
+    "tally-days *",
+    "snapshot reset",
   ].map((c) => `Bash(node engine/cli.ts ${c})`),
   "Bash(npm ci)",
   "Bash(git -C * merge --ff-only *)",

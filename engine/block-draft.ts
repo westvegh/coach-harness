@@ -56,6 +56,16 @@ export type BlockDraftInput = {
   /** Working load per exercise (name or exerciseId), in the athlete's units. */
   loads?: Record<string, number>;
   id?: string;
+  /**
+   * Before coach.yaml exists (setup), the input gives these; with coach.yaml they come from it
+   * (`days` from --template or coach.yaml; `emphasis` from the input when given).
+   */
+  method?: string;
+  days?: number;
+  units?: Units;
+  timezone?: string;
+  /** Where the history comes from: tally (the Tally cache), files (plans/), none. */
+  logger?: "tally" | "files" | "none";
 };
 
 export const DEFAULT_STEP = 0.05;
@@ -149,6 +159,15 @@ function nextMonday(today: CalendarDate): CalendarDate {
 
 const roundTo = (x: number, step: number) => Math.round(x / step) * step;
 
+/** The weekly step for build weeks: the input's (default 0.05), never above the pack's volume cap. */
+export function effectiveStep(rules: Rules, input: BlockDraftInput = {}): number {
+  const capCheck = findCheck(rules, "weekly_volume_increase_max");
+  const cap = typeof capCheck?.value === "number" ? capCheck.value : DEFAULT_VOLUME_CAP;
+  const step = input.step ?? DEFAULT_STEP;
+  if (!(typeof step === "number" && step >= 0)) throw new CoachError("BLOCK_DRAFT", "step must be a fraction of 0 or more");
+  return Math.min(step, cap);
+}
+
 export function draftBlock(
   template: Template,
   weeksN: number,
@@ -176,12 +195,8 @@ export function draftBlock(
   const cap = typeof capCheck?.value === "number" ? capCheck.value : DEFAULT_VOLUME_CAP;
   if (capCheck) ruleIds.add(capCheck.id);
   else warnings.push(`the pack has no weekly_volume_increase_max rule: using ${DEFAULT_VOLUME_CAP}`);
-  let step = input.step ?? DEFAULT_STEP;
-  if (!(typeof step === "number" && step >= 0)) throw new CoachError("BLOCK_DRAFT", "step must be a fraction of 0 or more");
-  if (step > cap) {
-    warnings.push(`step ${step} is above the volume cap ${cap}: using ${cap}`);
-    step = cap;
-  }
+  const step = effectiveStep(ctx.rules, input);
+  if (step < (input.step ?? DEFAULT_STEP)) warnings.push(`step ${input.step ?? DEFAULT_STEP} is above the volume cap ${cap}: using ${cap}`);
   const depthCheck = findCheck(ctx.rules, "deload_depth");
   const depth = (depthCheck?.value as { volume: number; load: number } | undefined) ?? DEFAULT_DELOAD_DEPTH;
   if (depthCheck) ruleIds.add(depthCheck.id);

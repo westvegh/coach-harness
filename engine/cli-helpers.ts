@@ -8,6 +8,8 @@
 //   adjust --decision trim|recovery < tally-day.json       (a raw Tally day on stdin)
 //   loads --input <file.json>        ({exercises, history?}; history defaults to the snapshot's)
 //   loads --from-snapshot <date>  |  loads < tally-day.json
+//   loads --input <week file> --fill [--history <file>]   (fills the week file in place)
+//   tally-days --input <week file>   (one plan_workout_day input per date)
 //   targets --input <file.json>      ({block, logs, today, target_week})
 //   routine-body --kind daily|weekly --repo-url <https://github.com/o/r>
 //                (--discover | --connections <file.json> | --connector-uuid <uuid> [--connector-name Tally_Workout])
@@ -94,6 +96,9 @@ function args(argv: string[]) {
       decision: { type: "string" },
       "planned-minutes": { type: "string" },
       session: { type: "string" },
+      // loads --fill fills a week file in place; --history is a normalized history file.
+      fill: { type: "boolean" },
+      history: { type: "string" },
     },
   });
 }
@@ -240,6 +245,8 @@ async function cmdAdjust(a: Args): Promise<number> {
  * given in --input is taken as `units` unless a session names its own unit.
  */
 async function cmdLoads(a: Args): Promise<number> {
+  if (a.values.fill) return cmdLoadsFill(a);
+  if (a.values.history) throw new CoachError("USAGE", "--history goes with loads --input <week file> --fill");
   const root = rootOf(a);
   const cfg = await maybeConfig(root);
   const [{ asTallyDay }, { suggestLoads }, { loadTaxonomy }] = await Promise.all([import("./tally-shape.ts"), import("./loads.ts"), import("./taxonomy.ts")]);
@@ -269,6 +276,45 @@ async function cmdLoads(a: Args): Promise<number> {
     return 0;
   }
   out({ units, suggestions, update: loadOperations(tallyDay, suggestions, units) });
+  return 0;
+}
+
+/**
+ * loads --input <week file> --fill [--history <file>]: fills the week's loads in place and prints
+ * them. The history: --history when given, else the logged weeks (the snapshot or plans/).
+ */
+async function cmdLoadsFill(a: Args): Promise<number> {
+  const root = rootOf(a);
+  const path = need(a.values.input, "--input <week file> (loads --fill)");
+  const cfg = await maybeConfig(root);
+  const [{ readWeekFile, saveWeekFile, fillWeekLoads, parseHistoryFile }, { loadTaxonomy }] = await Promise.all([import("./week-file.ts"), import("./taxonomy.ts")]);
+  const wf = readWeekFile(path);
+  const first = wf.week.days.flatMap((d) => d.exercises).find((e) => e.unit === "lbs" || e.unit === "kg");
+  const units: Units = cfg?.athlete.units ?? first?.unit ?? "lbs";
+  let history: SessionHistory;
+  let source: "file" | "logged weeks" | "none";
+  if (a.values.history) {
+    history = parseHistoryFile(readJson(a.values.history), a.values.history);
+    source = "file";
+  } else {
+    const snap = (await import("./coach-snapshot.ts")).coachSnapshot(root, { now: a.values.now, cfg });
+    history = snap?.history ?? [];
+    source = history.length > 0 ? "logged weeks" : "none";
+  }
+  const res = fillWeekLoads(wf, history, await rulesAt(root, cfg), units, { tax: loadTaxonomy({ root }), source });
+  saveWeekFile(path, wf);
+  out({ file: path, ...res });
+  return 0;
+}
+
+/** tally-days --input <week file>: one plan_workout_day input per date. */
+async function cmdTallyDays(a: Args): Promise<number> {
+  const root = rootOf(a);
+  const cfg = await maybeConfig(root);
+  const { readWeekFile, tallyDays } = await import("./week-file.ts");
+  const wf = readWeekFile(need(a.values.input, "--input <week file>"));
+  const first = wf.week.days.flatMap((d) => d.exercises).find((e) => e.unit === "lbs" || e.unit === "kg");
+  out(tallyDays(wf, cfg?.athlete.units ?? first?.unit ?? "lbs", cfg?.athlete.timezone));
   return 0;
 }
 
@@ -463,5 +509,7 @@ export async function helpersCommand(cmd: string, argv: string[]): Promise<numbe
       return cmdInstallLaunchd(a);
     case "window-check":
       return cmdWindowCheck(a);
+    case "tally-days":
+      return cmdTallyDays(a);
   }
 }

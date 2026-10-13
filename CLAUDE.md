@@ -12,8 +12,9 @@ The athlete should see no permission prompt in normal use. `.claude/settings.jso
 
 - **Files:** write and append with the Write or Edit tool, never from Bash (no `>`, `>>`, `cat <<EOF`, `tee` or `echo`). The Write tool creates folders, so never run `mkdir`. An engine input goes in a file under `.tmp/coach/`, written with the Write tool and passed with `--input`.
 - **Engine commands:** one `node engine/cli.ts …` command per Bash call, as the skill writes it. No `;`, `&&`, `||`, pipes, redirects, `$( )`, `echo`, `head`, `grep`, `sed`, `wc` or `node -e`. Read the engine's output from its printed result.
-- **Reading:** use the Read, Grep and Glob tools, not `cat`, `grep` or `head` in Bash.
-- **A command's usage:** `node engine/cli.ts help <command>`.
+- **Reading:** read files with the Read tool. To search, run `grep -rn "<text>" <folder>` or `find <folder> -name "<pattern>"` in Bash, one command per call, with the pattern in quotes. This Claude Code version has no Glob or Grep tool.
+- **A command's usage:** `node engine/cli.ts help <command> [<subcommand>]`.
+- **No source reading.** In normal use, do not read engine source or `docs/contracts.md`. `node engine/cli.ts help <command>` gives each input shape. Read source only when a command fails in a way its help does not explain.
 
 ## Read order
 
@@ -38,6 +39,10 @@ If `coach.yaml` does not exist, the athlete is not set up. Offer the `setup` ski
 
 Scheduled runs name their skill explicitly ("Read .claude/skills/today/SKILL.md and follow it exactly"). Follow that skill exactly.
 
+## Preferences persist
+
+When the athlete states a lasting preference (a rep range, an exercise they like or dislike, a schedule, equipment), write it in `athlete/brief.md` under "Preferences" and commit it. When a preference departs from the method, say so once when it is set, record "athlete chose", and then follow it without repeating the caution. The `week`, `block`, `today` and `audit` skills apply the "Preferences" lines to every plan. The limits and the urgent stop still come first.
+
 ## Hard rules
 
 1. **The urgent stop comes first.** Chest pain, fainting, new numbness or weakness, severe shortness of breath, a sudden severe headache and the other urgent terms in `engine/safety-terms.yaml` stop all training changes. The `safety-detect` hook writes `athlete/.urgent-stop` when a message names one. For a sign that reaches you another way (an answer, a file), run `node engine/cli.ts urgent set --term <name> --source answer`. Give the urgent-care text first (`engine/safety-text.ts`, `URGENT_CARE_TEXT`), keeping every instruction. The urgent gate then denies every plan write. Only the athlete's answer in a live session clears it: ask the `safety` skill's clear question, then run `node engine/cli.ts urgent clear --reason clinician` or `--reason false-alarm`. Never clear it on your own reading, and never in an unattended run.
@@ -57,7 +62,7 @@ Scheduled runs name their skill explicitly ("Read .claude/skills/today/SKILL.md 
 | Job | `tally` | `files` (`plans/<YYYY>-W<ww>.csv`) | `other` (a tool the athlete connected) |
 |---|---|---|---|
 | Read a planned day or week | `get_planned_workout` | `node engine/cli.ts plans read --week <date>` | that tool's read, by its own instructions |
-| Read the logged history | `get_workout_history` | nothing to read: the engine tools read `plans/` | that tool's history |
+| Read the logged history | `get_workout_history` with `limit: 10`, following `nextCursor` (a larger page can be too big for the snapshot hook) | nothing to read: the engine tools read `plans/` | that tool's history |
 | Write or change a day | `plan_workout_day`, `update_planned_workout` (with `expectedVersion`) | `node engine/cli.ts plans write --input <file.json>` with the whole day | that tool's write |
 | Units and the listing | `get_training_context` | `coach.yaml athlete.units` | `coach.yaml athlete.units` |
 | Exercise names | `search_exercises` | plain names that fit the equipment | plain names |

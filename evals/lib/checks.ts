@@ -221,3 +221,15 @@ export function replayWrites(a: RunArtifacts): { steps: { call: number; tool: st
     rmSync(dir, { recursive: true, force: true });
   }
 }
+
+/**
+ * The path-like words of a shell command (V4b): split on spaces, quotes, parentheses, `=`, `,` and
+ * shell operators; a word with a `/`, or one that starts with `~` or `..`, or the bare word given
+ * in `names`; never a URL or an option.
+ */
+export function pathTokens(command: string, names: string[] = []): string[] {
+  return command
+    .split(/[\s"'`()=,;|&<>]+/)
+    .map((t) => t.replace(/[:]+$/, ""))
+    .filter((t) => t && !t.startsWith("-") && !t.includes("://") && (t.includes("/") || t.startsWith("~") || t.startsWith("..") || names.includes(t)));
+}

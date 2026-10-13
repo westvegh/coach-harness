@@ -101,7 +101,7 @@ You can switch at any time ("move my plans to Tally"). With files, the coach men
 
 Your athlete files live in `athlete/` in your private repo:
 
-- `brief.md`: your goals, history, schedule and equipment;
+- `brief.md`: your goals, history, schedule, equipment and preferences (a lasting choice you state, such as a rep range, goes here, and every later plan follows it);
 - `limits.yaml`: your limits (a ban, or a cap on sets or load, for a body region);
 - `block.yaml`: the current training block;
 - `log/YYYY-MM.md`: one entry for each change, with the readiness, the rule IDs and the result, and any proposal for the next live session.
