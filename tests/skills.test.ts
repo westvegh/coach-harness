@@ -185,7 +185,9 @@ test("unattended big changes become one log line for the next live session; no P
   assert.match(claudeMd, /Unattended: make no big change; write one line in the athlete log, "- proposal for the next live session: <the change>"/);
   for (const s of skills) assert.doesNotMatch(s.text, /gh pr (create|merge)|git switch -c/, `${s.name}: no PR flow`);
   // The next live session offers them.
-  assert.match(steps("today").get(3)!, /\*\*Proposals for the live session\*\* \(interactive only\)[^\n]*"- proposal for the next live session: …"[^\n]*A\) Yes, do it, B\) Not now/);
+  // V6b fix 4: no question per proposal; today's proposals join the one consent question.
+  assert.match(steps("today").get(4)!, /\*\*Proposals for the live session\*\* \(interactive only\)[^\n]*"- proposal for the next live session: …"[^\n]*Ask no question here\./);
+  assert.match(steps("today").get(4)!, /Never one question per proposal\./);
 });
 
 // ---------- agents ----------
@@ -269,7 +271,8 @@ test("finding 1: today and week read history through today and scan notes before
       assert.ok(line.includes("window-check"), `${name}: step 1 exits only at window-check: ${line.trim()}`);
     }
   }
-  inOrder(section(skill("today").body, "Steps")!, ["safety scan-notes", "Proposals for the live session", "Today is already adjusted.", "node engine/cli.ts readiness"], "today");
+  // V6 A.5: urgent and pain handling, then the already-adjusted check, then proposals.
+  inOrder(section(skill("today").body, "Steps")!, ["safety scan-notes", "Today is already adjusted.", "Proposals for the live session", "node engine/cli.ts readiness"], "today");
   inOrder(section(skill("week").body, "Steps")!, ["safety scan-notes", "Proposals for the live session", "a new block is due", "node engine/cli.ts targets"], "week");
 });
 
@@ -330,15 +333,16 @@ test("finding 10: setup commits and pushes at its end; automation pushes first a
   }
 });
 
-test("finding 13: every pain follow-up in check-in offers options; the warning-sign question passes --urgent", () => {
-  const pain = steps("check-in").get(4)!;
-  for (const q of ["Where?", "Which side?", "How bad", "Any of these now?"]) {
+test("finding 13: every pain follow-up in check-in offers options; a warning sign the athlete names passes --urgent", () => {
+  const pain = steps("check-in").get(3)!;
+  for (const q of ["Where?", "Which side?", "How bad"]) {
     const line = pain.split("\n").find((l) => l.includes(q));
     assert.ok(line && /A\) [^\n]*B\) /.test(line), `${q} has options`);
   }
   assert.match(pain, /not sure/);
-  assert.match(steps("check-in").get(5)!, /\[--urgent <term>,\.\.\.\]/);
-  assert.match(steps("check-in").get(6)!, /run the `safety` skill for that region/);
+  assert.match(pain, /\*\*A warning sign\*\* the athlete names: pass the term names with `--urgent`/);
+  assert.match(steps("check-in").get(4)!, /\[--urgent <term>,\.\.\.\]/);
+  assert.match(steps("check-in").get(5)!, /run the `safety` skill for that region/);
 });
 
 // ---------- the safety skill ----------
@@ -364,7 +368,7 @@ test("safety skill: writes the limit the athlete chose (note, cap with build_bac
   assert.match(steps("safety").get(6)!, /"A clinician has seen me about it", "It was a false alarm", "Not yet"[^\n]*--reason clinician[^\n]*--reason false-alarm[^\n]*Never clear it on your own reading/);
   assert.match(steps("safety").get(7)!, /"Remove the <region> limit\? A\) Yes, B\) Loosen it, C\) Keep it"/);
   assert.match(steps("safety").get(8)!, /one multi-select: "Which of these still bother you\?"/);
-  assert.match(steps("safety").get(9)!, /See a clinician for new pain, pain that gets worse, or pain that does not settle\.[^\n]*once per conversation/);
+  assert.match(steps("safety").get(10)!, /See a clinician for new pain, pain that gets worse, or pain that does not settle\.[^\n]*once per conversation/);
   assert.match(skill("safety").body, /Without AskUserQuestion \(print mode\)[^\n]*ask the same questions as text with lettered options/);
   assert.doesNotMatch(skill("safety").text, /\bAgent\b|subagent|`safety` agent/, "no agent call");
 });
@@ -398,8 +402,8 @@ test("skills name no engine/ script path and leave no arithmetic to the model", 
 });
 
 test("today exits as already adjusted only when oplog done says so", () => {
-  const read = steps("today").get(4)!;
-  inOrder(read, ["node engine/cli.ts oplog done --date <today> --kind <kind>", "`status: done`", "Today is already adjusted.", "`status: uncertain`", "`reread`"], "today step 4");
+  const read = steps("today").get(3)!;
+  inOrder(read, ["node engine/cli.ts oplog done --date <today> --kind <kind>", "`status: done`", "`status: uncertain`", "`reread`", "Today is already adjusted."], "today step 3");
   assert.doesNotMatch(read, /log already has an entry/, "the log heading is not a record of success");
 });
 
@@ -420,7 +424,7 @@ test("athlete/.urgent-stop is committed: not gitignored, and CLAUDE.md says so",
 
 test("today step 8: no load progression on a day a proposal changed", () => {
   const loads = steps("today").get(8)!;
-  assert.match(loads, /Skip it when step 3 changed today/);
+  assert.match(loads, /Skip it when the step 7 list holds a step 4 proposal for today/);
   assert.match(skill("today").body, /A proposal the athlete accepts for today is today's adjustment/);
 });
 
@@ -429,8 +433,9 @@ test("today acts on the engine's patterns: a note for one day, a trim on the sho
   assert.match(decide, /`note` \(one day is not a pattern \[NA-REC-008\]\)/);
   assert.match(decide, /`trim` \(the short pattern: 3 or more off-mornings in a row \[NA-REC-009\]\)[^\n]*Progression is held/);
   assert.match(decide, /`recovery` with `aversion: true`/);
-  assert.match(decide, /Interactive: ask "You do not want to train today\.[^"]*A\) make today a recovery day, B\) keep the session as planned"/);
-  assert.match(decide, /Unattended: swap to recovery with `adjust`\. A recovery day is the safer change, so it is always allowed\./);
+  // V6 I.1: the coach recommends the recovery day; it no longer asks the athlete to pick between its own options.
+  assert.match(decide, /`recovery` with `aversion: true`[^\n]*swap to recovery with `adjust`\. Not wanting to train is a reason to rest, and a recovery day is the safer change, so the coach makes it without a question\./);
+  assert.doesNotMatch(decide, /A\) make today a recovery day, B\) keep the session as planned/);
   assert.match(decide, /`propose_deload`[^\n]*trim today with `adjust`[^\n]*the `week` run proposes it/);
   const loads = steps("today").get(8)!;
   assert.match(loads, /One off day is not a pattern: with `hold_progression: false`, run this step as usual/);
@@ -438,11 +443,11 @@ test("today acts on the engine's patterns: a note for one day, a trim on the sho
   assert.match(steps("today").get(10)!, /Give no targets and no advice on food or supplements/);
 });
 
-test("check-in asks the optional want-to-train item with options and passes it to the engine", () => {
+test("check-in asks about not wanting to train only when the athlete says it, and passes it to the engine", () => {
   const ask = steps("check-in").get(3)!;
-  assert.match(ask, /Want to train: "How much do you want to train today\? 1 I do not want to train at all … 5 I really want to train"/);
-  assert.match(ask, /"F\) skip"/);
-  assert.match(steps("check-in").get(5)!, /\[--want-to-train <n>\]/);
+  assert.match(ask, /Ask: "Not wanting to train at all, or just tired\?" with the options "I do not want to train at all" and "Just tired"\. The first gives `--want-to-train 1` \[NA-REC-012\]/);
+  assert.match(ask, /"Just tired" records nothing, except when today already has `want_to_train` at the aversion line \(1\): then it is a correction, so record `--want-to-train none`/);
+  assert.match(steps("check-in").get(4)!, /\[--want-to-train <n>\|none\]/);
 });
 
 test("week proposes a program change only on the deload signal: interactive asks, unattended logs it for the live session", () => {

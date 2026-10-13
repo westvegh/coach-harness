@@ -193,7 +193,7 @@ async function dayInput(a: Args, root: string, units: Units): Promise<DayInput> 
     if (usesFiles(root)) {
       const snap = coachSnapshot(root, { now: a.values.now });
       const sd = snap?.days[date];
-      if (!snap || !sd) throw new CoachError("NOT_PLANNED", `${date} has no planned day in plans/: write it with plans write first`);
+      if (!snap || !sd || !sd.found) throw new CoachError("NOT_PLANNED", `${date} has no planned day in plans/: write it with plans write first`);
       return { inp: {}, day: snapshotDayToPlan(date, sd, units), tally: true, unit: tallyDayUnit(sd, units), snap };
     }
     const snap = loadSnapshot(root);

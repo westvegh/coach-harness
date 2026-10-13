@@ -33,14 +33,15 @@ Today is `TZ=<coach.yaml athlete.timezone> date +%F`.
 6. **Clear the urgent stop** (live session only). Ask one AskUserQuestion: "Has a clinician seen you about it?" with "A clinician has seen me about it", "It was a false alarm", "Not yet". On the first, run `node engine/cli.ts urgent clear --reason clinician`; on the second, `node engine/cli.ts urgent clear --reason false-alarm`. "Not yet", no answer, or no question tool: the stop stays. Never clear it on your own reading.
 7. **"It's better" or "it's gone."** Ask "Remove the <region> limit? A) Yes, B) Loosen it, C) Keep it". A: delete the entry. B: raise the cap one step (one more set a week, or about 10% more load), or turn a ban into a cap with `build_back: true`. Write one line in the athlete log.
 8. **Old notes** (setup, the weekly review). When `node engine/cli.ts safety scan-notes` reports pain notes, ask one multi-select: "Which of these still bother you?" with one option per region named, plus "None of these". A chosen region goes to step 2. Log the rest as resolved by the athlete.
-9. **Always:** never diagnose, never name a likely cause, and never give medication, supplement, hormone or peptide advice. Say "See a clinician for new pain, pain that gets worse, or pain that does not settle." once per conversation.
+9. **Pain from a check-in.** When this skill ran for a pain entry of today's check-in (from the `check-in` skill, or the `today` skill's step 2), the skill that called it appends "- pain handled: <region> <checkin_at>" to the log when this skill finishes. A later check-in with worse pain has a new time, so it comes here again.
+10. **Always:** never diagnose, never name a likely cause, and never give medication, supplement, hormone or peptide advice. Say "See a clinician for new pain, pain that gets worse, or pain that does not settle." once per conversation.
 
 Without AskUserQuestion (print mode), or when a call returns no answers, ask the same questions as text with lettered options, for example "Left knee: how should the coach handle it? A) It's fine now: train normally, B) Go light and build back slowly, C) Avoid loading it for now". Wait for the answer.
 
 ## Writes
 
 - `athlete/limits.yaml`: the limit the athlete chose (a live answer only).
-- `athlete/log/<YYYY-MM>.md`: one line for a region that is fine, a removed limit, or resolved old notes.
+- `athlete/log/<YYYY-MM>.md`: one line for a region that is fine, a removed limit, or resolved old notes (and, from the calling skill, the "pain handled" line of step 9).
 - `athlete/.urgent-stop` and `athlete/log/urgent-clearances.jsonl`, only through `node engine/cli.ts urgent set` and `node engine/cli.ts urgent clear --reason clinician|false-alarm`.
 
 ## Unattended

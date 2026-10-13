@@ -9,7 +9,9 @@
 // the 30-day baseline survives a short fetch.
 //
 // Auth: OAuth tokens from the Keychain (see auth.ts). A legacy personal token in
-// OURA_PERSONAL_TOKEN is still accepted, with a deprecation warning.
+// OURA_PERSONAL_TOKEN is still accepted, with a deprecation warning. On failure the JSON
+// output carries `sign_in_needed`: true only for the sign-in codes (SIGN_IN_ERROR_CODES), so
+// the recovery-data skill runs the sign-in only when it can help (V6 K).
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -213,6 +215,23 @@ export async function fetchOura(opts: {
   return { path, from, to, records: records.length, kept: merged.length - records.length, auth, warnings };
 }
 
+/**
+ * The fixed error codes that mean "no sign-in, or the sign-in has expired" (V6 K): the only
+ * failures the athlete fixes with `node adapters/signals/oura/auth.ts`. The sign-in is saved in
+ * the macOS Keychain (service coach-harness.oura), so it serves every coach copy on this Mac.
+ * - OURA_NOT_AUTHORIZED: no tokens in the Keychain;
+ * - OURA_REAUTH: the refresh token was rejected or is spent;
+ * - OURA_UNAUTHORIZED: Oura answered 401;
+ * - OURA_TOKEN_STORE: the saved tokens cannot be read.
+ * Any other code (no client credentials, a network error, a rate limit, …) is not fixed by a sign-in.
+ */
+export const SIGN_IN_ERROR_CODES: ReadonlySet<string> = new Set(["OURA_NOT_AUTHORIZED", "OURA_REAUTH", "OURA_UNAUTHORIZED", "OURA_TOKEN_STORE"]);
+
+/** True when the error code means the athlete must sign in again (contracts §11). */
+export function needsSignIn(code: string): boolean {
+  return SIGN_IN_ERROR_CODES.has(code);
+}
+
 function athleteTimezone(root: string): string | undefined {
   const p = join(root, "coach.yaml");
   if (!existsSync(p)) return undefined;
@@ -239,7 +258,8 @@ async function main(argv: string[]): Promise<number> {
     return 0;
   } catch (e) {
     const err = formatCliError(e);
-    process.stdout.write(JSON.stringify({ error: err }, null, 2) + "\n");
+    // sign_in_needed: the skill decides from the code, never from the message text.
+    process.stdout.write(JSON.stringify({ error: err, sign_in_needed: needsSignIn(err.code) }, null, 2) + "\n");
     process.stderr.write(`${err.code}: ${err.message}\n`);
     return err.code === "USAGE" ? 2 : 1;
   }

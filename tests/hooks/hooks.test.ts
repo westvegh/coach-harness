@@ -143,7 +143,9 @@ test("session-context: today, the limits summary, setup progress, due items; no 
   assert.match(ctx, /today is 2026-10-14 \(wed\)/);
   assert.match(ctx, /Limits \(follow them in every plan\): L-001 left-knee: ban \(loaded_deep_knee_flexion\); L-002 left-shoulder: cap 6 sets\/week, build back \(overhead_press\)\./);
   assert.match(ctx, /Setup progress: setup: step 4 done 2026-10-12 08:10\./);
-  assert.match(ctx, /Due: today's check-in; the daily run/);
+  // V6 D: a check-in is never due.
+  assert.match(ctx, /Due: the daily run/);
+  assert.doesNotMatch(ctx, /check-in/);
   assert.doesNotMatch(ctx, /HOLD|SAFETY FIRST|URGENT|proposal/i);
 
   const fresh = instance({ coach: false });

@@ -2,6 +2,7 @@
 // - athlete/signals/YYYY-MM-DD.json (the Shortcut and chat check-ins), through the normalizer;
 // - athlete/.cache/signals/*.json (fetched sources such as Oura), each a DayRecord[].
 //
+// A cached record with a check-in and no checkin_at gets its observed_at as checkin_at.
 // One record per source and date: the complete one is preferred, then the latest
 // observed_at. Sources are never merged (an Oura RMSSD record and an Apple SDNN record for
 // the same night stay 2 records). A bad file, or a malformed cached record (for example a
@@ -10,6 +11,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { normalize } from "../adapters/signals/apple-health-shortcut/normalize.ts";
 import { validateSchema, type Schema } from "../adapters/signals/json-schema.ts";
+import { checkinBlockProblems } from "./checkin-shape.ts";
 import { isCalendarDate, parseInstant } from "./dates.ts";
 import { CoachError } from "./errors.ts";
 import type { CalendarDate, DayRecord, Instant } from "./types.ts";
@@ -43,10 +45,11 @@ export const DAY_RECORD_SCHEMA: Schema = {
     hrv: { type: "object", required: ["value_ms", "method"], properties: { value_ms: { type: "number", minimum: 0, maximum: 500 }, method: { enum: ["rmssd", "sdnn"] } } },
     rhr: { type: "object", required: ["bpm"], properties: { bpm: { type: "number", minimum: 20, maximum: 250 } } },
     vendor_score: { type: "number", minimum: 0, maximum: 100 },
+    checkin_at: INSTANT,
     subjective: {
       type: "object",
-      required: ["sleep_quality", "energy", "soreness", "stress"],
       properties: {
+        overall: SCALE,
         sleep_quality: SCALE,
         energy: SCALE,
         soreness: SCALE,
@@ -66,10 +69,17 @@ function cachedRecordProblem(r: unknown, nowMs: number): string | null {
   const errors = validateSchema(r, DAY_RECORD_SCHEMA);
   if (errors.length > 0) return errors.join("; ");
   const x = r as DayRecord;
+  // The group rules the schema subset cannot state (B.3).
+  if (x.subjective !== undefined) {
+    const shape = checkinBlockProblems(x.subjective, "subjective");
+    if (shape.length > 0) return shape.join("; ");
+  }
   if (!isCalendarDate(x.date)) return "date is not a calendar date";
   try {
     if (parseInstant(x.observed_at, "observed_at") > nowMs) return `observed_at ${x.observed_at} is in the future`;
     if (x.sleep && parseInstant(x.sleep.start_at, "sleep.start_at") >= parseInstant(x.sleep.end_at, "sleep.end_at")) return "sleep.start_at must be before sleep.end_at";
+    // V6b fix 5: the check-in time keys the "pain handled" line, so it must be a real instant, not in the future.
+    if (x.checkin_at !== undefined && parseInstant(x.checkin_at, "checkin_at") > nowMs) return `checkin_at ${x.checkin_at} is in the future`;
   } catch (e) {
     return (e as Error).message;
   }
@@ -130,7 +140,8 @@ export function loadSignals(input: { root: string; from: CalendarDate; to: Calen
           return;
         }
         const rec = r as DayRecord;
-        if (rec.date >= from && rec.date <= to) all.push(rec);
+        // An older cached check-in has no checkin_at: its observed_at is the check-in time (contracts §5).
+        if (rec.date >= from && rec.date <= to) all.push(rec.subjective && rec.checkin_at === undefined ? { ...rec, checkin_at: rec.observed_at } : rec);
       });
     }
   }

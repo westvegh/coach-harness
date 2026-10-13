@@ -33,6 +33,8 @@ test("valid full file → one complete record with every block", () => {
     hrv: { value_ms: 41.8, method: "sdnn" },
     rhr: { bpm: 54 },
     subjective: { sleep_quality: 3, energy: 4, soreness: 2, stress: 3, pain: [{ region: "left-knee", score: 2 }] },
+    // V6 A.6: when the check-in was answered, so pain is handled once per check-in.
+    checkin_at: FULL.submitted_at,
   });
 });
 
@@ -57,11 +59,11 @@ test("missing optional blocks", () => {
   // Header only: nothing to report.
   assert.deepEqual(normalize(file({}, ["sleep", "hrv", "rhr", "checkin"]), { now: NOW }), []);
 
-  // No pain list, and an empty one, both mean no pain.
+  // No pain list, and an empty one, both mean no pain. V6 B.3: the empty list is kept ("no pain now").
   const c = { ...FULL.checkin };
   delete c.pain;
   assert.equal(normalize(file({ checkin: c }), { now: NOW })[0].subjective!.pain, undefined);
-  assert.equal(normalize(file({ checkin: { ...c, pain: [] } }), { now: NOW })[0].subjective!.pain, undefined);
+  assert.deepEqual(normalize(file({ checkin: { ...c, pain: [] } }), { now: NOW })[0].subjective!.pain, []);
 });
 
 test("wrong types are rejected with the path", () => {

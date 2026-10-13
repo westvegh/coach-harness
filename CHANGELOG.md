@@ -2,6 +2,28 @@
 
 All notable changes to this project are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [semantic versioning](https://semver.org/).
 
+## [0.2.5]
+
+A data-first check-in, and the coach recommends. From a coach run on 0.2.4.
+
+### Changed for the athlete
+
+- **"Check in" gives today's report.** You no longer fill in a form. The coach reads your data first and gives a short report: the verdict ("Train as planned", "Train, a little lighter", "Recovery day" or "Rest day"), the reason with your own numbers (sleep, HRV, resting heart rate, your last sessions), today's session in one line, and what changed. "How am I doing?" and "am I ready to train?" give the same report.
+- **One question, only when it matters.** The coach asks "How do you feel today?" (Good, Okay, Run down, Wrecked) only on a day when your answer can change the workout: a run of off-mornings that trims the session, with no rating from you yet. It asks at most once a day.
+- **No daily warning-sign question.** The coach still stops all training changes when you mention a warning sign, in any words. The safety screens for pain still ask about warning signs.
+- **Your own words count.** Say "I'm wrecked", "my knee hurts" or "I don't want to train today", and the coach records it. Say "the knee is fine now" or "I want to train after all", and it clears the earlier answer.
+- **The coach recommends.** The coach picks today's weights, sets and swaps, and gives the reason. It no longer asks you to choose between its own options. Tell it if you want something else. When today's session is one you built or edited in Tally, or the change is big, the coach lists every change with its reason and asks one question: "Apply these? A) Yes, B) Change something, C) Not now".
+- **Not wanting to train.** When you do not want to train at all, the coach makes today a recovery day and tells you why. You can keep the session instead.
+- **Already adjusted.** When this morning's run already adjusted today, asking about today gives the report and changes nothing.
+- **No recovery data yet.** The report says how to add it: "Say 'connect my Oura' or 'connect my Apple Watch'."
+
+### Fixed
+
+- **A miss at a lighter weight.** After a miss, you went lighter and missed again: the coach used to drop the weight another 5%. It now repeats the lighter weight ("missed at 55 after a miss at 60: repeat 55"). A miss at the same or a heavier weight still drops 5%.
+- **Oura on a second coach copy.** Your Oura sign-in is saved on this Mac. The coach now tries it first, and asks you to sign in only when there is no sign-in or it expired.
+- **Sessions with no plan.** A session you logged on a day with no plan now counts. The coach compares it with the last time you did each exercise in the past 4 weeks: a lighter top set, or fewer reps at the same weight, counts as a drop. Before, performance was unknown.
+- **Pain from the Shortcut.** Pain at or above your threshold in this morning's check-in now goes to the pain questions before anything else, also on a plain "check in".
+
 ## [0.2.4]
 
 Sets per exercise and cluster sets, from a 5-day hypertrophy run on 0.2.1.

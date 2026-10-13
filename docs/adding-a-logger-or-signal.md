@@ -25,10 +25,13 @@ type DayRecord = {
   hrv?: { value_ms: number; method: "rmssd" | "sdnn" };
   rhr?: { bpm: number };
   vendor_score?: number; // the vendor's own score (Oura readiness, Whoop recovery); shown, not scored
-  subjective?: {         // the check-in; scales 1-5
-    sleep_quality: 1|2|3|4|5; energy: 1|2|3|4|5; soreness: 1|2|3|4|5; stress: 1|2|3|4|5;
-    pain?: { region: string; score: number }[];   // score 0-10
-  };
+  subjective?: {         // the check-in; scales 1-5. The rating is one group: overall, or the four scales together
+    overall?: 1|2|3|4|5;   // "How do you feel today?"; never with the four scales
+    sleep_quality?: 1|2|3|4|5; energy?: 1|2|3|4|5; soreness?: 1|2|3|4|5; stress?: 1|2|3|4|5;
+    want_to_train?: 1|2|3|4|5;                    // 1 means aversion
+    pain?: { region: string; score: number }[];   // score 0-10; [] means "no pain now"
+  };                     // at least one field (engine/checkin-shape.ts)
+  checkin_at?: string;   // when the check-in was answered
 };
 ```
 
@@ -69,8 +72,8 @@ The output is `{from, to, records, warnings}`. It keeps one record per source an
 ### The existing signal adapters
 
 - **`apple-health-shortcut/`**: an iOS Shortcut writes the daily file. `schema.json` is the file format. `normalize.ts` validates a file and maps it to `DayRecord[]`. `SHORTCUT.md` is the build guide.
-- **`checkin/`**: `write.ts` writes a chat check-in into the daily file with `source: "chat"`. When a Shortcut file already exists, the check-in block is merged into it and marked `source: "chat"`. The normalizer then returns 2 records (the Shortcut's wearable data and the chat check-in), so the sources stay separate. CLI: `node engine/cli.ts checkin --date … --sleep-quality … --energy … --soreness … --stress … [--pain left-knee:3]`.
-- **`oura/`** (Mac only in v1): `auth.ts` runs the OAuth flow, and `fetch.ts --days N` writes `athlete/.cache/signals/oura.json`. See "Credentials" below.
+- **`checkin/`**: `write.ts` writes a chat check-in into the daily file with `source: "chat"`. When a Shortcut file already exists, the check-in block is merged into it and marked `source: "chat"`. The normalizer then returns 2 records (the Shortcut's wearable data and the chat check-in), so the sources stay separate. A later chat check-in merges into today's block by group: a new rating replaces the old rating, a new pain or want-to-train answer replaces the old one, `none` clears it, and the rest stays. CLI: `node engine/cli.ts checkin --date … [--overall 1-5 | --sleep-quality … --energy … --soreness … --stress …] [--want-to-train 1-5|none] [--pain left-knee:3|none]`.
+- **`oura/`** (Mac only in v1): `auth.ts` runs the OAuth flow, and `fetch.ts --days N` writes `athlete/.cache/signals/oura.json`. The sign-in is saved in the Mac's Keychain, so it serves every coach copy on the Mac. A failed fetch prints `sign_in_needed: true` only for the sign-in error codes, so the coach asks for a sign-in only when one can help. See "Credentials" below.
 
 ### Add a new signal source (Whoop, Garmin, ...)
 

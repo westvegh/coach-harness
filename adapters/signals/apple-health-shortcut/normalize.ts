@@ -4,24 +4,34 @@
 // - observed_at = sleep.end_at (or submitted_at when there is no sleep block);
 // - complete only when sleep is present (contracts §11); a check-in-only record is not complete;
 // - HRV method sdnn unless the file says rmssd;
+// - the check-in block's group rules (one rating group, at least one field) are checked in
+//   code (engine/checkin-shape.ts); an empty pain list is kept ("no pain now");
 // - the check-in maps to `subjective`. A check-in from another source than the file
 //   (for example a chat check-in merged into a Shortcut file) becomes its own record,
 //   so sources stay separate.
 import { readFileSync } from "node:fs";
 import { CoachError } from "../../../engine/errors.ts";
 import { isCalendarDate, parseInstant } from "../../../engine/dates.ts";
-import type { CalendarDate, DayRecord, Instant, PainEntry, Scale } from "../../../engine/types.ts";
+import { checkinBlockProblems, FOUR_SCALES } from "../../../engine/checkin-shape.ts";
+import type { CalendarDate, DayRecord, Instant, PainEntry, Scale, Subjective } from "../../../engine/types.ts";
 import { validateSchema, type Schema } from "../json-schema.ts";
 
 export type SignalSource = "apple-health-shortcut" | "chat";
 
+/**
+ * The check-in block. The rating is one group: `overall`, or the four scales together, never
+ * both; at least one of the rating, want_to_train or pain (engine/checkin-shape.ts). The
+ * Shortcut sends the four scales; a chat check-in usually sends `overall`.
+ */
 export type SignalCheckin = {
-  sleep_quality: Scale;
-  energy: Scale;
-  soreness: Scale;
-  stress: Scale;
+  overall?: Scale;
+  sleep_quality?: Scale;
+  energy?: Scale;
+  soreness?: Scale;
+  stress?: Scale;
   /** Optional: how much the athlete wants to train today; 1 is aversion. */
   want_to_train?: Scale;
+  /** An empty list records that there is no pain now. */
   pain?: PainEntry[];
   source?: SignalSource;
   submitted_at?: Instant;
@@ -51,8 +61,10 @@ function fail(message: string): never {
  */
 export function validateSignalFile(raw: unknown, opts: { now?: Instant | number; expectDate?: CalendarDate } = {}): SignalFile {
   const errors = validateSchema(raw, SCHEMA);
-  if (errors.length > 0) fail(`signal file is invalid: ${errors.join("; ")}`);
   const f = raw as SignalFile;
+  // The group rules the schema subset cannot state (B.3).
+  if (errors.length === 0 && f.checkin !== undefined) errors.push(...checkinBlockProblems(f.checkin, "$.checkin"));
+  if (errors.length > 0) fail(`signal file is invalid: ${errors.join("; ")}`);
   if (!isCalendarDate(f.date)) fail(`signal file is invalid: $.date is not a calendar date: ${f.date}`);
   if (opts.expectDate !== undefined && f.date !== opts.expectDate) {
     fail(`signal file date ${f.date} does not match its file name (${opts.expectDate})`);
@@ -71,10 +83,13 @@ export function validateSignalFile(raw: unknown, opts: { now?: Instant | number;
   return f;
 }
 
-function subjective(c: SignalCheckin): NonNullable<DayRecord["subjective"]> {
-  const s: NonNullable<DayRecord["subjective"]> = { sleep_quality: c.sleep_quality, energy: c.energy, soreness: c.soreness, stress: c.stress };
+function subjective(c: SignalCheckin): Subjective {
+  const s: Subjective = {};
+  if (c.overall !== undefined) s.overall = c.overall;
+  for (const k of FOUR_SCALES) if (c[k] !== undefined) s[k] = c[k];
   if (c.want_to_train !== undefined) s.want_to_train = c.want_to_train;
-  if (c.pain && c.pain.length > 0) s.pain = c.pain.map((p) => ({ region: p.region, score: p.score }));
+  // An empty list stays: it records "no pain now".
+  if (c.pain) s.pain = c.pain.map((p) => ({ region: p.region, score: p.score }));
   return s;
 }
 
@@ -95,14 +110,19 @@ export function normalize(raw: unknown, opts: { now?: Instant | number; expectDa
   let separate: DayRecord | undefined;
   if (f.checkin) {
     const src = f.checkin.source ?? f.source;
-    if (src === f.source) main.subjective = subjective(f.checkin);
-    else {
+    // Both instants passed the schema pattern and the future check above (validateSignalFile).
+    const at = f.checkin.submitted_at ?? f.submitted_at;
+    if (src === f.source) {
+      main.subjective = subjective(f.checkin);
+      main.checkin_at = at;
+    } else {
       separate = {
         date: f.date,
         source: src,
         observed_at: f.checkin.submitted_at ?? f.submitted_at,
         complete: false,
         subjective: subjective(f.checkin),
+        checkin_at: at,
       };
     }
   }

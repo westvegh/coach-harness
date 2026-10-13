@@ -1,5 +1,6 @@
 // Readiness model (contracts §5). Pure: the same input always gives the same output.
 import { addDays, diffDays, isCalendarDate, isValidTimezone, parseInstant, zonedTimeToEpoch } from "./dates.ts";
+import { checkinBlockProblems } from "./checkin-shape.ts";
 import { CoachError } from "./errors.ts";
 import type { CalendarDate, CategoryState, DayRecord, MorningState, Readiness, ReadinessInput, ReadinessPattern, SessionPerf, Thresholds } from "./types.ts";
 
@@ -84,6 +85,9 @@ const EPS = 1e-9;
 
 type Component = { state: "green" | "amber" | "red"; reason: string };
 
+/** The words of the one check-in question (B.2); 5 is "great". */
+const OVERALL_WORDS: Record<number, string> = { 1: "wrecked", 2: "run down", 3: "okay", 4: "good", 5: "great" };
+
 const round = (x: number, d = 2) => Math.round(x * 10 ** d) / 10 ** d;
 const flagged = (s: CategoryState) => s === "amber" || s === "red";
 
@@ -102,6 +106,7 @@ function sampleSd(xs: number[], m: number): number {
  */
 function scoreAgainstBaseline(
   label: string,
+  unit: string,
   value: number,
   base: number[],
   dir: 1 | -1,
@@ -116,14 +121,14 @@ function scoreAgainstBaseline(
   if (sd < 0.01 * Math.abs(m)) {
     const p = (value - m) / m;
     const state = worse(p, pct.red) ? "red" : worse(p, pct.amber) ? "amber" : "green";
-    return { state, reason: `${label} ${round(p * 100, 1)}% vs baseline ${round(m, 1)} (low variance: percent rule)` };
+    return { state, reason: `${label} ${round(value, 1)} ${unit}, ${round(p * 100, 1)}% vs baseline ${round(m, 1)} (low variance: percent rule)` };
   }
   const zs = (value - m) / sd;
   const state = worse(zs, z.red) ? "red" : worse(zs, z.amber) ? "amber" : "green";
-  return { state, reason: `${label} z ${round(zs)} (baseline ${round(m, 1)} ± ${round(sd, 1)})` };
+  return { state, reason: `${label} ${round(value, 1)} ${unit}, z ${round(zs)} (baseline ${round(m, 1)} ± ${round(sd, 1)})` };
 }
 
-function checkRecord(r: DayRecord, i: number): void {
+function checkRecord(r: DayRecord, i: number, nowMs: number): void {
   if (!isCalendarDate(r?.date)) throw new CoachError("READINESS_INPUT", `records[${i}].date must be YYYY-MM-DD`);
   if (typeof r.source !== "string" || r.source === "") throw new CoachError("READINESS_INPUT", `records[${i}].source is required`);
   const num = (v: unknown, path: string) => {
@@ -135,13 +140,19 @@ function checkRecord(r: DayRecord, i: number): void {
     if (r.hrv.method !== "rmssd" && r.hrv.method !== "sdnn") throw new CoachError("READINESS_INPUT", `records[${i}].hrv.method must be rmssd | sdnn`);
   }
   if (r.rhr) num(r.rhr.bpm, "rhr.bpm");
-  if (r.subjective) {
-    for (const k of ["sleep_quality", "energy", "soreness", "stress"] as const) {
-      const v = r.subjective[k];
-      if (!Number.isInteger(v) || v < 1 || v > 5) throw new CoachError("READINESS_INPUT", `records[${i}].subjective.${k} must be 1-5`);
+  if (r.subjective !== undefined) {
+    const problems = checkinBlockProblems(r.subjective, `records[${i}].subjective`);
+    if (problems.length > 0) throw new CoachError("READINESS_INPUT", problems.join("; "));
+  }
+  // V6b fix 5: the check-in time must be an instant, and not after now.
+  if (r.checkin_at !== undefined) {
+    let at: number;
+    try {
+      at = parseInstant(r.checkin_at, "checkin_at");
+    } catch {
+      throw new CoachError("READINESS_INPUT", `records[${i}].checkin_at must be an ISO 8601 instant with an offset`);
     }
-    const w = r.subjective.want_to_train;
-    if (w !== undefined && (!Number.isInteger(w) || w < 1 || w > 5)) throw new CoachError("READINESS_INPUT", `records[${i}].subjective.want_to_train must be 1-5`);
+    if (at > nowMs) throw new CoachError("READINESS_INPUT", `records[${i}].checkin_at ${r.checkin_at} is after now`);
   }
 }
 
@@ -255,9 +266,9 @@ function wearable(input: ReadinessInput, th: Thresholds, nowMs: number): Readine
       const ratio = m.rec.sleep!.duration_min / input.sleep_target_min;
       c = { state: ratio < th.sleep_ratio_amber ? "amber" : "green", reason: `sleep ${m.rec.sleep!.duration_min} min = ${round(ratio * 100, 0)}% of target` };
     } else if (m.name === "resting HR") {
-      c = scoreAgainstBaseline("RHR", m.rec.rhr!.bpm, bases.get(m.name)!, 1, { amber: th.rhr_z_amber, red: th.rhr_z_red }, { amber: RHR_PCT_AMBER, red: RHR_PCT_RED });
+      c = scoreAgainstBaseline("RHR", "bpm", m.rec.rhr!.bpm, bases.get(m.name)!, 1, { amber: th.rhr_z_amber, red: th.rhr_z_red }, { amber: RHR_PCT_AMBER, red: RHR_PCT_RED });
     } else {
-      c = scoreAgainstBaseline(`HRV (${m.rec.hrv!.method})`, m.rec.hrv!.value_ms, bases.get(m.name)!, -1, { amber: th.hrv_z_amber, red: th.hrv_z_red }, { amber: HRV_PCT_AMBER, red: HRV_PCT_RED });
+      c = scoreAgainstBaseline(`HRV (${m.rec.hrv!.method})`, "ms", m.rec.hrv!.value_ms, bases.get(m.name)!, -1, { amber: th.hrv_z_amber, red: th.hrv_z_red }, { amber: HRV_PCT_AMBER, red: HRV_PCT_RED });
     }
     if (!c) {
       reasons.push(`${m.name}: the baseline cannot be scored`);
@@ -293,16 +304,23 @@ function subjective(input: ReadinessInput, th: Thresholds, nowMs: number): { cat
     return { cat: { state: "unknown", reasons }, pain: [] };
   }
   const s = rec.subjective!;
-  // Soreness and stress are inverted so that 1 is always the worst value.
-  const oriented = { sleep_quality: s.sleep_quality, energy: s.energy, soreness: 6 - s.soreness, stress: 6 - s.stress };
-  const m = mean(Object.values(oriented));
-  let state: CategoryState = m <= th.subjective_red + EPS ? "red" : m <= th.subjective_amber + EPS ? "amber" : "green";
-  reasons.push(`check-in mean ${round(m)}`);
-  const atOne = Object.entries(oriented).filter(([, v]) => v === 1).map(([k]) => k);
-  if (atOne.length > 0) {
-    reasons.push(`worst value on ${atOne.join(", ")}`);
-    if (state === "green") state = "amber";
-  }
+  let state: CategoryState = "unknown";
+  if (s.overall !== undefined) {
+    // One overall rating (B.3): 1 red, 2 amber, 3 to 5 green with the default thresholds.
+    state = s.overall <= th.subjective_red + EPS ? "red" : s.overall <= th.subjective_amber + EPS ? "amber" : "green";
+    reasons.push(`feels ${OVERALL_WORDS[s.overall]} (${s.overall}/5)`);
+  } else if (s.sleep_quality !== undefined && s.energy !== undefined && s.soreness !== undefined && s.stress !== undefined) {
+    // Soreness and stress are inverted so that 1 is always the worst value.
+    const oriented = { sleep_quality: s.sleep_quality, energy: s.energy, soreness: 6 - s.soreness, stress: 6 - s.stress };
+    const m = mean(Object.values(oriented));
+    state = m <= th.subjective_red + EPS ? "red" : m <= th.subjective_amber + EPS ? "amber" : "green";
+    reasons.push(`check-in mean ${round(m)}`);
+    const atOne = Object.entries(oriented).filter(([, v]) => v === 1).map(([k]) => k);
+    if (atOne.length > 0) {
+      reasons.push(`worst value on ${atOne.join(", ")}`);
+      if (state === "green") state = "amber";
+    }
+  } else reasons.push("no rating today");
   // Want-to-train is its own signal (aversion), not part of the mean.
   if (s.want_to_train !== undefined) reasons.push(`want to train ${s.want_to_train}/5`);
   return { cat: { state, reasons }, pain: (s.pain ?? []).map((p) => ({ region: p.region, score: p.score })), want: s.want_to_train };
@@ -417,8 +435,8 @@ function morningState(rs: Reading[], date: CalendarDate, signal: "hrv" | "rhr", 
   const base = [...byDate.values()].map((r) => r.value);
   const c =
     signal === "hrv"
-      ? scoreAgainstBaseline("HRV", rec.value, base, -1, { amber: th.hrv_z_amber, red: th.hrv_z_red }, { amber: HRV_PCT_AMBER, red: HRV_PCT_RED })
-      : scoreAgainstBaseline("RHR", rec.value, base, 1, { amber: th.rhr_z_amber, red: th.rhr_z_red }, { amber: RHR_PCT_AMBER, red: RHR_PCT_RED });
+      ? scoreAgainstBaseline("HRV", "ms", rec.value, base, -1, { amber: th.hrv_z_amber, red: th.hrv_z_red }, { amber: HRV_PCT_AMBER, red: HRV_PCT_RED })
+      : scoreAgainstBaseline("RHR", "bpm", rec.value, base, 1, { amber: th.rhr_z_amber, red: th.rhr_z_red }, { amber: RHR_PCT_AMBER, red: RHR_PCT_RED });
   if (!c) return "unknown";
   return c.state === "green" ? "ok" : "off";
 }
@@ -464,7 +482,7 @@ export function readiness(input: ReadinessInput): Readiness {
   if (!Array.isArray(input.records) || !Array.isArray(input.sessions)) {
     throw new CoachError("READINESS_INPUT", "records and sessions must be lists");
   }
-  input.records.forEach(checkRecord);
+  input.records.forEach((r, i) => checkRecord(r, i, nowMs));
   const thErrors = thresholdErrors(input.thresholds ?? {});
   if (thErrors.length > 0) throw new CoachError("READINESS_INPUT", thErrors.join("; "));
   const th: Thresholds = { ...DEFAULT_THRESHOLDS, ...input.thresholds };

@@ -5,8 +5,9 @@
 //   plan (the snapshot day read with get_planned_workout), never today's plan;
 // - sleep target: coach.yaml athlete.sleep_target_min (default 480);
 // - the readiness rules and their IDs: the method pack's check types (contracts §4).
-// Missing evidence is unknown, never estimated: a session without its plan is not judged,
-// and an older session never stands in for it.
+// Missing evidence is unknown, never estimated: a session whose date was not read is not
+// judged, and an older session never stands in for it. A session on a date that was read and
+// has no planned day is judged against the athlete's own history (V6 L, judgeUnplanned).
 import { DEFAULT_SLEEP_TARGET_MIN } from "./config.ts";
 import { addDays, diffDays, isCalendarDate, localDate, parseInstant, zonedTimeToEpoch } from "./dates.ts";
 import { CoachError } from "./errors.ts";
@@ -20,7 +21,8 @@ import type { CalendarDate, CoachConfig, HistoryExercise, Instant, LoggerExercis
 /** How one logged session was judged. `perf` is absent when the evidence is missing. */
 export type SessionJudgement = {
   date: CalendarDate;
-  plan: "found" | "missing" | "empty";
+  /** `none`: the date was read and has no planned day; the session is judged against the athlete's own history (V6 L). */
+  plan: "found" | "missing" | "empty" | "none";
   perf?: SessionPerf;
   notes: string[];
 };
@@ -141,6 +143,109 @@ export function judgeSession(session: SnapshotSession, plan: SnapshotDay, planUn
   return { date: session.date, plan: "found", perf, notes };
 }
 
+/** How far back an unplanned session looks for the last time an exercise was done (V6 L). */
+export const UNPLANNED_LOOKBACK_DAYS = 28;
+
+type TopSet = { weight: number | null; reps: number; rpe: number | null };
+
+/** The heaviest work set (warm-ups and sets without reps left out); the most reps at that weight. Null when there is none. */
+function topSet(ex: HistoryExercise): TopSet | null {
+  const work = ex.sets.filter((x) => x.warmup !== true && typeof x.reps === "number" && x.reps > 0);
+  if (work.length === 0) return null;
+  const weighted = work.filter((x) => typeof x.weight === "number" && x.weight > 0);
+  const pool = weighted.length > 0 ? weighted : work;
+  const weight = weighted.length > 0 ? Math.max(...weighted.map((x) => x.weight as number)) : null;
+  const at = pool.filter((x) => (weight === null ? true : x.weight === weight));
+  const best = at.reduce((a, x) => ((x.reps as number) > (a.reps as number) ? x : a));
+  return { weight, reps: best.reps as number, rpe: best.rpe ?? null };
+}
+
+const sameLogged = (a: HistoryExercise, b: HistoryExercise) =>
+  a.exerciseId && b.exerciseId ? a.exerciseId === b.exerciseId : normalizeName(a.name ?? "") === normalizeName(b.name ?? "");
+
+/**
+ * A logged session on a date that was read and has no planned day (V6 L), judged against the
+ * athlete's own history: for each exercise, the most recent earlier logged session of the same
+ * exercise within 28 days, in the same unit after conversion.
+ * - top_set_dropped: the top set's weight is lower than last time, or the same weight with fewer reps;
+ * - rpe_drift: the mean of (top-set RPE − last time's top-set RPE) over exercises that have both;
+ * - no plan, so no rep shortfall: planned_sets and completed_sets are the logged work sets.
+ * An exercise with no earlier session, a last session without a usable top set (never an older
+ * stand-in), or a unit known on one side only is not judged; a session in which no exercise can
+ * be judged gives no SessionPerf.
+ */
+export function judgeUnplanned(session: SnapshotSession, history: SnapshotSession[]): SessionJudgement {
+  const notes: string[] = [];
+  const from = addDays(session.date, -UNPLANNED_LOOKBACK_DAYS);
+  const earlier = history.filter((h) => h.date < session.date && h.date >= from).sort((x, y) => (x.date < y.date ? 1 : -1));
+  const unit = session.weightUnit ?? null;
+  let sets = 0;
+  let judged = 0;
+  let dropped = false;
+  const drifts: number[] = [];
+  for (const ex of session.exercises) {
+    const now = topSet(ex);
+    if (!now) {
+      notes.push(`${ex.name}: no logged work set with reps, not judged`);
+      continue;
+    }
+    let prevSession: SnapshotSession | undefined;
+    let prevEx: HistoryExercise | undefined;
+    // The most recent earlier session that has the exercise (V6b fix 2): an older session never
+    // stands in for it, also when its sets cannot give a top set.
+    for (const h of earlier) {
+      const m = h.exercises.find((e) => sameLogged(e, ex));
+      if (m) {
+        prevSession = h;
+        prevEx = m;
+        break;
+      }
+    }
+    if (!prevSession || !prevEx) {
+      notes.push(`${ex.name}: no earlier session in the last ${UNPLANNED_LOOKBACK_DAYS} days, not judged`);
+      continue;
+    }
+    const prev = topSet(prevEx);
+    if (!prev) {
+      notes.push(`${ex.name}: the last session (${prevSession.date}) has no work set with reps, not judged`);
+      continue;
+    }
+    const prevUnit = prevSession.weightUnit ?? null;
+    if ((now.weight === null) !== (prev.weight === null)) {
+      notes.push(`${ex.name}: weighted one time and not the other, not judged`);
+      continue;
+    }
+    let prevWeight = prev.weight;
+    if (now.weight !== null && prevWeight !== null) {
+      if ((unit === null) !== (prevUnit === null)) {
+        notes.push(`${ex.name}: the weight unit is unknown on one side, not judged`);
+        continue;
+      }
+      if (unit && prevUnit && unit !== prevUnit) prevWeight = convertWeight(prevWeight, prevUnit, unit);
+    }
+    judged++;
+    sets += ex.sets.filter((x) => x.warmup !== true && typeof x.reps === "number" && x.reps > 0).length;
+    const lower = now.weight !== null && prevWeight !== null && now.weight < prevWeight - 1e-9;
+    const same = now.weight === null ? prevWeight === null : prevWeight !== null && Math.abs(now.weight - prevWeight) <= 1e-9;
+    if (lower || (same && now.reps < prev.reps)) {
+      dropped = true;
+      notes.push(`${ex.name}: top set ${now.weight ?? "bodyweight"} × ${now.reps} below ${prevWeight ?? "bodyweight"} × ${prev.reps} on ${prevSession.date}`);
+    } else notes.push(`${ex.name}: top set ${now.weight ?? "bodyweight"} × ${now.reps} against ${prevWeight ?? "bodyweight"} × ${prev.reps} on ${prevSession.date}`);
+    if (now.rpe !== null && prev.rpe !== null) drifts.push(now.rpe - prev.rpe);
+  }
+  if (judged === 0) return { date: session.date, plan: "none", notes: [...notes, `session ${session.date} not judged: no plan and no earlier session to compare`] };
+  if (drifts.length === 0) notes.push("no top set has an RPE both times: RPE drift unknown");
+  const perf: SessionPerf = {
+    date: session.date,
+    planned_sets: sets,
+    completed_sets: sets,
+    reps_shortfall_ratio: 0,
+    ...(drifts.length > 0 ? { rpe_drift: round(drifts.reduce((a, d) => a + d, 0) / drifts.length) } : {}),
+    top_set_dropped: dropped,
+  };
+  return { date: session.date, plan: "none", perf, notes };
+}
+
 export type BuildInput = {
   root: string;
   date: CalendarDate;
@@ -223,10 +328,21 @@ export function readinessForDate(b: BuildInput): ReadinessForDate {
     const dates = [...new Set(window.map((s) => s.date))];
     for (const d of dates) {
       const day = snap.days[d];
-      if (!day || !day.found) {
+      if (!day) {
         judged.push({ date: d, plan: "missing", notes: [`no plan for ${d} in the snapshot: read it with get_planned_workout, or the session stays unknown`] });
         notes.push(`session ${d} not judged: its plan is not in the snapshot`);
         break;
+      }
+      if (!day.found) {
+        // Read, and no planned day: judged against the athlete's own history (V6 L).
+        const perDate = window.filter((s) => s.date === d).map((s) => judgeUnplanned(s, snap.history));
+        judged.push(...perDate);
+        if (perDate.some((j) => !j.perf)) {
+          notes.push(`session ${d} not judged: no plan and no earlier session to compare`);
+          break;
+        }
+        sessions.push(...perDate.map((j) => j.perf!));
+        continue;
       }
       const unit = day.weightUnit ?? null;
       const perDate = window.filter((s) => s.date === d).map((s) => judgeSession(s, day, unit));

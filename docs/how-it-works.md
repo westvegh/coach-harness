@@ -28,7 +28,7 @@ A signal adapter turns one data source into daily records. Three adapters ship:
 
 - **Apple Health, through an iOS Shortcut that you build.** The Shortcut reads last night's sleep, HRV and resting heart rate, asks the check-in questions, and commits one file a day to your private repo. The guide is `adapters/signals/apple-health-shortcut/SHORTCUT.md`.
 - **Oura, on your Mac.** A fetcher reads the Oura API with your own Oura app credentials. The credentials stay in the macOS Keychain.
-- **Check-in in chat.** Say "check in" and answer four 1-5 scales (sleep quality, energy, soreness, stress), an optional "want to train" scale, and pain by body region.
+- **Check-in in chat.** Say "check in". You get today's report from the data the coach has: no form. Tell the coach how you feel, about pain, or that you do not want to train, and it records your words. The daily run asks one question, "How do you feel today?", only on a day when the answer can change the workout.
 
 Each record carries the time the data was true and a flag that says whether it is complete. Old or future data does not count for today.
 
@@ -39,8 +39,8 @@ The readiness rules follow Dr. Andy Galpin's public teaching on recovery (Huberm
 The engine (`engine/readiness.ts`) scores three categories each morning as green, amber, red or unknown:
 
 - **Wearable:** HRV and resting heart rate against your own baseline, and sleep against your sleep target. The baseline needs 28 valid days within the last 6 weeks. Until then the category is "calibrating". It is never compared with other people.
-- **Subjective:** today's check-in. It has four 1-5 scales and an optional question: "How much do you want to train today?"
-- **Performance:** your last logged sessions against their plans: missed sets or reps, harder effort than planned, or a dropped top set.
+- **Subjective:** today's check-in. It is one rating from 1 to 5 ("How do you feel today?"), or the Shortcut's four 1-5 scales. "I do not want to train at all" and pain by body region can come with it or alone. With no rating, the category is unknown.
+- **Performance:** your last logged sessions against their plans: missed sets or reps, harder effort than planned, or a dropped top set. A session with no plan is compared with the last time you did each exercise in the past 4 weeks: a lighter top set, or fewer reps at the same weight, counts as a drop.
 
 It acts on patterns, not on single days. An "off-morning" is a morning when HRV is below your normal band, or resting heart rate is above it. A morning with no reading is unknown. It does not count as off, and it ends a run of off-mornings.
 
@@ -50,10 +50,10 @@ It acts on patterns, not on single days. An "off-morning" is a morning when HRV 
 | One off day, in any category | A note only. A dip after a hard session is often the training working. |
 | 3 or more off-mornings in a row | Hold weight increases and trim about 20% of the sets |
 | That run, plus a red check-in or red performance today | A recovery day |
-| "Want to train" at 1 (you do not want to train at all) | Offer a recovery day. An unattended run makes it a recovery day. |
+| "Want to train" at 1 (you do not want to train at all) | A recovery day. The coach tells you why. You can keep the session instead. |
 | 7 or more off-mornings in a row, plus a low check-in and a performance drop | Propose an early deload or a new block. You approve it. |
 
-On a run of off-mornings, the coach also asks whether your sleep, eating or drinking changed. It never sets food or supplement targets. A change to the whole program needs all three kinds of evidence, and it needs your yes. The output of `node engine/cli.ts readiness --date <date>` shows the run (`pattern`), the `decision`, the reasons and the rule IDs.
+The coach recommends: it says its pick and the reason, and you change it if you want. On a run of off-mornings, the report also invites you to say whether your sleep, eating or drinking changed. It never sets food or supplement targets. A change to the whole program needs all three kinds of evidence, and it needs your yes. The output of `node engine/cli.ts readiness --date <date>` shows the run (`pattern`), the `decision`, the reasons and the rule IDs.
 
 ### Method packs
 

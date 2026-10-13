@@ -134,6 +134,15 @@ export type Rules = { pack: string; version: number; rules: Rule[] };
 
 export type Scale = 1 | 2 | 3 | 4 | 5;
 export type PainEntry = { region: string; score: number };
+export type Subjective = {
+  overall?: Scale;
+  sleep_quality?: Scale;
+  energy?: Scale;
+  soreness?: Scale;
+  stress?: Scale;
+  want_to_train?: Scale;
+  pain?: PainEntry[];
+};
 
 export type DayRecord = {
   date: CalendarDate;
@@ -144,8 +153,14 @@ export type DayRecord = {
   hrv?: { value_ms: number; method: "rmssd" | "sdnn" };
   rhr?: { bpm: number };
   vendor_score?: number;
-  /** want_to_train (optional): 1 means aversion, not wanting to train at all (contracts §5). */
-  subjective?: { sleep_quality: Scale; energy: Scale; soreness: Scale; stress: Scale; want_to_train?: Scale; pain?: PainEntry[] };
+  /**
+   * A check-in (contracts §5). The rating is one group: `overall` (1-5), or the four scales
+   * together; never both. want_to_train (optional): 1 means aversion, not wanting to train at
+   * all. `pain: []` records "no pain now". At least one field (engine/checkin-shape.ts).
+   */
+  subjective?: Subjective;
+  /** When the check-in in `subjective` was answered (its submitted_at); a pain entry is handled per check-in (V6 A.6). */
+  checkin_at?: Instant;
 };
 
 export type SessionPerf = {
@@ -444,5 +459,5 @@ export type ShortcutSignalFile = {
   sleep?: { start_at: Instant; end_at: Instant; duration_min: number };
   hrv?: { value_ms: number; method: "rmssd" | "sdnn"; samples?: number };
   rhr?: { bpm: number };
-  checkin?: { sleep_quality: Scale; energy: Scale; soreness: Scale; stress: Scale; pain?: PainEntry[] };
+  checkin?: { sleep_quality: Scale; energy: Scale; soreness: Scale; stress: Scale; want_to_train?: Scale; pain?: PainEntry[] };
 };

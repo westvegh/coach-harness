@@ -15,7 +15,7 @@
 //   --- end urgent stop ---
 //   --- signals (handlers in engine/signals-cli.ts) ---
 //   node engine/cli.ts signals --from <date> --to <date> [--now <instant>]
-//   node engine/cli.ts checkin --date <date> --sleep-quality n --energy n --soreness n --stress n [--want-to-train n] [--pain region:score,...] [--urgent <term>,...]
+//   node engine/cli.ts checkin --date <date> [--overall n | --sleep-quality n --energy n --soreness n --stress n] [--want-to-train n|none] [--pain region:score,...|none] [--urgent <term>,...]
 //   --- end signals ---
 //   --- privacy (handlers in engine/cli-git.ts; contracts §10a) ---
 //   node engine/cli.ts install-git-hooks

@@ -1,14 +1,19 @@
 // CLI subcommands for signals (contracts §15 "signals", "checkin"). Wired into engine/cli.ts.
 //
 //   node engine/cli.ts signals --from <date> --to <date> [--now <instant>] [--root <dir>]
-//   node engine/cli.ts checkin --date <date> --sleep-quality 1-5 --energy 1-5 --soreness 1-5 --stress 1-5
-//                              [--want-to-train 1-5] [--pain region:score,...] [--urgent <term>,...] [--now <instant>] [--root <dir>]
+//   node engine/cli.ts checkin --date <date> [--overall 1-5 | --sleep-quality 1-5 --energy 1-5 --soreness 1-5 --stress 1-5]
+//                              [--want-to-train 1-5|none] [--pain region:score,...|none] [--urgent <term>,...] [--now <instant>] [--root <dir>]
+//   At least one of the rating (--overall, or the four scales together), --want-to-train,
+//   --pain or --urgent. `none` clears that answer for today. The answer merges into today's
+//   check-in by group (adapters/signals/checkin/write.ts).
 //   --urgent names urgent warning signs the athlete chose in the check-in; it writes,
-//   commits and pushes the urgent stop (engine/urgent.ts, source checkin).
+//   commits and pushes the urgent stop (engine/urgent.ts, source checkin). --urgent alone
+//   changes no signal file.
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { writeCheckin, type CheckinAnswers } from "../adapters/signals/checkin/write.ts";
+import { hasAnswer, writeCheckin, type CheckinAnswers } from "../adapters/signals/checkin/write.ts";
+import { FOUR_SCALES } from "./checkin-shape.ts";
 import { CoachError } from "./errors.ts";
 import { unattendedMarker } from "./mode.ts";
 import { loadSignals } from "./signals.ts";
@@ -35,6 +40,9 @@ function scale(v: string | undefined, name: string): Scale {
   return n as Scale;
 }
 
+/** "none" clears a group (--want-to-train none, --pain none). */
+const isNone = (v: string) => v.trim().toLowerCase() === "none";
+
 /** "left-knee:3,low-back:2" → [{region, score}]. */
 export function parsePain(v: string | undefined): PainEntry[] | undefined {
   if (v === undefined || v.trim() === "") return undefined;
@@ -57,6 +65,7 @@ export async function cmdCheckin(argv: string[]): Promise<number> {
       root: { type: "string" },
       date: { type: "string" },
       now: { type: "string" },
+      overall: { type: "string" },
       "sleep-quality": { type: "string" },
       energy: { type: "string" },
       soreness: { type: "string" },
@@ -67,15 +76,27 @@ export async function cmdCheckin(argv: string[]): Promise<number> {
     },
   });
   if (!values.date) throw new CoachError("USAGE", "checkin needs --date <YYYY-MM-DD>");
-  const answers: CheckinAnswers = {
-    sleep_quality: scale(values["sleep-quality"], "sleep-quality"),
-    energy: scale(values.energy, "energy"),
-    soreness: scale(values.soreness, "soreness"),
-    stress: scale(values.stress, "stress"),
-  };
-  if (values["want-to-train"] !== undefined) answers.want_to_train = scale(values["want-to-train"], "want-to-train");
-  const pain = parsePain(values.pain);
-  if (pain) answers.pain = pain;
+  const answers: CheckinAnswers = {};
+  const flags = values as Record<string, string | undefined>;
+  const scaleFlags = FOUR_SCALES.map((k) => [k, k.replace("_", "-")] as const);
+  const given = scaleFlags.filter(([, flag]) => flags[flag] !== undefined);
+  if (values.overall !== undefined && given.length > 0) throw new CoachError("USAGE", "checkin takes --overall or the four scales, not both");
+  if (given.length > 0 && given.length < scaleFlags.length) {
+    throw new CoachError("USAGE", `checkin needs the four scales together (--sleep-quality, --energy, --soreness, --stress); missing ${scaleFlags.filter(([, f]) => flags[f] === undefined).map(([, f]) => `--${f}`).join(", ")}`);
+  }
+  if (values.overall !== undefined) answers.overall = scale(values.overall, "overall");
+  for (const [k, flag] of given) answers[k] = scale(flags[flag], flag);
+  if (values["want-to-train"] !== undefined) answers.want_to_train = isNone(values["want-to-train"]) ? null : scale(values["want-to-train"], "want-to-train");
+  if (values.pain !== undefined) {
+    if (isNone(values.pain)) answers.pain = null;
+    else {
+      const pain = parsePain(values.pain);
+      if (pain) answers.pain = pain;
+    }
+  }
+  if (!hasAnswer(answers) && !values.urgent) {
+    throw new CoachError("USAGE", "checkin needs at least one of --overall, the four scales, --want-to-train, --pain or --urgent");
+  }
   const root = resolve(values.root ?? ".");
   const urgentTerms = values.urgent ? values.urgent.split(",") : [];
   let r: ReturnType<typeof writeCheckin>;
@@ -95,6 +116,6 @@ export async function cmdCheckin(argv: string[]): Promise<number> {
     const { pushNow, unpushed, URGENT_RELATIVE } = await import("./urgent.ts");
     push = r.urgent_stop.commit.committed || unpushed(root, [URGENT_RELATIVE]) ? await pushNow(root) : null;
   }
-  out({ path: r.path, action: r.action, replaced: r.replaced, file: r.file, ...(r.urgent_stop ? { urgent_stop: { ...r.urgent_stop, push } } : {}) });
+  out({ path: r.path, action: r.action, replaced: r.replaced, file: r.file, ...(r.note ? { note: r.note } : {}), ...(r.urgent_stop ? { urgent_stop: { ...r.urgent_stop, push } } : {}) });
   return 0;
 }

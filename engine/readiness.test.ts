@@ -333,7 +333,7 @@ describe("input errors", () => {
     assert.throws(() => run([], [], { today: "12/10/2026" }), CoachError);
     assert.throws(() => run([], [], { now: "2026-10-12T07:00:00" }), CoachError); // no offset
     assert.throws(() => run([], [], { tz: "Mars/Olympus" }), CoachError);
-    assert.throws(() => run([checkin(0, 4, 2, 2)]), /subjective\.sleep_quality must be 1-5/);
+    assert.throws(() => run([checkin(0, 4, 2, 2)]), /subjective\.sleep_quality: must be a whole number from 1 to 5/);
     assert.throws(() => run([], [], { thresholds: { nope: 1 } as never }), /thresholds\.nope: unknown threshold/);
   });
 });

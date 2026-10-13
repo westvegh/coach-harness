@@ -78,13 +78,13 @@ You can switch at any time: say "move my plans to Tally".
 recovery signals ─► readiness ─► method rules ─► change ─► your limits ─► your plans
 ```
 
-1. Recovery data comes in each morning: sleep, HRV and resting heart rate, and a short check-in.
+1. Recovery data comes in each morning: sleep, HRV and resting heart rate. Say "check in" for today's report. The coach reads the data first, and asks one question ("How do you feel today?") only on a day when the answer can change the workout.
 2. The engine scores three categories: wearable, subjective and performance.
-3. The method's rules decide: keep the session, add a note, trim it, or swap to a recovery day. An isolated low reading usually gives a note only. Two exceptions: when you do not want to train at all, the coach offers a recovery day, and an urgent warning sign stops all training changes.
+3. The method's rules decide: keep the session, add a note, trim it, or swap to a recovery day. An isolated low reading usually gives a note only. Two exceptions: when you do not want to train at all, the coach makes it a recovery day (you can keep the session instead), and an urgent warning sign stops all training changes.
 4. The coach reads your limits before every plan, and checks the planned week against them with the engine.
 5. The plan goes where your plans live. You log your sets. Your log feeds the next day.
 
-The engine makes every number. Small changes apply on their own. Big changes need your yes; a scheduled run saves each big change for the next time you talk to the coach.
+The engine makes every number. The coach recommends: it gives its pick and the reason, and you change it if you want. Small changes apply on their own. Big changes need your yes; a scheduled run saves each big change for the next time you talk to the coach.
 
 **What git records:** every change to `athlete/`, `plans/` and `coach.yaml`, and a summary line in your athlete log for each Tally write. Changes the coach makes in another tool you connected are not recorded in git. The full description is in [docs/how-it-works.md](docs/how-it-works.md).
 

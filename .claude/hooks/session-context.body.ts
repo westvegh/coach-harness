@@ -121,18 +121,17 @@ async function main(): Promise<void> {
   const progress = setupProgress(root);
   if (progress) lines.push(`Setup progress: ${progress}.`);
 
-  // What is due.
+  // What is due. A check-in is never due (V6 D): the athlete brings it up, and the daily run
+  // asks its one question only on a day when the answer can change the workout.
   const due: string[] = [];
   const signal = join(root, "athlete/signals", `${today}.json`);
-  let checkedIn = false;
   if (existsSync(signal)) {
     try {
-      checkedIn = !!(JSON.parse(readFileSync(signal, "utf8")) as { checkin?: unknown }).checkin;
+      JSON.parse(readFileSync(signal, "utf8"));
     } catch {
       lines.push(`WARNING: athlete/signals/${today}.json is not valid JSON.`);
     }
   }
-  if (!checkedIn) due.push("today's check-in");
   const logFile = join(root, "athlete/log", `${today.slice(0, 7)}.md`);
   if (!existsSync(logFile) || !readFileSync(logFile, "utf8").includes(`## ${today} `)) due.push("the daily run (no log entry today)");
   if (weekdayOf(today) === cfg.automation.weekly.day) due.push("the weekly review");

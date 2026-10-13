@@ -473,6 +473,20 @@ function planned(rows: PlanRow[], units: Units, warnings: string[]): DayPlan[] {
   return [...days.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
 }
 
+/**
+ * True when the row carries a plan: any of the sets, reps or load columns has a value (V6b fix 3).
+ * A date with no such row has no planned session: `plans read` leaves it out of `days` and lists
+ * it in `unplanned_logged`, and the snapshot gives it `found: false`. Its logged rows stay.
+ */
+export function hasPlanColumns(r: PlanRow): boolean {
+  return r.sets !== "" || r.reps !== "" || r.load !== "";
+}
+
+/** The dates of `rows` that have at least one planned row. */
+function plannedDates(rows: PlanRow[]): Set<CalendarDate> {
+  return new Set(rows.filter(hasPlanColumns).map((r) => r.date));
+}
+
 /** True when the athlete logged the row: any done_ column has a value. */
 export function isLogged(r: PlanRow): boolean {
   return r.done_sets !== "" || r.done_reps !== "" || r.done_load !== "";
@@ -509,16 +523,23 @@ function logged(rows: PlanRow[], units: Units, warnings: string[]): DayLog[] {
   return [...days.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
 }
 
-export type WeekRead = { file: string; exists: boolean; week: string; week_start: CalendarDate; days: DayPlan[]; logged: DayLog[]; unparsed: number; warnings: string[] };
+/**
+ * `unplanned_logged`: dates with logged rows and no planned row (`hasPlanColumns`). They are not
+ * in `days` (no planned session: a rest day with logged work); their rows stay in `logged`.
+ */
+export type WeekRead = { file: string; exists: boolean; week: string; week_start: CalendarDate; days: DayPlan[]; logged: DayLog[]; unplanned_logged: CalendarDate[]; unparsed: number; warnings: string[] };
 
 /** The week that holds `date`: its planned days (engine DayPlans), its logged days, and what could not be read. */
 export function readWeek(root: string, date: CalendarDate, units: Units): WeekRead {
   const path = weekFilePath(root, date);
   const f = readWeekFile(path);
   const warnings = [...f.warnings];
-  const days = planned(f.rows, units, warnings);
+  const withPlan = plannedDates(f.rows);
+  const all = planned(f.rows, units, warnings);
+  const days = all.filter((d) => withPlan.has(d.date));
   const done = logged(f.rows, units, warnings);
-  return { file: relative(root, path), exists: existsSync(path), week: isoWeekId(date), week_start: weekStart(date), days, logged: done, unparsed: f.unparsed.length, warnings: [...new Set(warnings)] };
+  const unplanned = done.map((d) => d.date).filter((d) => !withPlan.has(d));
+  return { file: relative(root, path), exists: existsSync(path), week: isoWeekId(date), week_start: weekStart(date), days, logged: done, unplanned_logged: unplanned, unparsed: f.unparsed.length, warnings: [...new Set(warnings)] };
 }
 
 type AllRows = { rows: PlanRow[]; warnings: string[]; unparsed: { monday: CalendarDate; row: UnparsedRow }[] };
@@ -620,7 +641,15 @@ export function filesSnapshot(root: string, opts: { units: Units; timezone: stri
   const all = allRows(root);
   const warnings = [...all.warnings];
   const days: Record<CalendarDate, SnapshotDay> = {};
+  // A date whose rows have no planned columns (sets, reps, load) has no plan: the files were
+  // read, so it is a read with no planned day (`found: false`), and readiness judges a session
+  // logged on it against the athlete's own history (V6 L).
+  const withPlan = plannedDates(all.rows);
   for (const d of planned(all.rows, opts.units, warnings)) {
+    if (!withPlan.has(d.date)) {
+      days[d.date] = { found: false, version: null, updatedAt: null, source: "files", userModified: false, skipped: false, exercises: [], weightUnit: opts.units, weightUnitSource: "settings", captured_at: opts.now };
+      continue;
+    }
     days[d.date] = {
       found: true,
       version: null,

@@ -45,7 +45,7 @@ export const HELP: Record<string, string> = {
   snapshot: "snapshot show | snapshot reset  — print the Tally snapshot cache; empty it (it is a cache; setup resets it after the account question) (§9)",
   safety: "safety detect --text <text> | safety scan-notes --since <YYYY-MM-DD> [--input <history.json>] [--dry-run]  — urgent and pain terms in text; in logged notes (an urgent term writes the urgent stop) (§10)",
   classify: "classify --exercise \"<name>\" [--id <exerciseId>] [--muscle <m>] | classify --input <{before, after, tool, today?}.json>  — an exercise's patterns, or a change's kind (small or big) (§6)",
-  checkin: "checkin --date <YYYY-MM-DD> --sleep-quality 1-5 --energy 1-5 --soreness 1-5 --stress 1-5 [--want-to-train 1-5] [--pain region:score,...] [--urgent <term>,...]  — write today's check-in (live only; §11)",
+  checkin: "checkin --date <YYYY-MM-DD> [--overall 1-5 | --sleep-quality 1-5 --energy 1-5 --soreness 1-5 --stress 1-5] [--want-to-train 1-5|none] [--pain region:score,...|none] [--urgent <term>,...]  — record today's check-in (live only; §11): at least one answer or --urgent; merges into today's check-in by group, none clears an answer, --urgent alone writes only the stop",
   oplog: "oplog done --date <YYYY-MM-DD> --kind <kind>  — whether a Tally write of that kind is done on that date, from the write log (§15)",
   mode: "mode  — interactive or unattended (§15)",
   opid: "opid --date <YYYY-MM-DD> --kind <kind> --input <{tool, args}.json>  — the operation id for a Tally write (§15)",

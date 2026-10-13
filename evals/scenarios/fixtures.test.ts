@@ -27,9 +27,9 @@ import { saidAlreadyAdjusted } from "./16-failed-trim-retried.ts";
 
 const scenarios = await loadScenarios();
 
-test("25 scenarios (07, 08a, 08b, 13, 14 and 15 tested guard denials and went in v0.2; V4 added 26 to 29; V5 added 30), unique names", () => {
-  assert.equal(scenarios.length, 25);
-  assert.equal(new Set(scenarios.map((s) => s.name)).size, 25);
+test("28 scenarios (07, 08a, 08b, 13, 14 and 15 tested guard denials and went in v0.2; V4 added 26 to 29; V5 added 30; V6 added 31 to 33), unique names", () => {
+  assert.equal(scenarios.length, 28);
+  assert.equal(new Set(scenarios.map((s) => s.name)).size, 28);
 });
 
 /** Every file under root, relative (node_modules and .git not entered). */
@@ -142,6 +142,8 @@ const EXPECTED_DECISION: Record<string, string> = {
   "09-already-adjusted": "trim",
   "16-failed-trim-retried": "trim",
   "17-aversion-recovery": "recovery",
+  // V6: no check-in today, so the subjective category is unknown and the pattern trims; the one question decides.
+  "32-pattern-check-in": "trim",
 };
 
 /** Scenarios where a run that does nothing is already correct. */
@@ -407,4 +409,103 @@ test("V5 30 (V5b fix 8): the cluster check passes a good run and fails each wron
   assert.ok(failed({ text: "Bench Press counts as 3 sets more than last week. EZ bar curls are planned." }, /curl "counts as 3"/), "a count not tied to the curl fails");
   // A live audit row (rerun 2): the curl named first, the count far later on the same line, passes.
   assert.ok(!failed({ text: "| athlete chose | NA-END-004, NA-DES-010 | The curl cluster has 6 reps per mini-set, which is under the 11–30 range for endurance work. | 6 × 6 cluster counts as 3 sets | None. It is your choice. |" }, /counts as 3/));
+});
+
+test("V6 31-33: the fixtures give the cases the scenarios need, and the checks pass a good run and fail a wrong one", async () => {
+  const { suggestLoads } = await import("../../engine/loads.ts");
+  const { judgeUnplanned } = await import("../../engine/readiness-date.ts");
+  const { readYamlFile } = await import("../../engine/yaml-file.ts");
+  const asHistory = (sessions: any[]) =>
+    sessions.map((s) => ({ date: s.date, weightUnit: s.weightUnit, exercises: s.exercises.map((e: any) => ({ exerciseId: "", name: e.name, muscle: e.muscle ?? "", sets: e.sets.map((x: any) => ({ weight: x.weight ?? null, reps: x.reps ?? null, rpe: null })) })) }));
+  const fixture = (name: string) => {
+    const s = scenarios.find((x) => x.name === name)!;
+    const p = prepare(s, { allowDirty: true });
+    return { s, ...p, done: () => rmSync(p.inst.dir, { recursive: true, force: true }) };
+  };
+  // 33: the engine repeats 145 for the deadlift planned at 155 (not the 5% drop to 135); the day is protected.
+  const f33 = fixture("33-coach-picks-load");
+  try {
+    const rules = readYamlFile(join(f33.inst.root, "methods/nine-adaptations/rules.yaml")) as any;
+    const row = (f33.seed.days as any)[f33.ctx.today];
+    assert.equal(row.source, "builder");
+    const plan = row.exercises.find((e: any) => e.name === "Romanian Deadlift");
+    assert.equal(plan.suggestedWeight, 155);
+    const [s] = suggestLoads([{ name: plan.name, sets: Array.from({ length: plan.suggestedSets }, () => ({ reps: plan.suggestedReps })) }], asHistory(f33.seed.sessions as any[]) as any, rules, "lbs", { tax: taxonomy() });
+    assert.equal(s.suggestedWeight, 145, s.reason);
+  } finally {
+    f33.done();
+  }
+  // 32: the last session (no plan) is a top-set drop against the week before.
+  const f32 = fixture("32-pattern-check-in");
+  try {
+    const hist = asHistory(f32.seed.sessions as any[]);
+    const last = hist.find((h: any) => h.date === addDays(f32.ctx.today, -3))!;
+    assert.equal(judgeUnplanned(last as any, hist as any).perf?.top_set_dropped, true);
+  } finally {
+    f32.done();
+  }
+  // 33's scripted answer picks Yes with or without the letter (a live run labelled it "A) Yes").
+  const { answer } = await import("../lib/answerer.mjs");
+  const s33 = scenarios.find((x) => x.name === "33-coach-picks-load")!;
+  for (const labels of [["Yes", "Change something", "Not now"], ["A) Yes", "B) Change something", "C) Not now"]]) {
+    const q = { question: "Today is Lower A. My loads: … Apply these?", header: "Today", multiSelect: false, options: labels.map((label) => ({ label })) };
+    assert.equal(answer({ questions: [q] }, s33.answers ?? []).answers[q.question], labels[0]);
+  }
+  // The checks: a good run passes, and a run that asked a load question or wrote the drop fails.
+  const s31 = scenarios.find((x) => x.name === "31-calm-check-in")!;
+  const base = { today: "2026-10-14", after: { "athlete/.urgent-stop": null, "athlete/signals/2026-10-14.json": '{"version":1}' } };
+  const good31 = s31.check(art({ ...base, result: { text: "**Train as planned.**\nSleep 450 min, HRV normal.", isError: false, turns: 1, costUsd: 0, durationMs: 0, exitCode: 0, aborted: null }, messages: [{ afterTool: 0, text: "**Train as planned.**\nSleep 450 min, HRV normal." }] } as Partial<RunArtifacts>));
+  assert.deepEqual(good31.filter((c) => !c.ok).map((c) => c.name), []);
+  const asked31 = s31.check(art({ ...base, tools: [tool("AskUserQuestion", { questions: [{ question: "How do you feel today?" }] })] as RunArtifacts["tools"], result: { text: "Which weight today? A) 40, B) 45", isError: false, turns: 1, costUsd: 0, durationMs: 0, exitCode: 0, aborted: null }, messages: [{ afterTool: 0, text: "Which weight today? A) 40, B) 45" }] } as Partial<RunArtifacts>));
+  for (const name of ["no AskUserQuestion call", "no lettered option list in the reply", "the final reply starts with the verdict (as planned)"]) assert.ok(asked31.some((c) => !c.ok && c.name === name), name);
+});
+
+test("V6b fixes 6 and 7: scenario 33 fails a write before consent and any change off the approved list; scenario 31 fails list-item options and the feel question", async () => {
+  const { approvedDay } = await import("./33-coach-picks-load.ts");
+  const s33 = scenarios.find((x) => x.name === "33-coach-picks-load")!;
+  const p = prepare(s33, { allowDirty: true });
+  try {
+    const today = p.ctx.today;
+    const seedRow = (p.seed.days as any)[today];
+    const base = art({ today, seed: p.seed } as Partial<RunArtifacts>);
+    const want = approvedDay(base);
+    assert.equal(want.find((w) => w.name === "Romanian Deadlift")!.weight, 145);
+    const T = Date.parse(`${today}T08:00:00Z`);
+    const question = "Today is Lower A. My loads: Goblet squat 75, Romanian deadlift 145 (you got 9, 9, 7 at 145 last time), Leg press 285, Calf raise 95. Apply these?";
+    const ask = tool("AskUserQuestion", { questions: [{ question, options: [{ label: "Yes" }, { label: "Change something" }, { label: "Not now" }] }] }, { at: T - 10, resultAt: T });
+    const write = tool("mcp__tallymock__update_planned_workout", { date: today }, { at: T + 1000, resultAt: T + 1100 });
+    const row = (exs: any[]) => ({ ...seedRow, exercises: exs });
+    const good = seedRow.exercises.map((e: any) => ({ ...e, suggestedWeight: want.find((w) => w.name === e.name)!.weight ?? undefined }));
+    const run = (o: { tools?: unknown[]; callAt?: number; exercises?: any[] } = {}) =>
+      s33.check(
+        art({
+          today,
+          seed: p.seed,
+          tools: (o.tools ?? [ask, write]) as RunArtifacts["tools"],
+          mock: { days: { [today]: row(o.exercises ?? good) }, calls: [{ at: new Date(o.callAt ?? T + 1050).toISOString(), tool: "update_planned_workout", args: { date: today }, result: { status: "updated" } }] } as unknown as RunArtifacts["mock"],
+          messages: [{ afterTool: 1, text: "Romanian deadlift 145 lb: you missed at 155, then got 9, 9, 7 at 145, so repeat 145." }],
+        } as Partial<RunArtifacts>),
+      );
+    const failed = (o: Parameters<typeof run>[0], name: RegExp) => run(o).some((c) => !c.ok && name.test(c.name));
+    assert.deepEqual(run().filter((c) => !c.ok).map((c) => c.name), []);
+    assert.ok(failed({ tools: [write, ask] }, /no Tally write before the consent answer/), "a write before the question");
+    assert.ok(failed({ callAt: T - 500 }, /no Tally write before the consent answer/), "a mock write stamped before the answer");
+    const changed = (f: (e: any) => any) => good.map((e: any) => (e.name === "Leg Press" ? f(e) : e));
+    assert.ok(failed({ exercises: changed((e) => ({ ...e, suggestedSets: e.suggestedSets - 1 })) }, /equals the approved list/), "changed sets");
+    assert.ok(failed({ exercises: changed((e) => ({ ...e, suggestedReps: e.suggestedReps - 2 })) }, /equals the approved list/), "changed reps");
+    assert.ok(failed({ exercises: [...good, { name: "Leg Extension", suggestedSets: 3, suggestedReps: 12, suggestedWeight: 90 }] }, /equals the approved list/), "an extra exercise");
+    assert.ok(failed({ exercises: good.filter((e: any) => e.name !== "Calf Raise") }, /equals the approved list/), "a missing exercise");
+  } finally {
+    rmSync(p.inst.dir, { recursive: true, force: true });
+  }
+  // 31: options as Markdown list items, and the feel question, fail the run.
+  const { hasLetteredOptions } = await import("./31-calm-check-in.ts");
+  assert.equal(hasLetteredOptions("How do you feel today?\n- A) Good\n- B) Okay\n- C) Run down"), true);
+  assert.equal(hasLetteredOptions("**Today: Lower A.** Then Upper B on Thursday."), false);
+  const s31 = scenarios.find((x) => x.name === "31-calm-check-in")!;
+  const text = "**Train as planned.**\nSleep 450 min.\n\nHow do you feel today?\n- A) Good\n- B) Okay";
+  const r31 = s31.check(art({ today: "2026-10-14", after: { "athlete/.urgent-stop": null }, result: { text, isError: false, turns: 1, costUsd: 0, durationMs: 0, exitCode: 0, aborted: null }, messages: [{ afterTool: 0, text }] } as Partial<RunArtifacts>));
+  for (const name of ["no lettered option list in the reply", 'no "How do you feel today?" question']) assert.ok(r31.some((c) => !c.ok && c.name === name), name);
+  const asked = s31.check(art({ today: "2026-10-14", tools: [tool("AskUserQuestion", { questions: [{ question: "How do you feel today?" }] })] as RunArtifacts["tools"], after: { "athlete/.urgent-stop": null } } as Partial<RunArtifacts>));
+  assert.ok(asked.some((c) => !c.ok && c.name === 'no "How do you feel today?" question'));
 });

@@ -77,7 +77,8 @@ const fmt = (n: number) => Number(n.toFixed(2));
  * From the last logged top set: hit all reps at RPE ≤ target → one step up (2.5% upper body,
  * 5% lower body, rounded to the plate step: 5 lbs or 2.5 kg, and at least one plate step);
  * missed reps → repeat; missed in the last 2 sessions → −5%, rounded down (a repeat when no
- * lighter plate weight exists). No suggestion is ever above the last top set ×
+ * lighter plate weight exists), but only when the last top set is at or above the one before:
+ * a miss at a lighter weight after a miss repeats that lighter weight (V6 J). No suggestion is ever above the last top set ×
  * (1 + top_set_jump_max); when the cap leaves no plate step, the weight repeats. No history
  * means no suggestion. Logged weights are in `units`.
  */
@@ -166,6 +167,12 @@ export function suggestLoads(
     const at = `${fmt(last.weight)} ${units} × ${last.reps}${last.rpe == null ? "" : ` @ RPE ${last.rpe}`}`;
     if (!last.hit) {
       const prev = outcomes[1];
+      // A miss counts at the weight it happened (V6 J): after a miss, a lighter session that
+      // also missed repeats its own weight; the drop applies only when the last weight is at
+      // or above the one before (compared in `units`, after conversion and rounding).
+      if (prev && !prev.hit && fmt(last.weight) < fmt(prev.weight)) {
+        return capped({ exerciseId: id, suggestedWeight: fmt(last.weight), reason: `missed at ${fmt(last.weight)} after a miss at ${fmt(prev.weight)} ${units}: repeat ${fmt(last.weight)}; last ${at}`, rule_ids: [] }, last.weight);
+      }
       if (prev && !prev.hit) {
         const w = floorTo(last.weight * (1 - MISSED_TWICE_DROP), plate);
         if (!(w > 0)) {

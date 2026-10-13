@@ -260,8 +260,12 @@ test("aversion: want to train 1 is a recovery day [NA-REC-012]", () => {
   assert.equal(r.decision, "recovery");
   assert.deepEqual(r.rule_ids, ["NA-REC-012"]);
   assert.match(r.subjective.reasons.join(" "), /want to train 1\/5/);
-  // The item is optional, and only 1 to 5 is accepted.
+  // The item is optional, and only 1 to 5 is accepted. V6 B.3 (changed on purpose): a later
+  // check-in that leaves the item out keeps it (the writer merges by group); only
+  // --want-to-train none clears it.
   assert.equal(cli(["checkin", "--date", TODAY, "--sleep-quality", "4", "--energy", "4", "--soreness", "2", "--stress", "2", "--now", NOW, "--root", dir]).code, 0);
+  assert.equal(at(dir).aversion, true);
+  assert.equal(cli(["checkin", "--date", TODAY, "--want-to-train", "none", "--now", NOW, "--root", dir]).code, 0);
   assert.equal(at(dir).aversion, false);
   assert.equal(cli(["checkin", "--date", TODAY, "--sleep-quality", "4", "--energy", "4", "--soreness", "2", "--stress", "2", "--want-to-train", "0", "--now", NOW, "--root", dir]).code, 2);
 });

@@ -38,4 +38,4 @@ This coach cannot assess pain. It can only make training easier or pause it.
 
 `athlete/.urgent-stop` holds only the matched term names (for example `chest pain`), their sources and a time. A clearance adds one line to `athlete/log/urgent-clearances.jsonl`: the date, the terms, the sources and the reason. Your message text is never stored.
 
-The term list is `engine/safety-terms.yaml`. The hook matches urgent terms only; the coach notices ordinary pain without a word list. The matcher can miss a paraphrase, so the check-in also asks about warning signs directly.
+The term list is `engine/safety-terms.yaml`. The hook matches urgent terms only; the coach notices ordinary pain without a word list. The matcher can miss a paraphrase. The coach reads every message too, and acts on any warning sign you mention, in any words. The check-in does not ask a daily warning-sign question; the safety screens for pain still ask about warning signs.

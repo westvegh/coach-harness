@@ -42,8 +42,9 @@
     "checkin": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["sleep_quality", "energy", "soreness", "stress"],
+      "description": "The rating is one group: overall, or the four scales together (all four or none), never both. At least one of the rating, want_to_train or pain (an empty pain list counts). The validator checks these group rules in code (engine/checkin-shape.ts).",
       "properties": {
+        "overall": { "$ref": "#/$defs/scale", "description": "How the athlete feels today in one rating; 5 is best. Not with the four scales." },
         "sleep_quality": { "$ref": "#/$defs/scale" },
         "energy": { "$ref": "#/$defs/scale" },
         "soreness": { "$ref": "#/$defs/scale" },
@@ -51,6 +52,7 @@
         "want_to_train": { "$ref": "#/$defs/scale", "description": "Optional. How much the athlete wants to train today; 1 means aversion." },
         "pain": {
           "type": "array",
+          "description": "An empty list records that there is no pain now.",
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -68,6 +70,6 @@
   },
   "$defs": {
     "instant": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:\\d{2})$" },
-    "scale": { "type": "integer", "minimum": 1, "maximum": 5, "description": "1 to 5. sleep_quality, energy and want_to_train: 5 is best. soreness and stress: 5 is worst." }
+    "scale": { "type": "integer", "minimum": 1, "maximum": 5, "description": "1 to 5. overall, sleep_quality, energy and want_to_train: 5 is best. soreness and stress: 5 is worst." }
   }
 }
