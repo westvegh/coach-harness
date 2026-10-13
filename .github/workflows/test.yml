@@ -22,3 +22,22 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      # The update skill runs `npm test` in an athlete's copy, so the suite must also pass
+      # there: a committed copy with coach.yaml and made-up athlete files.
+      - name: npm test in an athlete copy
+        run: |
+          copy="$(mktemp -d)"
+          git archive HEAD | tar -x -C "$copy"
+          cd "$copy"
+          cp coach.example.yaml coach.yaml
+          mkdir -p athlete/log plans .tmp/coach
+          cp templates/athlete/limits.yaml athlete/limits.yaml
+          printf '# Brief\n\n## Preferences\n\n- 8-12 reps on the main lifts\n' > athlete/brief.md
+          printf 'setup: finish done 2026-10-12 15:33\n' > athlete/log/setup.md
+          printf 'date,day,exercise,sets,reps,load,unit,notes,done_sets,done_reps,done_load,felt\n2026-10-19,Lower,Hack Squat,4,10,,,,,,,\n' > plans/2026-W43.csv
+          printf '{}\n' > .tmp/coach/history.json
+          git init -q -b main
+          git add -A
+          git -c user.name=ci -c user.email=ci@example.com commit -qm "athlete copy"
+          npm ci
+          npm test

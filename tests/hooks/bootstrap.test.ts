@@ -1,7 +1,7 @@
 // The hooks work before `npm ci` (docs/contracts.md §20 item 27). Each hook runs from a copy of the repo with
 // no node_modules (so `yaml` and every engine module that needs it cannot load) and
 // decides with Node built-ins only.
-import { test } from "node:test";
+import { after, test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -16,12 +16,22 @@ const FORMS = ["mcp__tally__", "mcp__Tally_Workout__", "mcp__claude_ai_Tally_Wor
 const BASE_ENV = Object.fromEntries(Object.entries(process.env).filter(([k]) => !["CLAUDE_CODE_REMOTE", "COACH_UNATTENDED", "CLAUDE_PROJECT_DIR", "COACH_NOW", "NODE_PATH"].includes(k)));
 const MISSING = /coach-harness packages are missing\. Run `npm ci`\./;
 
-/** A copy of the repo without node_modules or .git; with `coach`, an athlete instance. */
+// The suite also runs in an athlete's copy (the update skill runs `npm test`), so a bare
+// copy leaves out the athlete's own files: coach.yaml decides the "no coach.yaml" cases,
+// and athlete data never goes to the temp folder.
+const LEFT_OUT = /^(node_modules|\.git|coach\.yaml|athlete|plans|\.tmp|\.claude\/settings\.local\.json)(\/|$)/;
+const copies: string[] = [];
+after(() => {
+  for (const d of copies) rmSync(d, { recursive: true, force: true });
+});
+
+/** A copy of the repo without node_modules, .git or the athlete's files; with `coach`, an athlete instance. */
 function bareCopy(opts: { coach: boolean }): string {
   const dir = mkdtempSync(join(tmpdir(), "coach-bare-"));
+  copies.push(dir);
   cpSync(REPO, dir, {
     recursive: true,
-    filter: (src) => !/(^|\/)(node_modules|\.git)(\/|$)/.test(relative(REPO, src)),
+    filter: (src) => !LEFT_OUT.test(relative(REPO, src)),
   });
   if (opts.coach) cpSync(join(REPO, "coach.example.yaml"), join(dir, "coach.yaml"));
   // The point of the test: no package resolves from the copy.

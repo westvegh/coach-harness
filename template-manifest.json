@@ -1,7 +1,7 @@
 {
   "version": 1,
   "repo": "https://github.com/westvegh/coach-harness",
-  "release": "0.2.2",
+  "release": "0.2.3",
   "files": {
     ".claude/agents/analyst.md": {
       "mode": "100644",
@@ -145,7 +145,7 @@
     },
     ".github/workflows/test.yml": {
       "mode": "100644",
-      "blob": "1f3a95fe0195a2f115058afb78bf4b9da847f04d"
+      "blob": "401c2cec97df162f660ca079176d344f5bdb45f4"
     },
     ".gitignore": {
       "mode": "100644",
@@ -157,7 +157,7 @@
     },
     "CHANGELOG.md": {
       "mode": "100644",
-      "blob": "34ce98e624958109820eec5ce91d41f43c9f99bb"
+      "blob": "1c39ef5a5a6ebb0f4eda491981f932c7ec07c046"
     },
     "CLAUDE.md": {
       "mode": "100644",
@@ -549,7 +549,7 @@
     },
     "engine/urgent.ts": {
       "mode": "100644",
-      "blob": "53faf6c799ca82d0641ea92f90f58e883f6bb6c7"
+      "blob": "1e973a49e2e1fc552f5c8e355248524086c9d726"
     },
     "engine/volume.test.ts": {
       "mode": "100644",
@@ -973,11 +973,11 @@
     },
     "package-lock.json": {
       "mode": "100644",
-      "blob": "88520949f2b8b46717f6fb3ed57f596b91813ec2"
+      "blob": "f700deed0f7218b0fbee9df57086f3044c346c2a"
     },
     "package.json": {
       "mode": "100644",
-      "blob": "b399d70b11adf3e76d0329a1cd5740d2260fb5b0"
+      "blob": "ed2aefedc859f80f12757aca4508e3ecdb9ca252"
     },
     "scripts/bench-cli.ts": {
       "mode": "100644",
@@ -1081,7 +1081,7 @@
     },
     "tests/hooks/bootstrap.test.ts": {
       "mode": "100644",
-      "blob": "d4b0f14dacc21ae6d9bb9470255127a019404b13"
+      "blob": "512c21a81cf30ab1b7df51300e07cfd45e4310f6"
     },
     "tests/hooks/hooks.test.ts": {
       "mode": "100644",
@@ -1181,7 +1181,7 @@
     },
     "tests/urgent.test.ts": {
       "mode": "100644",
-      "blob": "c9c4c85d47bf7e2e585b7a8a9930b52accb2fca5"
+      "blob": "4d832ab073ed1b7aa1e235ce95408e6f7d3996fa"
     },
     "tests/v4-engine.test.ts": {
       "mode": "100644",

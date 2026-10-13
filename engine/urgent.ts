@@ -155,11 +155,21 @@ export function commitPaths(root: string, paths: string[], message: string): Com
       return false;
     }
   };
-  // A path that is neither on disk nor tracked has nothing to commit (git add would fail on it).
-  const live = paths.filter((p) => existsSync(join(root, p)) || tracked(p));
+  // A path removed with `git rm` is gone from the disk and the index, but HEAD still has it.
+  const inHead = (p: string) => {
+    try {
+      git(["cat-file", "-e", `HEAD:${p}`]);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  // `git add` fails on a path that is neither on disk nor tracked; a path only HEAD has is already staged.
+  const addable = paths.filter((p) => existsSync(join(root, p)) || tracked(p));
+  const live = paths.filter((p) => addable.includes(p) || inHead(p));
   if (live.length === 0) return { committed: false, reason: "nothing to commit" };
   try {
-    git(["add", "-A", "--", ...live]);
+    if (addable.length > 0) git(["add", "-A", "--", ...addable]);
     const staged = git(["diff", "--cached", "--name-only", "-z", "--", ...live]).split("\0").filter(Boolean);
     if (staged.length === 0) return { committed: false, reason: "nothing to commit" };
     // Only the paths with staged changes: a folder that exists but holds nothing git knows (an

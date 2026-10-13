@@ -2,6 +2,13 @@
 
 All notable changes to this project are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [semantic versioning](https://semver.org/).
 
+## [0.2.3]
+
+### Fixed
+
+- **Tests in your copy.** The update runs the tests in your copy, and 3 of them failed there because your copy has a `coach.yaml`. They pass now. The test also no longer leaves copies of your athlete files in the temp folder. CI now runs every test in a copy with athlete files too.
+- **Committing a removed plan file.** When the coach removed a plan file with `git rm`, `node engine/cli.ts commit` left the removal out of the commit. It includes it now.
+
 ## [0.2.2]
 
 Setup polish, from a full setup run on v0.2.1. The guiding rule: fewer waits, fewer screens, no typed answers.

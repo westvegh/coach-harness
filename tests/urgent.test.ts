@@ -295,3 +295,20 @@ test("V1b fix 4: a failed push is retried on the next call (urgent set, check-in
   assert.equal(again.json.push.pushed, true, JSON.stringify(again.json));
   assert.match(remoteLog().split("\n")[0], /urgent stop cleared \(false-alarm\)/);
 });
+
+test("commit: a plan file removed with git rm is committed (the folder is gone from the disk and the index)", () => {
+  const root = instance();
+  mkdirSync(join(root, "plans"), { recursive: true });
+  writeFileSync(join(root, "plans/2026-W43.csv"), "date,day,exercise\n");
+  git(root, "add", "plans");
+  git(root, "commit", "-q", "-m", "week 1");
+  git(root, "rm", "-q", "plans/2026-W43.csv");
+  writeFileSync(join(root, "athlete/brief.md"), "# Brief\n");
+  const r = cli(root, ["commit", "--message", "logger is tally"]);
+  assert.equal(r.code, 0, r.stderr);
+  assert.equal(r.json.committed, true);
+  assert.equal(git(root, "status", "--porcelain"), "", "nothing left staged or changed");
+  assert.equal(git(root, "ls-tree", "-r", "--name-only", "HEAD", "--", "plans"), "", "HEAD has no plan file");
+  assert.match(git(root, "ls-tree", "-r", "--name-only", "HEAD", "--", "athlete"), /athlete\/brief\.md/);
+  rmSync(root, { recursive: true, force: true });
+});
