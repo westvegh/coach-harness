@@ -15,6 +15,8 @@ A program is a set of decisions made in a fixed order. This pack follows the ord
 - **Session order:** fresh, neural work first and fatiguing work last (see [NA-ADP-003]). The most important exercise comes first.
 - **Spacing:** keep about 48 hours between hard hypertrophy sessions for the same muscle (see [NA-HYP-005]). Keep maximal aerobic and anaerobic interval days apart (see [NA-END-003]).
 - **Bedtime:** finish hard training several hours before sleep when possible. Intense evening sessions disturb sleep (E4, 01:29:20).
+- **Sets per exercise:** when the coach drafts a week, one exercise gets at most 4 hard sets in a session. Extra sets for a muscle go to another exercise or another day; when no exercise can take them, the draft names the muscle that falls short. The athlete can choose more [NA-DES-009]. This is a pack policy based on 3 to 5 work sets per exercise (see [NA-STR-003]). Conditioning, recovery and cluster work is not limited.
+- **Cluster sets:** a cluster is a set split into short mini-sets with a few seconds of rest between them. It counts as its total reps divided by the rep max its load matches: 6 mini-sets of 6 reps at a 12-rep-max load count as 3 hard sets [NA-DES-010]. This is an estimate with no standard source. A cluster keeps its prescription from week to week; the straight exercises take the rest of the muscle's sets.
 - **Blocks:** write blocks of about 6 to 12 weeks, with every session planned and a rough idea of where the block sits in the year (E2, 01:21:00).
 
 ## The weekly frames

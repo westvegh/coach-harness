@@ -203,6 +203,19 @@ rules:
     source: { ref: E4, at: "02:51:29", precision: exact }
     note: "Dr. Galpin suggests running the three-day rotation back to back for 5-6 days; the exact five-day layout is this pack's choice."
 
+  - id: NA-DES-009
+    text: "When the coach drafts a week, one exercise gets at most 4 hard sets in a session. More sets for a muscle go to another exercise or another day. The athlete can choose more."
+    kind: policy
+    severity: soft
+    check: { type: max_sets_per_exercise_session, value: 4, adaptations: [power, strength, hypertrophy, muscular_endurance] }
+    note: "Policy, used when drafting and reported by the audit; never a refusal. The strength rule's 3 to 5 work sets per exercise (NA-STR-003) is the basis. Conditioning, recovery and cluster work is not limited."
+
+  - id: NA-DES-010
+    text: "A cluster (short mini-sets with a few seconds of rest between them) counts as its total reps divided by the rep max its load matches. For example, 6 mini-sets of 6 reps at a 12-rep-max load count as 3 hard sets."
+    kind: policy
+    severity: soft
+    note: "Policy. This is an estimate with no standard source: it gives a cluster the hard sets of straight sets that do the same total reps near failure at that load."
+
   # --- 06 Progression and deload -----------------------------------------
   - id: NA-PROG-001
     text: "Never raise weekly volume for a muscle by more than 10% over the reference week."

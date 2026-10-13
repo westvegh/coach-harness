@@ -2,8 +2,8 @@
 // runs `limits check` and the coach fixes what it reports.
 //
 //   node engine/cli.ts limits check --input <file.json>    ({week: WeekPlan} or {days: DayPlan[]})
+import { countedSets, type ClusterEntry } from "./clusters.ts";
 import { classify, normalizeName } from "./taxonomy.ts";
-import { hardSets } from "./volume.ts";
 import type { DayPlan, ExerciseEntry, Limit, Limits, Taxonomy, Units } from "./types.ts";
 
 const LB_PER_KG = 2.2046226218;
@@ -56,10 +56,11 @@ export type LimitFinding = {
 
 /**
  * Every place a planned week breaks a limit: a banned exercise, a weekly hard-set count over
- * `max_sets_per_week` (warm-ups left out), a set over `max_load` (warm-ups included). An exercise the taxonomy cannot classify is
+ * `max_sets_per_week` (counted sets: warm-ups left out, a cluster counts total reps ÷ its rep max),
+ * a set over `max_load` (warm-ups included). An exercise the taxonomy cannot classify is
  * listed too: the coach decides whether it loads a limited region. Skipped days do not count.
  */
-export function checkLimits(days: DayPlan[], limits: Limits, tax: Taxonomy): LimitFinding[] {
+export function checkLimits(days: DayPlan[], limits: Limits, tax: Taxonomy, clusters: readonly ClusterEntry[] = []): LimitFinding[] {
   const out: LimitFinding[] = [];
   const live = days.filter((d) => d.status !== "skipped");
   for (const l of limits.limits) {
@@ -73,9 +74,9 @@ export function checkLimits(days: DayPlan[], limits: Limits, tax: Taxonomy): Lim
           out.push({ limit: l.id, region: l.region, rule: l.rule, kind: "banned", date: d.date, exercise: ex.name, detail: `${ex.name} on ${d.date} matches ${l.id} (ban, ${l.region})${why}` });
           continue;
         }
-        sets += hardSets(ex);
+        sets += countedSets(ex, d.date, clusters);
         if (l.max_load) {
-          // Warm-ups do not count toward the weekly sets (hardSets), but their loads count: a
+          // Warm-ups do not count toward the weekly sets (countedSets), but their loads count: a
           // warm-up over the cap still loads the region past what the athlete chose.
           for (const s of ex.sets) {
             if (typeof s.weight !== "number") continue;

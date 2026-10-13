@@ -15,6 +15,9 @@ import type { Rules } from "../../engine/types.ts";
 
 const T = loadTemplates(join(REPO, "methods/nine-adaptations"));
 const CTX = { tax: tax(), rules: rules(), units: "lbs" as const, method: "nine-adaptations", today: "2026-10-14", emphasis: "all-around" as const, templateId: "4-day" };
+const CTX0 = CTX;
+/** The shipped pack without its per-exercise session maximum (V5): the rule-3 allocation alone. */
+const NO_MAX: Rules = { ...rules(), rules: rules().rules.filter((r) => r.check?.type !== "max_sets_per_exercise_session") };
 
 /** Named exercises for every 4-day slot, so the taxonomy can classify them. */
 const EXERCISES = {
@@ -38,7 +41,12 @@ const EXERCISES = {
 };
 
 test("with no targets, week 1 is the template under the emphasis multiplier, day by day", () => {
-  const d = draftBlock(T["4-day"], 6, { ...CTX, emphasis: "strength" }, { start: "2026-10-19", id: "B-001", exercises: EXERCISES });
+  // V5: the shipped pack's session maximum lowers the one 5-set slot to 4 and moves the set to
+  // another slot; two interval slots on one day stay (ready). Without the check: as before.
+  const capped = draftBlock(T["4-day"], 6, { ...CTX, emphasis: "strength" }, { start: "2026-10-19", id: "B-001", exercises: EXERCISES });
+  assert.equal(capped.ready, true);
+  assert.deepEqual(capped.weeks[0].days.flatMap((day) => day.exercises.map((e) => e.sets.length)), [4, 4, 4, 3, 3, 3, 2, 1, 1, 2, 4, 2, 3, 1, 3, 3, 1, 8, 1, 1]);
+  const d = draftBlock(T["4-day"], 6, { ...CTX, rules: NO_MAX, emphasis: "strength" }, { start: "2026-10-19", id: "B-001", exercises: EXERCISES });
   const w1 = d.weeks[0];
   assert.equal(w1.week_start, "2026-10-19");
   assert.deepEqual(w1.days.map((x) => x.date), ["2026-10-19", "2026-10-20", "2026-10-22", "2026-10-23"]);
@@ -145,8 +153,10 @@ test("without exercises the draft returns no usable days; its counts equal weekl
     assert.deepEqual(w.days.flatMap((x) => x.exercises), []);
     assert.deepEqual(w.sets_by_muscle, weeklySetsByMuscle({ week_start: w.week_start, days: w.days }, tax()));
   }
-  // The plan itself still counts every slot (the block week's targets).
-  assert.equal(d.weeks[0].planned_by_muscle.chest, 9);
+  // The plan itself still counts every slot (the block week's targets). V5: the shipped pack's
+  // session maximum of 4 sets per exercise gives chest 8 (9 without it).
+  assert.equal(d.weeks[0].planned_by_muscle.chest, 8);
+  assert.equal(draftBlock(T["4-day"], 6, { ...CTX, rules: NO_MAX }, { start: "2026-10-19", id: "B-001" }).weeks[0].planned_by_muscle.chest, 9);
   assert.deepEqual(d.block.weeks[0].targets, d.weeks[0].planned_by_muscle);
   assert.ok(d.warnings.some((x) => x.startsWith(`${d.unresolved.length} slots have no resolved exercise`)));
 });
@@ -171,8 +181,9 @@ const histSnap = (days: Record<string, ReturnType<typeof emptyDay>> = {}) =>
   snapshot(days, { history: HISTORY, planned: { captured_at: NOW, from: TODAY, dates: {} } });
 const LOGS = snapshotWeeks(histSnap(), "lbs");
 
-test("week 1 of a new block is capped against the reference week (the scenario numbers: chest 9 vs 7, triceps 13 vs 7, shoulders 10 vs 6)", () => {
+test("week 1 of a new block is capped against the reference week (the scenario numbers: chest 9 vs 7, triceps 13 vs 7, shoulders 10 vs 6; a pack without the session maximum)", () => {
   const input = { start: "2026-10-19", id: "B-002", exercises: EXERCISES };
+  const CTX = { ...CTX0, rules: NO_MAX };
   const free = draftBlock(T["4-day"], 6, CTX, input);
   assert.deepEqual([free.weeks[0].planned_by_muscle.chest, free.weeks[0].planned_by_muscle.triceps, free.weeks[0].planned_by_muscle.shoulders], [9, 13, 10]);
   const ref = weeklySetsByMuscle(LOGS[0], tax());

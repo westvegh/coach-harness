@@ -1,5 +1,6 @@
 // Day adjustments for a readiness decision (contracts §15): trim a session, or swap it
 // for a recovery day.
+import { clusterOf, type ClusterEntry } from "./clusters.ts";
 import { CoachError } from "./errors.ts";
 import { DEFAULT_THRESHOLDS } from "./readiness.ts";
 import { classify, normalizeName, regionMatches } from "./taxonomy.ts";
@@ -14,6 +15,8 @@ export type AdjustContext = {
   limits: Limits;
   /** The planned session length in minutes. Default: estimated from the day (see estimateMinutes). */
   planned_minutes?: number;
+  /** coach.yaml `clusters` (0.2.4): a trim counts physical sets, so a cluster loses mini-sets; the list names them. */
+  clusters?: readonly ClusterEntry[];
 };
 
 export type AdjustResult = { day: DayPlan; changes: string[] };
@@ -52,7 +55,7 @@ function label(ex: ExerciseEntry): string {
 
 /**
  * Trim: for every exercise with a loaded (non-recovery) pattern, hard sets drop by
- * round(sets × trim_fraction), to a minimum of 1. The last hard sets go; warm-ups, loads,
+ * round(sets × trim_fraction), to a minimum of 1 (physical sets: a cluster drops mini-sets). The last hard sets go; warm-ups, loads,
  * reps and the exercise order stay. Unclassified exercises count as loaded.
  */
 function trimDay(day: DayPlan, ctx: AdjustContext): AdjustResult {
@@ -73,7 +76,7 @@ function trimDay(day: DayPlan, ctx: AdjustContext): AdjustResult {
         kept++;
       }
     }
-    changes.push(`${label(ex)}: ${hard} → ${keep} sets`);
+    changes.push(`${label(ex)}: ${hard} → ${keep} ${clusterOf(ex, day.date, ctx.clusters ?? []) ? "mini-sets" : "sets"}`);
     return { ...structuredClone(ex), sets };
   });
   return { day: { ...structuredClone(day), exercises }, changes };

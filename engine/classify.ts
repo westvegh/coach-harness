@@ -1,6 +1,7 @@
 // Change classification (contracts §6). The model's own label is ignored: the kinds come
 // from the before and after days, the block, the history and coach.yaml `approval`.
 import { canonicalJson } from "./canonical.ts";
+import { clusterOf, type ClusterEntry } from "./clusters.ts";
 import { addDays, weekStart } from "./dates.ts";
 import { blockWeekAt, findCheck } from "./progression.ts";
 import { classify, classifyForSafety, normalizeName } from "./taxonomy.ts";
@@ -20,8 +21,13 @@ export type ClassifyContext = {
   rules: Rules;
   config: CoachConfig;
   today: CalendarDate;
-  /** Sets per muscle of the week holding `after`, before and after the whole call. */
+  /** Sets per muscle of the week holding `after`, before and after the whole call (counted sets, as `volume` prints them). */
   volume?: { week_start: CalendarDate; before: Record<string, number>; after: Record<string, number> };
+  /**
+   * coach.yaml `clusters` (0.2.4). The checks here compare physical sets (a cluster's mini-sets
+   * against its slot's mini-sets); the list only names mini-sets in the reasons.
+   */
+  clusters?: readonly ClusterEntry[];
 };
 
 export type Classified = { kinds: ChangeKind[]; big: boolean; reasons: string[] };
@@ -166,7 +172,7 @@ function inBlock(ex: ExerciseEntry, block: Block | null, tax: Taxonomy): boolean
  * new_exercise), with hard sets not above the slot's prescription for the week (a deload
  * week scales it by deload_depth.volume). Null when it is one; else the reason.
  */
-export function blockSessionProblem(after: DayPlan, ctx: Pick<ClassifyContext, "block" | "tax" | "rules">): string | null {
+export function blockSessionProblem(after: DayPlan, ctx: Pick<ClassifyContext, "block" | "tax" | "rules" | "clusters">): string | null {
   if (!ctx.block) return "there is no block";
   const bw = blockWeekAt(ctx.block, weekStart(after.date));
   if (!bw) return `${after.date} is outside the block`;
@@ -183,7 +189,8 @@ export function blockSessionProblem(after: DayPlan, ctx: Pick<ClassifyContext, "
       }
     }
     if (allowed < 0) return `${ex.name} matches no slot of the block`;
-    if (hardSetCount(ex) > allowed) return `${ex.name}: ${hardSetCount(ex)} sets, above the slot's ${allowed}`;
+    const unit = clusterOf(ex, after.date, ctx.clusters ?? []) ? "mini-sets" : "sets";
+    if (hardSetCount(ex) > allowed) return `${ex.name}: ${hardSetCount(ex)} ${unit}, above the slot's ${allowed}`;
   }
   return null;
 }

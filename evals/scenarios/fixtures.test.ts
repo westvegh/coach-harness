@@ -27,9 +27,9 @@ import { saidAlreadyAdjusted } from "./16-failed-trim-retried.ts";
 
 const scenarios = await loadScenarios();
 
-test("24 scenarios (07, 08a, 08b, 13, 14 and 15 tested guard denials and went in v0.2; V4 added 26 to 29), unique names", () => {
-  assert.equal(scenarios.length, 24);
-  assert.equal(new Set(scenarios.map((s) => s.name)).size, 24);
+test("25 scenarios (07, 08a, 08b, 13, 14 and 15 tested guard denials and went in v0.2; V4 added 26 to 29; V5 added 30), unique names", () => {
+  assert.equal(scenarios.length, 25);
+  assert.equal(new Set(scenarios.map((s) => s.name)).size, 25);
 });
 
 /** Every file under root, relative (node_modules and .git not entered). */
@@ -376,4 +376,35 @@ test("V4 G2-G4: the new scenarios fail on bad transcripts", async () => {
   // The good transcript: every lift in range, the audit call and line, the turn-1 commit.
   const okArt = art({ ...loose, turns: [{ ...loose.turns![0], commits: ["a"] }, loose.turns![1]], tools: [tool("Bash", { command: "node engine/cli.ts limits check --input .tmp/coach/wk/week-2.json" })] as RunArtifacts["tools"], messages: [{ afterTool: 0, text: "Saved." }, { afterTool: 0, text: "| athlete chose | 8-12 reps |" }], mock: { calls: [], days: { [next]: { exercises: [good("Bench Press", "Barbell_Bench_Press"), good("Romanian Deadlift", "Romanian_Deadlift"), good("Seated Cable Row", "Seated_Cable_Row")] } } } as unknown as RunArtifacts["mock"] });
   assert.deepEqual(get("29-preference-persists").check(okArt).filter((c) => !c.ok).map((c) => c.name), []);
+});
+
+test("V5 30 (V5b fix 8): the cluster check passes a good run and fails each wrong one", async () => {
+  const s = scenarios.find((x) => x.name === "30-cluster-sets")!;
+  const { isoWeekId } = await import("../../engine/plans-files.ts");
+  const today = "2026-10-14";
+  const file = `plans/${isoWeekId("2026-10-19")}.csv`;
+  const block = ["days:", "  - { day: mon, focus: Lift, slots: [{ exercise: Bench Press }] }", "  - { day: tue, focus: Easy, slots: [{ exercise: Zone 2 Bike }] }", "  - { day: thu, focus: Endurance, slots: [{ exercise: EZ Bar Curls (Cluster) }] }", "  - { day: fri, focus: Intervals, slots: [{ exercise: Bike Intervals }] }"].join("\n");
+  const head = "date,day,exercise,sets,reps,load,unit,notes,done_sets,done_reps,done_load,felt";
+  const CURL = 'EZ Bar Curls (Cluster),6,6,35,lbs,"Cluster: 6 × 6 at 12RM, 10 s between mini-sets"';
+  const goodRows = ["2026-10-19,Lift,Bench Press,4,5,185,lbs,,,,,", "2026-10-20,Easy,Zone 2 Bike,1,45min,,,,,,,", `2026-10-22,Endurance,${CURL},,,,`, "2026-10-23,Intervals,Bike Intervals,12,1min,,,,,,,"];
+  const csv = (rows: string[]) => [head, ...rows].join("\n") + "\n";
+  const volume = (date = "2026-10-22") => tool("Bash", { command: "node engine/cli.ts volume --input .tmp/coach/wk/week-4.json" }, { result: { isError: false, text: `{"sets_by_muscle": {"biceps": 3}, "clusters": [{"date": "${date}", "exercise": "EZ Bar Curls (Cluster)", "text": "6 × 6 cluster, counts as 3 sets"}]}` } });
+  const TIED = "| EZ Bar Curls (Cluster) | 6 × 6 cluster, counts as 3 sets |";
+  const run = (o: { rows?: string[]; text?: string; tools?: unknown[] } = {}) =>
+    s.check(art({ today, before: { "athlete/block.yaml": block }, after: { "athlete/block.yaml": block, [file]: csv(o.rows ?? goodRows) }, tools: (o.tools ?? [volume()]) as RunArtifacts["tools"], messages: [{ afterTool: 0, text: o.text ?? TIED }] } as Partial<RunArtifacts>));
+  const failed = (o: Parameters<typeof run>[0], name: RegExp) => run(o).some((c) => !c.ok && name.test(c.name));
+  assert.deepEqual(run().filter((c) => !c.ok).map((c) => c.name), []);
+  // The review's repro: one curl dated 2020-01-01, no straight exercise, no audit, an unrelated "counts as 3".
+  const repro = { rows: [`2020-01-01,Endurance,${CURL},,,,`], tools: [], text: "No audit was run. An unrelated exercise counts as 3" };
+  for (const name of [/next week's dates only/, /every planned session day/, /on its planned day/, /straight resistance/, /audit ran/, /counts as 3/]) assert.ok(failed(repro, name), String(name));
+  assert.ok(failed({ rows: goodRows.map((r) => r.replace(",35,", ",30,")) }, /exactly 35/), "the −5% drop fails");
+  assert.ok(failed({ rows: goodRows.map((r) => r.replace("Bench Press,4,", "Bench Press,6,")) }, /more than 4 sets/), "a 6-set bench fails");
+  assert.ok(failed({ rows: goodRows.filter((r) => !r.includes("Bench Press")) }, /straight resistance/), "no straight exercise fails");
+  assert.ok(failed({ rows: goodRows.map((r) => r.replace('"Cluster: 6 × 6 at 12RM, 10 s between mini-sets"', '""')) }, /planned day as a 6 × 6 cluster/), "no note fails");
+  assert.ok(failed({ rows: goodRows.map((r) => r.replace("2026-10-22,Endurance,EZ", "2026-10-23,Endurance,EZ")) }, /planned day/), "the curl on another day fails");
+  assert.ok(failed({ rows: goodRows.filter((r) => !r.startsWith("2026-10-20")) }, /every planned session day/), "a missing session day fails");
+  assert.ok(failed({ tools: [volume("2020-01-01")] }, /audit ran/), "a volume call on another week fails");
+  assert.ok(failed({ text: "Bench Press counts as 3 sets more than last week. EZ bar curls are planned." }, /curl "counts as 3"/), "a count not tied to the curl fails");
+  // A live audit row (rerun 2): the curl named first, the count far later on the same line, passes.
+  assert.ok(!failed({ text: "| athlete chose | NA-END-004, NA-DES-010 | The curl cluster has 6 reps per mini-set, which is under the 11–30 range for endurance work. | 6 × 6 cluster counts as 3 sets | None. It is your choice. |" }, /counts as 3/));
 });

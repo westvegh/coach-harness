@@ -64,7 +64,9 @@ export async function plansCommand(argv: string[]): Promise<number> {
     } catch (e) {
       throw new CoachError("INPUT_ERROR", `cannot read ${values.input}: ${(e as Error).message}`);
     }
-    out(writePlan(root, daysOf(raw), await unitsOf(root)));
+    // Cluster rows get their note (0.2.4): the input's `clusters`, else coach.yaml's.
+    const { loadClusters } = await import("./clusters.ts");
+    out(writePlan(root, daysOf(raw), await unitsOf(root), loadClusters(root, raw)));
     return 0;
   }
   if (sub === "read") {

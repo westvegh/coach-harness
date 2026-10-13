@@ -69,6 +69,11 @@ The pack that ships is `nine-adaptations`. See [adding-a-method.md](adding-a-met
 
 The engine (`engine/`) is TypeScript with one dependency. Claude runs it through one command, `node engine/cli.ts <command>`, and it prints JSON. It computes readiness, weekly sets per muscle, next week's targets, load suggestions, trims, recovery days and change classes. Claude reports each number with the command that made it. It never does the arithmetic itself.
 
+### Sets per exercise and cluster sets
+
+- **Sets per exercise.** When the coach drafts a week, one exercise gets at most 4 hard sets in a session (the method's default). The extra sets for a muscle go to another exercise. When no exercise can take them, the draft names the muscle that gets fewer sets than wanted. You can choose more: a plan with more sets stays valid, and the audit only notes it.
+- **Cluster sets.** A cluster is a set split into short mini-sets with a few seconds of rest between them, for example 6 mini-sets of 6 reps at a weight you could lift 12 times. The coach records each exercise you do as a cluster in `coach.yaml`. A cluster counts as its total reps divided by that rep max: 6 × 6 at a 12-rep weight counts as 3 hard sets. The coach keeps the cluster the same from week to week and gives the other exercises the rest of the muscle's sets. A cluster's weight goes up only when you did every rep at the same weight; otherwise it stays the same. It never drops for a short last mini-set.
+
 ### Change classes
 
 The engine classifies every change to a day (`engine/classify.ts`). The model's own label does not count.

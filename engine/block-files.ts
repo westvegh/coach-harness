@@ -12,7 +12,8 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync 
 import { dirname, join } from "node:path";
 import { parse, stringify } from "yaml";
 import { BLOCK_RELATIVE, validateBlock } from "./block.ts";
-import type { BlockDraft } from "./block-draft.ts";
+import type { BlockDraft, ShortMuscle } from "./block-draft.ts";
+import type { ClusterEntry } from "./clusters.ts";
 import { CoachError } from "./errors.ts";
 import type { Template } from "./methods.ts";
 import { refuseUnderUrgentStop } from "./plans-files.ts";
@@ -21,14 +22,65 @@ import { isPlainObject } from "./yaml-file.ts";
 
 export const BLOCKS_DIR = "athlete/blocks";
 
-/** The template's plain lines for the week and each day (optional in a pack). */
-export type DraftWhy = { week: string[]; days: { day: Weekday; why: string }[] };
+/**
+ * The template's plain lines for the week and each day (optional in a pack), and one plain line per
+ * muscle the draft plans below its target (0.2.4: the per-exercise maximum), for the athlete.
+ */
+export type DraftWhy = { week: string[]; days: { day: Weekday; why: string }[]; short?: string[] };
 
-export function draftWhy(template: Template, weekdays: Weekday[]): DraftWhy {
+export function draftWhy(template: Template, weekdays: Weekday[], draft?: Pick<BlockDraft, "weeks">): DraftWhy {
+  const short = draft ? shortLines(draft) : [];
   return {
     week: [...(template.why ?? [])],
     days: template.week.flatMap((d, i) => (d.why ? [{ day: weekdays[i], why: d.why }] : [])),
+    ...(short.length > 0 ? { short } : {}),
   };
+}
+
+/**
+ * Plain lines for the athlete on the muscles the draft plans below their target: one line per
+ * reason, each muscle with its planned and wanted sets in the first build week it falls short.
+ */
+function shortLines(draft: Pick<BlockDraft, "weeks">): string[] {
+  const first = new Map<string, ShortMuscle>();
+  for (const w of draft.weeks) for (const x of w.short ?? []) if (!first.has(x.muscle)) first.set(x.muscle, x);
+  const list = (reason: ShortMuscle["reason"]) =>
+    [...first.values()]
+      .filter((x) => x.reason === reason)
+      .map((x) => `${x.muscle.replace(/-/g, " ")} (${x.planned} of ${x.requested})`)
+      .join(", ");
+  const out: string[] = [];
+  const atMax = list("at_max");
+  if (atMax) out.push(`Some muscles get fewer sets a week than wanted, because each of their exercises already has the most sets one exercise gets in a session: ${atMax}. An extra exercise or day would close the gap.`);
+  const other = list("other_target");
+  if (other) out.push(`Some muscles get fewer sets than wanted, because more sets on their exercises would give another muscle too many: ${other}.`);
+  const none = list("no_slot");
+  if (none) out.push(`No exercise in the week can take more sets for: ${none}. An extra exercise or day would close the gap.`);
+  return out;
+}
+
+/**
+ * The short muscles across the block, compact (the summary stays under 8 KB): per muscle its reason
+ * and "<week>: <wanted>→<planned>" for each build week it falls short in.
+ */
+function compactShort(draft: Pick<BlockDraft, "weeks">): { muscle: string; reason: ShortMuscle["reason"]; weeks: string }[] {
+  const by = new Map<string, { reason: ShortMuscle["reason"]; parts: string[] }>();
+  for (const w of draft.weeks) {
+    for (const x of w.short ?? []) {
+      const e = by.get(x.muscle) ?? { reason: x.reason, parts: [] };
+      e.parts.push(`${w.week}: ${x.requested}→${x.planned}${x.reason !== e.reason ? ` ${x.reason}` : ""}`);
+      by.set(x.muscle, e);
+    }
+  }
+  return [...by.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([muscle, e]) => ({ muscle, reason: e.reason, weeks: e.parts.join(", ") }));
+}
+
+/** The short-muscle warnings fold into one line in the --out summary: `short` lists them (the full draft keeps one per week). */
+function foldShortWarnings(warnings: string[]): string[] {
+  const isShort = (w: string) => /^week \d+: [a-z-]+: \d+ sets wanted, \d+ planned: /.test(w);
+  const muscles = new Set(warnings.filter(isShort).map((w) => /^week \d+: ([a-z-]+): /.exec(w)![1]));
+  if (muscles.size === 0) return warnings;
+  return [...warnings.filter((w) => !isShort(w)), `${muscles.size} muscles are planned below their target in some build weeks (the per-exercise session maximum, or another muscle's target): see short`];
 }
 
 /** The build weeks, the weekly step the draft used and the deload weeks. */
@@ -40,14 +92,26 @@ function progression(draft: BlockDraft, step: number): { build_weeks: number; st
  * Writes <dir>/block.json and <dir>/week-<n>.json, and returns the summary to print.
  * `step` is the weekly step the draft used (input or default), for `progression`.
  */
-export function writeDraftFiles(dir: string, draft: BlockDraft & { template: string }, why: DraftWhy, step: number): Record<string, unknown> {
+export function writeDraftFiles(dir: string, draft: BlockDraft & { template: string }, why: DraftWhy, step: number, clusters: readonly ClusterEntry[] | null = null): Record<string, unknown> {
   mkdirSync(dir, { recursive: true });
   const blockFile = join(dir, "block.json");
   writeFileSync(blockFile, JSON.stringify(draft.block, null, 2) + "\n");
   const weeks = draft.weeks.map((w) => {
     const file = join(dir, `week-${w.week}.json`);
-    writeFileSync(file, JSON.stringify({ week: { week_start: w.week_start, kind: w.kind, load_factor: w.load_factor, days: w.days } }, null, 2) + "\n");
-    return { week: w.week, kind: w.kind, week_start: w.week_start, load_factor: w.load_factor, file, sets_by_muscle: w.sets_by_muscle };
+    // 0.2.4: the input's cluster list travels with the week file, so every command that reads it
+    // (volume, limits check, loads --fill, plans write, tally-days) uses it, before coach.yaml exists
+    // too. An empty list is kept: it overrides coach.yaml, as it did in the draft. null: no key.
+    const body = { week: { week_start: w.week_start, kind: w.kind, load_factor: w.load_factor, days: w.days }, ...(clusters !== null ? { clusters } : {}) };
+    writeFileSync(file, JSON.stringify(body, null, 2) + "\n");
+    return {
+      week: w.week,
+      kind: w.kind,
+      week_start: w.week_start,
+      load_factor: w.load_factor,
+      file,
+      sets_by_muscle: w.sets_by_muscle,
+      ...(w.cluster_above_target.length > 0 ? { cluster_above_target: w.cluster_above_target } : {}),
+    };
   });
   return {
     template: draft.template,
@@ -56,11 +120,12 @@ export function writeDraftFiles(dir: string, draft: BlockDraft & { template: str
     block_file: blockFile,
     ready: draft.ready,
     unresolved: compactUnresolved(draft.unresolved),
-    warnings: fillWarnings(draft.warnings),
+    warnings: foldShortWarnings(fillWarnings(draft.warnings)),
     rule_ids: draft.rule_ids,
     capped: draft.capped,
     reference: draft.reference,
     progression: progression(draft, step),
+    short: compactShort(draft),
     why,
     weeks,
   };

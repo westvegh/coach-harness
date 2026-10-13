@@ -2,6 +2,21 @@
 
 All notable changes to this project are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [semantic versioning](https://semver.org/).
 
+## [0.2.4]
+
+Sets per exercise and cluster sets, from a 5-day hypertrophy run on 0.2.1.
+
+### Changed for the athlete
+
+- **Fewer sets on one exercise.** A new block no longer piles 6 to 8 sets on one exercise in a session. When the coach drafts a week, one exercise gets at most 4 hard sets in a session, and the extra sets go to another exercise. When no exercise can take them, the coach names the muscle that gets fewer sets than wanted, and says that an extra exercise or day would close the gap. You can still choose more sets: your plan stays valid, and the audit only notes it.
+- **One exercise once a day.** A draft no longer puts the same lifting exercise in two places on one day. The coach picks another exercise for the second place.
+- **Cluster sets.** Tell the coach that you do an exercise as clusters (for example 6 mini-sets of 6 reps at your 12-rep weight, 10 seconds apart). The coach records it once and keeps the cluster the same from week to week. A cluster counts as its total reps divided by that rep max: 6 × 6 at a 12-rep weight counts as 3 hard sets, not 6. Your weekly sets, your limits and the audit all use that count. The plan file and the Tally day notes say how to do the cluster.
+- **Cluster weights.** A short last mini-set (for example 35 of 36 reps) keeps the same weight next time. It no longer drops the weight by 5%. The weight goes up only when you did every rep at one weight.
+
+### Fixed
+
+- **Warm-ups.** A heavier warm-up no longer counts as your top set when the coach suggests the next weight. Warm-up rows in a training export now stay marked as warm-ups.
+
 ## [0.2.3]
 
 ### Fixed

@@ -223,8 +223,10 @@ async function cmdAdjust(a: Args): Promise<number> {
   const decision = a.values.decision ?? inp.decision;
   const pm = a.values["planned-minutes"] !== undefined ? Number(a.values["planned-minutes"]) : inp.planned_minutes;
   const tax = loadTaxonomy({ root });
+  const { loadClusters } = await import("./clusters.ts");
   const res = adjustDay(day as DayPlan, decision as "trim" | "recovery", {
     tax,
+    clusters: loadClusters(root, inp),
     thresholds: { ...(cfg?.thresholds ?? {}) },
     template: await templateAt(root, cfg),
     limits: await limitsAt(root),
@@ -270,7 +272,12 @@ async function cmdLoads(a: Args): Promise<number> {
   const exercises = tallyDay ? tallyDay.exercises : inp.exercises;
   if (!Array.isArray(exercises)) throw new CoachError("INPUT_ERROR", "loads input needs exercises or a Tally day");
   const units = tallyDay ? unit : ((inp.units as "lbs" | "kg" | undefined) ?? cfg?.athlete.units ?? "lbs");
-  const suggestions = suggestLoads(exercises as never, history, await rulesAt(root, cfg), units, { tax: loadTaxonomy({ root }), strictUnits });
+  // Clusters (0.2.4): the input's list, else coach.yaml's. The planned date decides `since`: the
+  // day's date, else the input's `date`, else today in the athlete's timezone.
+  const { athleteToday, loadClusters } = await import("./clusters.ts");
+  const { isCalendarDate } = await import("./dates.ts");
+  const date = tallyDay ? tallyDay.date : isCalendarDate(inp.date) ? inp.date : athleteToday(root, a.values.now);
+  const suggestions = suggestLoads(exercises as never, history, await rulesAt(root, cfg), units, { tax: loadTaxonomy({ root }), strictUnits, clusters: loadClusters(root, inp), date });
   if (!tallyDay) {
     out({ units, suggestions });
     return 0;
@@ -301,7 +308,8 @@ async function cmdLoadsFill(a: Args): Promise<number> {
     history = snap?.history ?? [];
     source = history.length > 0 ? "logged weeks" : "none";
   }
-  const res = fillWeekLoads(wf, history, await rulesAt(root, cfg), units, { tax: loadTaxonomy({ root }), source });
+  const { loadClusters } = await import("./clusters.ts");
+  const res = fillWeekLoads(wf, history, await rulesAt(root, cfg), units, { tax: loadTaxonomy({ root }), source, clusters: loadClusters(root, wf) });
   saveWeekFile(path, wf);
   out({ file: path, ...res });
   return 0;
@@ -311,10 +319,10 @@ async function cmdLoadsFill(a: Args): Promise<number> {
 async function cmdTallyDays(a: Args): Promise<number> {
   const root = rootOf(a);
   const cfg = await maybeConfig(root);
-  const { readWeekFile, tallyDays } = await import("./week-file.ts");
+  const [{ readWeekFile, tallyDays }, { loadClusters }] = await Promise.all([import("./week-file.ts"), import("./clusters.ts")]);
   const wf = readWeekFile(need(a.values.input, "--input <week file>"));
   const first = wf.week.days.flatMap((d) => d.exercises).find((e) => e.unit === "lbs" || e.unit === "kg");
-  out(tallyDays(wf, cfg?.athlete.units ?? first?.unit ?? "lbs", cfg?.athlete.timezone));
+  out(tallyDays(wf, cfg?.athlete.units ?? first?.unit ?? "lbs", cfg?.athlete.timezone, loadClusters(root, wf)));
   return 0;
 }
 
@@ -350,7 +358,8 @@ async function cmdTargets(a: Args): Promise<number> {
   if (!Number.isInteger(inp.target_week)) throw new CoachError("USAGE", "targets input needs target_week (the block week to plan)");
   const block = inp.block as unknown as Block;
   const ref = referenceWeek(block, (inp.logs as WeekLog[]) ?? [], inp.today);
-  const targets = nextWeekTargets(block, ref, await rulesAt(root, await maybeConfig(root)), { tax: loadTaxonomy({ root }), week: inp.target_week as number });
+  const { loadClusters } = await import("./clusters.ts");
+  const targets = nextWeekTargets(block, ref, await rulesAt(root, await maybeConfig(root)), { tax: loadTaxonomy({ root }), week: inp.target_week as number, clusters: loadClusters(root, inp) });
   out({ reference_week: ref?.week_start ?? null, targets });
   return 0;
 }

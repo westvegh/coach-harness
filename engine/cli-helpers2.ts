@@ -3,7 +3,7 @@
 // CoachError (cli.ts prints them), except `signals refresh`, which is async and prints its own.
 //
 //   readiness --date <YYYY-MM-DD> [--now <instant>]
-//   weeks --from <YYYY-MM-DD> --to <YYYY-MM-DD>
+//   weeks --from <YYYY-MM-DD> --to <YYYY-MM-DD> [--input <{clusters}.json>]
 //   block draft [--template <id>] --weeks <n> [--input <file.json>] [--out <dir>] [--now <instant>]
 //   block write --input <dir>/block.json
 //   ids next --kind block|limit [--now <instant>]
@@ -90,11 +90,22 @@ async function cmdReadinessDate(a: Args): Promise<number> {
 }
 
 async function cmdWeeks(a: Args): Promise<number> {
-  if (!a.values.from || !a.values.to) throw new CoachError("USAGE", "usage: weeks --from <YYYY-MM-DD> --to <YYYY-MM-DD>");
+  if (!a.values.from || !a.values.to) throw new CoachError("USAGE", "usage: weeks --from <YYYY-MM-DD> --to <YYYY-MM-DD> [--input <{clusters}.json>]");
   const root = rootOf(a);
-  const [{ weeksFromSnapshot }, { coachSnapshot }] = await Promise.all([import("./weeks.ts"), import("./coach-snapshot.ts")]);
+  const [{ weeksFromSnapshot }, { coachSnapshot }, { loadClusters }, { weeklySetsByMuscle }, { loadTaxonomy }] = await Promise.all([
+    import("./weeks.ts"),
+    import("./coach-snapshot.ts"),
+    import("./clusters.ts"),
+    import("./volume.ts"),
+    import("./taxonomy.ts"),
+  ]);
   // With logger: files the week files are the record (contracts §12a).
-  out(weeksFromSnapshot(coachSnapshot(root, { now: await nowOf(a), cfg: await maybeConfig(root) }), a.values.from, a.values.to));
+  const res = weeksFromSnapshot(coachSnapshot(root, { now: await nowOf(a), cfg: await maybeConfig(root) }), a.values.from, a.values.to);
+  // 0.2.4: each week's counted sets per muscle (a cluster counts total reps ÷ its rep max).
+  const tax = loadTaxonomy({ root });
+  // The list: --input's `clusters` (for example before coach.yaml exists), else coach.yaml's.
+  const clusters = loadClusters(root, a.values.input ? readJsonFile(a.values.input) : undefined);
+  out({ ...res, logs: res.logs.map((w) => ({ ...w, sets_by_muscle: weeklySetsByMuscle(w, tax, clusters) })) });
   return 0;
 }
 
@@ -163,6 +174,8 @@ async function cmdBlockDraft(a: Args): Promise<number> {
         ? filesSnapshot(root, { units: set.units, timezone: set.timezone, now })
         : null;
   const rules = (await import("./methods.ts")).loadRules(packDir) as unknown as Rules;
+  // Clusters (0.2.4): the input's list (setup, before coach.yaml), else coach.yaml's.
+  const clusters = (await import("./clusters.ts")).loadClusters(root, input);
   const draft = draftBlock(
     template,
     weeks,
@@ -175,6 +188,7 @@ async function cmdBlockDraft(a: Args): Promise<number> {
       emphasis: set.emphasis,
       templateId: id,
       history: snap ? snapshotWeeks(snap, set.units) : undefined,
+      clusters,
     },
     input as BlockDraftInput,
   );
@@ -184,7 +198,10 @@ async function cmdBlockDraft(a: Args): Promise<number> {
   }
   const { draftWhy, writeDraftFiles } = await import("./block-files.ts");
   const weekdays = draft.block.days.map((d) => d.day);
-  out(writeDraftFiles(a.values.out, { template: id, ...draft }, draftWhy(template, weekdays), effectiveStep(rules, input as BlockDraftInput)));
+  // Only a list the input carries travels with the week files (setup, before coach.yaml exists): a
+  // copy of coach.yaml's list would win over a later edit of coach.yaml.
+  const carried = "clusters" in input && input.clusters !== undefined ? clusters : null;
+  out(writeDraftFiles(a.values.out, { template: id, ...draft }, draftWhy(template, weekdays, draft), effectiveStep(rules, input as BlockDraftInput), carried));
   return 0;
 }
 

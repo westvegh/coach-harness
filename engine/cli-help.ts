@@ -22,7 +22,7 @@ export const HELP: Record<string, string> = {
     "loads --from-snapshot <date> | loads < tally-day.json | loads --input <{exercises, history?}.json>  — suggestions only (§15, §22.2)",
   "tally-days": "tally-days --input <week file>  — one plan_workout_day input per date {date, dayType, dayName, notes, exercises, weightUnit, timezone}; add only ifAbsent, expectedVersion, replace and opId (§22.6a)",
   readiness: "readiness --date <YYYY-MM-DD> [--now <instant>]  — builds the input from signals, the snapshot and coach.yaml | readiness --input <file.json>  (§5, §22.4)",
-  weeks: "weeks --from <YYYY-MM-DD> --to <YYYY-MM-DD>  — the snapshot history as Monday-to-Sunday WeekLogs for targets (§22.5)",
+  weeks: "weeks --from <YYYY-MM-DD> --to <YYYY-MM-DD> [--input <{clusters}.json>]  — the snapshot history as Monday-to-Sunday WeekLogs for targets, each with counted sets_by_muscle; clusters from --input, else coach.yaml (§22.5, §8a)",
   block:
     "block draft [--template <id>] --weeks <n> [--input <file.json>] [--out <dir>]  — template × targets → the block and week-by-week days; --out writes <dir>/block.json and <dir>/week-<n>.json and prints a summary\n" +
     "block write --input <dir>/block.json  — writes athlete/block.yaml (archives a block with another id; refused under the urgent stop)  (§22.6)",
@@ -40,7 +40,7 @@ export const HELP: Record<string, string> = {
   "history-files": "history-files  — the two newest workout CSV exports (by their header line) directly in ~/Downloads and ~/Desktop, for setup's history question (§22a)",
   logger: "logger set tally|files|other  — set coach.yaml logger (comments kept): a switch, or the fallback to files when another tool stops answering (§12a)",
   "tally-mention": "tally-mention [--sessions <n>]  — logger files|other: the one Tally line after the third session logged by hand; records tally_mentioned (§12a)",
-  volume: "volume --input <week file>  — hard sets per muscle of the week | volume --input <{block, logs, today, target_week}.json>  — next week's targets (§7, §22.3)",
+  volume: "volume --input <week file>  — counted sets per muscle of the week (a cluster counts total reps ÷ its rep max), each cluster's count (`clusters`) and straight exercises above the pack's session maximum (`session_max`, advisory) | volume --input <{block, logs, today, target_week}.json>  — next week's targets (§7, §8a, §22.3)",
   "limits-hash": "limits-hash [--file <limits.yaml>]  — the limits file's hash (§2)",
   snapshot: "snapshot show | snapshot reset  — print the Tally snapshot cache; empty it (it is a cache; setup resets it after the account question) (§9)",
   safety: "safety detect --text <text> | safety scan-notes --since <YYYY-MM-DD> [--input <history.json>] [--dry-run]  — urgent and pain terms in text; in logged notes (an urgent term writes the urgent stop) (§10)",
@@ -49,7 +49,7 @@ export const HELP: Record<string, string> = {
   oplog: "oplog done --date <YYYY-MM-DD> --kind <kind>  — whether a Tally write of that kind is done on that date, from the write log (§15)",
   mode: "mode  — interactive or unattended (§15)",
   opid: "opid --date <YYYY-MM-DD> --kind <kind> --input <{tool, args}.json>  — the operation id for a Tally write (§15)",
-  targets: "targets --input <{block, logs, today, target_week}.json>  — next week's sets per muscle from the block and the logged weeks (§15)",
+  targets: "targets --input <{block, logs, today, target_week}.json>  — next week's sets per muscle from the block and the logged weeks; `straight` is what the straight exercises get after the clusters' counted sets (§15, §8a)",
   "routine-body": "routine-body --kind daily|weekly --repo-url <https://github.com/o/r> (--discover | --connections <file.json> | --connector-uuid <uuid>)  — the cloud routine body (automation skill; §15)",
   "launchd-plist": "launchd-plist --kind daily|weekly [--repo-path <abs path>] [--claude <abs path>]  — print a launchd agent for this Mac (§15)",
   "install-launchd": "install-launchd --kind daily|weekly|both [--yes] [--load]  — install the launchd agents after a probe run (live only; §15)",
@@ -68,7 +68,7 @@ export const SUBHELP: Record<string, Record<string, string>> = {
     draft:
       "block draft --weeks <n> --input <draft.json> [--out <dir>] [--template <id>]  — with --out: <dir>/block.json, <dir>/week-<n>.json and a summary (why, progression, sets per week)\n" +
       'input: {"id":"B-001","start":"2026-10-19","emphasis":"strength","exercises":{"squat":{"name":"Back Squat"},"1.3":{"name":"Bench Press","exerciseId":"Barbell_Bench_Press"}},"loads":{"Back Squat":185}}  (exercises by pattern or "day.slot"; §22.6)\n' +
-      'before coach.yaml exists, add: "method":"nine-adaptations","days":4,"units":"lbs","timezone":"America/Los_Angeles","logger":"files" (tally | files | none); optional: targets, step, deload_weeks, weekdays',
+      'before coach.yaml exists, add: "method":"nine-adaptations","days":4,"units":"lbs","timezone":"America/Los_Angeles","logger":"files" (tally | files | none); optional: targets, step, deload_weeks, weekdays, clusters ([{name, mini_sets, reps, rm, rest_s?}], as in coach.yaml; then copied into each week file)',
     write: "block write --input <dir>/block.json  — validate the block, archive a block with another id to athlete/blocks/<id>.yaml, write athlete/block.yaml atomically; refused under the urgent stop  (§22.6a)",
   },
   ids: { next: "ids next --kind block|limit  — the next free ID (§22.7)" },

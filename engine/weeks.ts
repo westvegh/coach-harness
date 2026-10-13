@@ -29,7 +29,7 @@ export function historyWeeks(history: SnapshotSession[], from: CalendarDate, to:
         name: e.name,
         muscle: e.muscle || null,
         ...(s.weightUnit ? { unit: s.weightUnit } : {}),
-        sets: e.sets.map((x) => ({ weight: x.weight, reps: x.reps, rpe: x.rpe })),
+        sets: e.sets.map((x) => ({ weight: x.weight, reps: x.reps, rpe: x.rpe, ...(x.warmup === true ? { warmup: true } : {}) })),
       });
     }
     byDate.set(s.date, day);
@@ -79,7 +79,7 @@ export function snapshotWeeks(snap: Snapshot, units: Units): WeekLog[] {
         name: e.name,
         muscle: e.muscle || null,
         unit: s.weightUnit ?? units,
-        sets: e.sets.map((x) => ({ weight: x.weight, reps: x.reps, rpe: x.rpe })),
+        sets: e.sets.map((x) => ({ weight: x.weight, reps: x.reps, rpe: x.rpe, ...(x.warmup === true ? { warmup: true } : {}) })),
       })),
     });
   }

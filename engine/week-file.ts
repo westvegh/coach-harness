@@ -9,6 +9,7 @@
 // tally-days: one plan_workout_day input per date, converted with entryToTallyExercise.
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import { convertWeight } from "../adapters/loggers/tally/day.ts";
+import { exerciseClusterNote, stripClusterNotes, type ClusterEntry } from "./clusters.ts";
 import { isCalendarDate } from "./dates.ts";
 import { CoachError } from "./errors.ts";
 import { PLATE_STEP, suggestLoads, type SessionHistory } from "./loads.ts";
@@ -26,7 +27,11 @@ export function readWeekFile(path: string): WeekFile {
   } catch (e) {
     throw new CoachError("INPUT_ERROR", `cannot read ${path}: ${(e as Error).message}`);
   }
-  if (isPlainObject(raw) && !isPlainObject(raw.week) && Array.isArray(raw.days)) raw = { week: { days: raw.days } };
+  // {days} alone is a week too; its other top-level keys (clusters, 0.2.4) stay.
+  if (isPlainObject(raw) && !isPlainObject(raw.week) && Array.isArray(raw.days)) {
+    const { days, ...rest } = raw;
+    raw = { ...rest, week: { days } };
+  }
   if (!isPlainObject(raw) || !isPlainObject(raw.week) || !Array.isArray(raw.week.days)) {
     throw new CoachError("INPUT_ERROR", `${path} must be a week file {week: {week_start, kind, load_factor, days}} (block draft --out writes one per week)`);
   }
@@ -50,7 +55,8 @@ export function saveWeekFile(path: string, wf: WeekFile): void {
 
 /**
  * A normalized history file, {units, sessions: [{date, exercises: [{name, sets: [{weight, reps}]}]}]},
- * which the coach writes from a training export (setup), as the snapshot's history.
+ * which the coach writes from a training export (setup), as the snapshot's history. A set's
+ * `warmup: true` (an export's warm-up marker: Strong "Set Order" W, Hevy set_type warmup) is kept.
  */
 export function parseHistoryFile(raw: unknown, where = "--history"): SessionHistory {
   if (!isPlainObject(raw)) throw new CoachError("INPUT_ERROR", `${where} must be {units, sessions: [{date, exercises: [{name, sets: [{weight, reps}]}]}]}`);
@@ -69,7 +75,7 @@ export function parseHistoryFile(raw: unknown, where = "--history"): SessionHist
           exerciseId: typeof e.exerciseId === "string" ? e.exerciseId : "",
           name: e.name,
           muscle: "",
-          sets: e.sets.filter(isPlainObject).map((x) => ({ weight: num(x.weight), reps: num(x.reps), rpe: num(x.rpe) })),
+          sets: e.sets.filter(isPlainObject).map((x) => ({ weight: num(x.weight), reps: num(x.reps), rpe: num(x.rpe), ...(x.warmup === true ? { warmup: true } : {}) })),
         };
       }),
     };
@@ -114,12 +120,12 @@ function prescription(ex: ExerciseEntry): ExerciseEntry {
 }
 
 /** Fills the week's loads in place (the object is changed) and returns what it did. */
-export function fillWeekLoads(wf: WeekFile, history: SessionHistory, rules: Rules, units: Units, opts: { tax?: Taxonomy; source: FillResult["history"] }): FillResult {
+export function fillWeekLoads(wf: WeekFile, history: SessionHistory, rules: Rules, units: Units, opts: { tax?: Taxonomy; source: FillResult["history"]; clusters?: readonly ClusterEntry[] }): FillResult {
   const factor = typeof wf.week.load_factor === "number" ? wf.week.load_factor : 1;
   const out: FillResult = { units, load_factor: factor, history: opts.source, filled: 0, suggestions: [] };
   for (const day of wf.week.days) {
     day.exercises.forEach((ex: ExerciseEntry, i) => {
-      const [s] = suggestLoads([prescription(ex)], history, rules, units, { tax: opts.tax, strictUnits: true });
+      const [s] = suggestLoads([prescription(ex)], history, rules, units, { tax: opts.tax, strictUnits: true, clusters: opts.clusters, date: day.date });
       if (s?.suggestedWeight === undefined) {
         out.suggestions.push({ date: day.date, index: i, exercise: ex.name, weight: null, reason: s?.reason ?? "no suggestion" });
         return;
@@ -135,16 +141,44 @@ export function fillWeekLoads(wf: WeekFile, history: SessionHistory, rules: Rule
   return out;
 }
 
+/** Tally day notes are at most 1,000 characters (workout-api `notes: z.string().max(1000)`, JavaScript length). */
+export const TALLY_NOTES_MAX = 1000;
+
+/**
+ * The day notes with one line per cluster exercise (B.7): "Cluster: <name>: 6 × 6 at 12RM, 10 s
+ * between mini-sets". Old "Cluster:" lines go first, so a repeat conversion has no duplicate or
+ * stale line. A line that does not fit in TALLY_NOTES_MAX is left out with a warning; the coach's
+ * own notes are never cut.
+ */
+export function tallyNotes(d: DayPlan, clusters: readonly ClusterEntry[], warnings: string[]): string | undefined {
+  const own = stripClusterNotes(d.notes);
+  let notes = own;
+  for (const ex of d.exercises) {
+    const note = exerciseClusterNote(ex, d.date, clusters);
+    if (!note) continue;
+    const line = `Cluster: ${ex.name}: ${note.replace(/^Cluster: /, "")}`;
+    const next = notes === "" ? line : `${notes}\n${line}`;
+    if (next.length > TALLY_NOTES_MAX) {
+      warnings.push(`${d.date} ${ex.name}: the cluster line does not fit in Tally's ${TALLY_NOTES_MAX}-character day notes; it was left out`);
+      continue;
+    }
+    notes = next;
+  }
+  return notes === "" && d.notes === undefined ? undefined : notes;
+}
+
 /**
  * One plan_workout_day input per date (date, dayType, dayName, notes, exercises, weightUnit,
  * and timezone when known). The coach adds only the read-dependent fields: ifAbsent,
- * expectedVersion, replace and opId.
+ * expectedVersion, replace and opId. A cluster exercise (coach.yaml `clusters`) adds its line to
+ * the day notes: Tally has no per-exercise notes.
  */
-export function tallyDays(wf: WeekFile, units: Units, timezone?: string): { days: (TallyDayWrite & { timezone?: string })[]; warnings: string[] } {
+export function tallyDays(wf: WeekFile, units: Units, timezone?: string, clusters: readonly ClusterEntry[] = []): { days: (TallyDayWrite & { timezone?: string })[]; warnings: string[] } {
   const warnings: string[] = [];
   const days = wf.week.days.map((d) => {
     // V4b: one unit per day: every exercise converted to the athlete's units before the day is printed.
-    const plan = { ...d, dayType: d.dayType ?? "training", exercises: d.exercises.map((e) => exerciseToUnits(structuredClone(e), units)) };
+    const notes = tallyNotes(d, clusters, warnings);
+    const plan = { ...d, ...(notes !== undefined ? { notes } : {}), dayType: d.dayType ?? "training", exercises: d.exercises.map((e) => exerciseToUnits(structuredClone(e), units)) };
     const { day, warnings: w } = planToTallyDay(plan);
     // An exercise with an exerciseId (from search_exercises) is not a guess: keep only the real warnings.
     warnings.push(...w.filter((x) => !d.exercises.some((e) => e.exerciseId && x.startsWith(`${e.name}: no Tally record`))));

@@ -12,6 +12,8 @@
 // 6. deload_depth {volume: 0.7, load: 0.7} means the deload week keeps 70% (rounded).
 // Also: the small kind `annotate` (only notes or dayName change; allowed under a hold).
 
+import type { ClusterEntry } from "./clusters.ts";
+
 // ---------- §0 conventions ----------
 
 /** A calendar date, YYYY-MM-DD, in the athlete's timezone. */
@@ -65,6 +67,8 @@ export type CoachConfig = {
   };
   approval: { auto: ChangeKind[]; ask: ChangeKind[] };
   thresholds: Partial<Thresholds>;
+  /** Exercises the athlete does as cluster sets (0.2.4; optional, default none; engine/clusters.ts). */
+  clusters?: ClusterEntry[];
 };
 
 // ---------- §2 limits.yaml ----------
@@ -114,7 +118,8 @@ export type Classification = {
 
 // ---------- §4 method pack (the subset the engine reads) ----------
 
-export type RuleCheck = { type: string; value: unknown };
+/** `adaptations`: the slots a max_sets_per_exercise_session check limits (0.2.4). */
+export type RuleCheck = { type: string; value: unknown; adaptations?: string[] };
 export type Rule = {
   id: string;
   text: string;
@@ -282,11 +287,15 @@ export type WeekLog = {
 export type BlockSlot = {
   pattern: string;
   adaptation: string;
+  /** Hard sets; for a cluster slot, mini-sets. */
   sets: number;
   reps?: string | number;
   duration?: string | number;
   rest_s?: number;
   exercise?: string;
+  /** A copy for the reader (0.2.4): recognition reads coach.yaml `clusters`, never these. */
+  style?: "cluster" | "straight";
+  rm?: number;
 };
 
 export type BlockDay = { day: Weekday; focus: string; slots: BlockSlot[] };
@@ -325,9 +334,19 @@ export type Targets = {
   /** 1 for build and test weeks; deload_depth.load for deload weeks. */
   load_factor: number;
   capped: CappedMuscle[];
+  /** The block's cluster slots in this week, each with its counted sets (0.2.4). */
+  clusters: ClusterSlotSets[];
+  /** `sets` minus the clusters' counted sets: what the straight slots get (never below 0). */
+  straight: Record<string, number>;
+  /** Advisory: muscles whose clusters alone count more than the target; the clusters stay as prescribed. */
+  cluster_above_target: ClusterAboveTarget[];
   rule_ids: string[];
   warnings: string[];
 };
+
+/** A cluster slot of a block week: its mini-sets, counted sets and muscles. */
+export type ClusterSlotSets = { day: Weekday; exercise: string; mini_sets: number; reps: number; rm: number; counted: number; muscles: string[] };
+export type ClusterAboveTarget = { muscle: string; target: number; cluster_sets: number };
 
 export type VolumeViolation = {
   muscle: string;
@@ -339,7 +358,8 @@ export type VolumeViolation = {
 
 // ---------- §9 snapshot ----------
 
-export type HistorySet = { weight: number | null; reps: number | null; rpe: number | null };
+/** `warmup`: kept from an export that marks warm-ups (0.2.4); Tally history has no marker. */
+export type HistorySet = { weight: number | null; reps: number | null; rpe: number | null; warmup?: boolean };
 /** `notes`: the exercise note Tally returns (kept for the note scan, V4). */
 export type HistoryExercise = { exerciseId: string; name: string; muscle: string; sets: HistorySet[]; notes?: string };
 

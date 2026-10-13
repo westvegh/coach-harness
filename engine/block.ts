@@ -58,6 +58,9 @@ export function validateBlock(raw: unknown, where = "athlete/block.yaml"): Block
       if (!count(s.sets, 1)) errors.push(`${sat}.sets must be a whole number of 1 or more`);
       if (s.rest_s !== undefined && !(typeof s.rest_s === "number" && Number.isFinite(s.rest_s) && s.rest_s >= 0)) errors.push(`${sat}.rest_s must be seconds`);
       if (s.exercise !== undefined && (typeof s.exercise !== "string" || s.exercise === "")) errors.push(`${sat}.exercise must be a name or exerciseId`);
+      // 0.2.4: optional copies for the reader (recognition reads coach.yaml clusters, never these).
+      if (s.style !== undefined && s.style !== "cluster" && s.style !== "straight") errors.push(`${sat}.style must be cluster or straight`);
+      if (s.rm !== undefined && !count(s.rm, 1)) errors.push(`${sat}.rm must be a whole number of 1 or more`);
     });
   });
   if (errors.length > 0) throw new CoachError("BLOCK_INVALID", `${where} is invalid:\n  - ${errors.join("\n  - ")}`);

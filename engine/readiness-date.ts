@@ -96,11 +96,13 @@ export function judgeSession(session: SnapshotSession, plan: SnapshotDay, planUn
       continue;
     }
     used.add(logged);
-    if (logged.sets.some((x) => x.reps === null)) {
+    // Physical sets: each logged set (a cluster's mini-sets) against the planned sets. Warm-ups are not work.
+    const work = logged.sets.filter((x) => x.warmup !== true);
+    if (work.some((x) => x.reps === null)) {
       missing.push(`${p.name}: a logged set has no reps`);
       continue;
     }
-    const done = logged.sets.filter((x) => (x.reps as number) > 0).slice(0, p.sets);
+    const done = work.filter((x) => (x.reps as number) > 0).slice(0, p.sets);
     completed += done.length;
     for (const x of done) {
       targetSum += p.repsMin;
@@ -108,7 +110,7 @@ export function judgeSession(session: SnapshotSession, plan: SnapshotDay, planUn
       if (p.rpe !== null && x.rpe !== null) drifts.push(x.rpe - p.rpe);
     }
     if (p.weight !== null && p.weight > 0) {
-      const weights = logged.sets.map((x) => x.weight).filter((w): w is number => typeof w === "number");
+      const weights = work.map((x) => x.weight).filter((w): w is number => typeof w === "number");
       if (weights.length === 0) {
         missing.push(`${p.name}: a weight was planned, but no logged set has one`);
         continue;

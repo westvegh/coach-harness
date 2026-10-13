@@ -1,5 +1,7 @@
-// Load suggestions from the last logged top set (contracts §15).
+// Load suggestions from the last logged top set (contracts §15); a cluster is judged as one
+// block (0.2.4, contracts §8a).
 import { convertWeight } from "../adapters/loggers/tally/day.ts";
+import { clusterOf, workSets, type ClusterEntry, type ClusterMatch } from "./clusters.ts";
 import { CoachError } from "./errors.ts";
 import { classify, normalizeName } from "./taxonomy.ts";
 import type { CalendarDate, ExerciseEntry, HistoryExercise, Rules, Snapshot, Taxonomy, Units } from "./types.ts";
@@ -57,7 +59,8 @@ function targets(ex: PlannedExercise): { reps: number | null; rpe: number } {
  * counts on reps alone).
  */
 function outcome(s: Session, target: { reps: number; rpe: number }): Outcome | null {
-  const sets = s.ex.sets.filter((x) => typeof x.weight === "number" && x.weight > 0 && typeof x.reps === "number");
+  // Warm-ups are not the top set (0.2.4): a heavier warm-up never becomes the weight to beat.
+  const sets = s.ex.sets.filter((x) => x.warmup !== true && typeof x.weight === "number" && x.weight > 0 && typeof x.reps === "number");
   if (sets.length === 0) return null;
   const weight = Math.max(...sets.map((x) => x.weight as number));
   const top = sets.filter((x) => x.weight === weight);
@@ -103,8 +106,16 @@ export function suggestLoads(
    * exercise logged in a session without a unit gets no suggestion (unknown, never a guess).
    * Without it, a session with a unit is still converted; one without is taken as `units`.
    */
-  opts: { tax?: Taxonomy; strictUnits?: boolean } = {},
+  opts: {
+    tax?: Taxonomy;
+    strictUnits?: boolean;
+    /** coach.yaml `clusters` (B.2). */
+    clusters?: readonly ClusterEntry[];
+    /** The planned date of the exercises (whether each is a cluster); absent: any date. */
+    date?: CalendarDate;
+  } = {},
 ): LoadSuggestion[] {
+  const clusters = opts.clusters ?? [];
   if (units !== "lbs" && units !== "kg") throw new CoachError("BAD_INPUT", `units must be lbs or kg, got ${JSON.stringify(units)}`);
   const unknownUnit: SessionHistory = [];
   history = history.flatMap((s) => {
@@ -136,12 +147,16 @@ export function suggestLoads(
 
   return exercises.map((ex): LoadSuggestion => {
     const id = ex.exerciseId || ex.name;
-    const noUnit = unknownUnit.filter((d) => d.exercises.some((h) => sameExercise(ex, h))).map((d) => d.date);
+    // A cluster uses only the sessions where it was a cluster on that session's date, so only those
+    // can block it with an unknown unit (an old straight session never does).
+    const cl = clusterOf(ex, opts.date, clusters);
+    const noUnit = unknownUnit.filter((d) => d.exercises.some((h) => sameExercise(ex, h) && (!cl || clusterOf(h, d.date, clusters) !== null))).map((d) => d.date);
     if (noUnit.length > 0) {
       return { exerciseId: id, reason: `the weight unit of the session on ${noUnit.sort().join(", ")} is unknown: no suggestion`, rule_ids: [] };
     }
     const sessions: Session[] = [];
     for (const day of sessionsDesc) for (const h of day.exercises) if (sameExercise(ex, h)) sessions.push({ date: day.date, ex: h });
+    if (cl) return clusterSuggestion(ex, cl, sessions);
     const target = targets(ex);
     const outcomes = target.reps === null ? [] : sessions.map((s) => outcome(s, { reps: target.reps!, rpe: target.rpe })).filter((o): o is Outcome => o !== null);
     if (sessions.length === 0 || outcomes.length === 0) {
@@ -160,20 +175,55 @@ export function suggestLoads(
       }
       return capped({ exerciseId: id, suggestedWeight: fmt(last.weight), reason: `missed the target (${target.reps} reps at RPE ≤ ${target.rpe}); last ${at} → repeat`, rule_ids: [] }, last.weight);
     }
+    return stepUp(ex, id, last.weight, `hit ${target.reps} reps at RPE ≤ ${target.rpe}; last ${at}`, "hit the target", `last ${at}`);
+  });
+
+  /** One step up from `weight` (2.5% upper body, 5% lower body), under top_set_jump_max (a repeat when no plate step fits). */
+  function stepUp(ex: PlannedExercise, id: string, weight: number, why: string, hitText: string, lastText: string): LoadSuggestion {
     const step = isLower(ex, opts.tax) ? STEP_LOWER : STEP_UPPER;
-    let next = roundTo(last.weight * (1 + step), plate);
-    if (next <= last.weight) next = last.weight + plate;
-    let reason = `hit ${target.reps} reps at RPE ≤ ${target.rpe}; last ${at} → +${step * 100}% rounded to ${plate} ${units}`;
+    let next = roundTo(weight * (1 + step), plate);
+    if (next <= weight) next = weight + plate;
+    let reason = `${why} → +${step * 100}% rounded to ${plate} ${units}`;
     if (jumpMax !== null) {
-      const cap = last.weight * (1 + jumpMax);
+      const cap = weight * (1 + jumpMax);
       if (next > cap + 1e-9) {
         next = floorTo(cap, plate);
-        if (next <= last.weight) {
-          return capped({ exerciseId: id, suggestedWeight: fmt(last.weight), reason: `hit the target, but one ${plate} ${units} step is above top_set_jump_max (${jumpMax * 100}%); last ${at} → repeat`, rule_ids: jumpIds }, last.weight);
+        if (next <= weight) {
+          return capped({ exerciseId: id, suggestedWeight: fmt(weight), reason: `${hitText}, but one ${plate} ${units} step is above top_set_jump_max (${jumpMax * 100}%); ${lastText} → repeat`, rule_ids: jumpIds }, weight);
         }
         reason += `, capped by top_set_jump_max (${jumpMax * 100}%)`;
       }
     }
-    return capped({ exerciseId: id, suggestedWeight: fmt(next), reason, rule_ids: jumpIds }, last.weight);
-  });
+    return capped({ exerciseId: id, suggestedWeight: fmt(next), reason, rule_ids: jumpIds }, weight);
+  }
+
+  /**
+   * A cluster (B.6): the last logged session where the exercise was a cluster on that session's
+   * date is judged as one block. Work mini-sets are non-warm-up sets with a weight above 0 and
+   * reps; W is the weight of the most work mini-sets (ties: the lighter). Hit (every work
+   * mini-set at W, total reps at least the planned total, no RPE above the target) → one step up;
+   * anything else → repeat W. Never the "missed twice" drop.
+   */
+  function clusterSuggestion(ex: PlannedExercise, cl: ClusterMatch, all: Session[]): LoadSuggestion {
+    const id = ex.exerciseId || ex.name;
+    const planned = workSets(ex.sets).map((x) => x.reps).filter((r): r is number => typeof r === "number" && r > 0);
+    const plannedTotal = planned.length > 0 ? planned.reduce((a, r) => a + r, 0) : cl.entry ? cl.entry.mini_sets * cl.entry.reps : null;
+    if (plannedTotal === null) return { exerciseId: id, reason: "cluster: the plan gives no reps per mini-set: no suggestion", rule_ids: [] };
+    const work = (s: Session) => workSets(s.ex.sets).filter((x) => typeof x.weight === "number" && x.weight > 0 && typeof x.reps === "number");
+    const last = all.find((s) => clusterOf(s.ex, s.date, clusters) && work(s).length > 0);
+    if (!last) return { exerciseId: id, reason: all.length === 0 ? "no logged history: no suggestion" : "cluster: no logged cluster session with a weight: no suggestion", rule_ids: [] };
+    const sets = work(last);
+    const byWeight = new Map<number, number>();
+    for (const x of sets) byWeight.set(x.weight as number, (byWeight.get(x.weight as number) ?? 0) + 1);
+    const W = [...byWeight.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0][0];
+    const total = sets.reduce((a, x) => a + (x.reps as number), 0);
+    const rpe = targets(ex).rpe;
+    const over = sets.map((x) => x.rpe).filter((r): r is number => typeof r === "number" && r > rpe);
+    const w = `${fmt(W)} ${units}`;
+    if (byWeight.size > 1) return capped({ exerciseId: id, suggestedWeight: fmt(W), reason: `cluster: mixed weights on ${last.date} → repeat ${w}`, rule_ids: [] }, W);
+    if (total < plannedTotal) return capped({ exerciseId: id, suggestedWeight: fmt(W), reason: `cluster: ${total} of ${plannedTotal} reps at ${w} on ${last.date} → repeat`, rule_ids: [] }, W);
+    if (over.length > 0) return capped({ exerciseId: id, suggestedWeight: fmt(W), reason: `cluster: RPE ${Math.max(...over)} above the target ${rpe} at ${w} on ${last.date} → repeat`, rule_ids: [] }, W);
+    const done = `${total} of ${plannedTotal} reps at ${w} on ${last.date}`;
+    return stepUp(ex, id, W, `cluster: ${done}`, "cluster: hit every rep", done);
+  }
 }

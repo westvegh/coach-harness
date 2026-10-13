@@ -7,7 +7,7 @@ import { parseArgs } from "node:util";
 import { CoachError } from "./errors.ts";
 import type { LoggerTool } from "./logger.ts";
 import type { NotesHistoryEntry } from "./safety.ts";
-import type { Block, ReadinessInput, Rules, WeekLog, WeekPlan } from "./types.ts";
+import type { Block, DayPlan, ReadinessInput, Rules, WeekLog, WeekPlan } from "./types.ts";
 
 export const SNAPSHOT_RELATIVE = "athlete/.cache/snapshot.json";
 
@@ -52,28 +52,51 @@ export async function cmdReadiness(argv: string[]): Promise<number> {
   return 0;
 }
 
-type VolumeInput = { week?: WeekPlan | WeekLog; block?: Block; logs?: WeekLog[]; today?: string; target_week?: number; rules?: Rules };
+type VolumeInput = { week?: WeekPlan | WeekLog; block?: Block; logs?: WeekLog[]; today?: string; target_week?: number; rules?: Rules; clusters?: unknown };
 
 /**
- * `week` → sets per muscle. `block` + `logs` + `today` → the reference week and the next
- * week's targets. Rules come from `rules` in the input, or else from the method pack named
- * in coach.yaml.
+ * `week` → counted sets per muscle (a cluster counts total reps ÷ its rep max), each cluster with
+ * its count, and the straight exercises above the pack's per-exercise session maximum (advisory).
+ * `block` + `logs` + `today` → the reference week and the next week's targets. Rules come from
+ * `rules` in the input, or else from the method pack named in coach.yaml; `clusters` from the
+ * input, or else from coach.yaml.
  */
 export async function cmdVolume(argv: string[]): Promise<number> {
   const { values } = opts(argv);
-  const [{ loadTaxonomy }, { weeklySetsByMuscle }, { nextWeekTargets, referenceWeek }] = await Promise.all([import("./taxonomy.ts"), import("./volume.ts"), import("./progression.ts")]);
+  const [{ loadTaxonomy }, { weeklySetsByMuscle }, { nextWeekTargets, referenceWeek }, { clusterLine, loadClusters }, { sessionMaxCheck, sessionMaxFindings }] = await Promise.all([
+    import("./taxonomy.ts"),
+    import("./volume.ts"),
+    import("./progression.ts"),
+    import("./clusters.ts"),
+    import("./session-max.ts"),
+  ]);
   const root = resolve(values.root ?? ".");
   const input = readJson(requireInput(values.input, "volume")) as VolumeInput;
   if (!isPlainObject(input)) throw new CoachError("INPUT_ERROR", "volume input must be a JSON object");
   const tax = loadTaxonomy({ root });
+  const clusters = loadClusters(root, input);
   const result: Record<string, unknown> = {};
-  if (input.week) result.sets_by_muscle = weeklySetsByMuscle(input.week, tax);
+  let rules: Rules | null = null;
+  const rulesOf = async () => (rules ??= input.rules ?? (await packRules(root)));
+  if (input.week) {
+    result.sets_by_muscle = weeklySetsByMuscle(input.week, tax, clusters);
+    const lines = input.week.days.flatMap((d) =>
+      d.exercises.flatMap((e) => {
+        const c = clusterLine(e, d.date, clusters);
+        return c ? [{ date: d.date, exercise: e.name, ...c }] : [];
+      }),
+    );
+    if (lines.length > 0) result.clusters = lines;
+    const check = sessionMaxCheck(await rulesOf());
+    const over = check ? sessionMaxFindings(input.week.days as DayPlan[], check, tax, clusters) : [];
+    if (over.length > 0) result.session_max = over;
+  }
   if (input.block) {
     if (!input.today) throw new CoachError("USAGE", "volume with a block needs today");
     if (!Number.isInteger(input.target_week)) throw new CoachError("USAGE", "volume with a block needs target_week (the block week to plan)");
     const ref = referenceWeek(input.block, input.logs ?? [], input.today);
     result.reference_week = ref?.week_start ?? null;
-    result.targets = nextWeekTargets(input.block, ref, input.rules ?? (await packRules(root)), { tax, week: input.target_week });
+    result.targets = nextWeekTargets(input.block, ref, await rulesOf(), { tax, week: input.target_week, clusters });
   }
   if (Object.keys(result).length === 0) throw new CoachError("USAGE", "volume input needs `week`, or `block` + `logs` + `today`");
   out(result);
@@ -219,6 +242,7 @@ export async function cmdClassify(argv: string[]): Promise<number> {
   // With logger: files the history is the week files (contracts §12a).
   const snap = config.logger === "tally" ? loadSnapshot(root) : (await import("./coach-snapshot.ts")).coachSnapshot(root, { cfg: config });
   const today = typeof input.today === "string" ? input.today : localDate(new Date().toISOString(), config.athlete.timezone);
+  const { loadClusters } = await import("./clusters.ts");
   out(
     classifyChange(input.before ?? null, input.after ?? null, {
       block: readBlock(root),
@@ -229,6 +253,7 @@ export async function cmdClassify(argv: string[]): Promise<number> {
       rules,
       config,
       today,
+      clusters: loadClusters(root, input),
       ...(input.volume ? { volume: input.volume } : {}),
     }),
   );

@@ -53,6 +53,7 @@ rules:
 | `rest_range_s` | `{adaptation, min, max}` | rest seconds for slots of that adaptation |
 | `session_change_min_categories` | integer | readiness categories needed to change a session |
 | `program_change_min_categories` | integer | categories needed to change the program |
+| `max_sets_per_exercise_session` | integer N (1 or more), plus `adaptations: [...]` beside `value` | when the coach drafts a week, one exercise of those adaptations gets at most N hard sets in a session (a drafting default and an audit finding, never a refusal) |
 
 Any other type fails the lint. Adding a type means adding engine support first.
 

@@ -1,8 +1,10 @@
 // Reference week and next-week targets (contracts §8, §7 step 7).
-import { addDays, diffDays, weekdayOf, weekStart } from "./dates.ts";
+import { clusterCount, type ClusterEntry } from "./clusters.ts";
+import { addDays, diffDays, weekdayOf, weekStart, WEEKDAYS } from "./dates.ts";
 import { CoachError } from "./errors.ts";
+import { normalizeName, classify } from "./taxonomy.ts";
 import { assertDaysInWeek, hardSets, weeklySetsByMuscle } from "./volume.ts";
-import type { Block, BlockWeek, CalendarDate, CappedMuscle, Rules, Targets, Taxonomy, VolumeViolation, WeekKind, WeekLog } from "./types.ts";
+import type { Block, BlockWeek, CalendarDate, CappedMuscle, ClusterAboveTarget, ClusterSlotSets, Rules, Targets, Taxonomy, VolumeViolation, WeekKind, WeekLog } from "./types.ts";
 
 export const DEFAULT_VOLUME_CAP = 0.1;
 export const DEFAULT_DELOAD_DEPTH = { volume: 0.7, load: 0.7 };
@@ -31,7 +33,7 @@ export function blockWeekAt(block: Block, weekStart: CalendarDate): BlockWeek | 
   return block.weeks.find((w) => w.week === d / 7 + 1) ?? null;
 }
 
-/** Distinct dates inside the week with at least one hard set logged. */
+/** Distinct dates inside the week with at least one hard set logged (physical sets: a cluster's mini-sets). */
 export function loggedSessions(log: WeekLog): number {
   assertDaysInWeek(log);
   return new Set(log.days.filter((d) => d.exercises.some((e) => hardSets(e) > 0)).map((d) => d.date)).size;
@@ -89,7 +91,61 @@ export type NextWeekOptions = {
    * deload, test and missed weeks sit between them.
    */
   week?: number;
+  /** coach.yaml `clusters` (0.2.4): the reference week counts clusters, and the block's cluster slots keep their prescription. */
+  clusters?: readonly ClusterEntry[];
 };
+
+/** A block slot's exercise (an exerciseId or a name) against the list: either one may match. */
+function slotEntry(exercise: string | undefined, list: readonly ClusterEntry[]): ClusterEntry | null {
+  if (!exercise) return null;
+  const n = normalizeName(exercise);
+  return list.find((e) => e.exerciseId === exercise || (n !== "" && normalizeName(e.name) === n)) ?? null;
+}
+
+/**
+ * The block's cluster slots in one block week (B.5): a slot whose exercise matches a list entry
+ * on that slot's date (on or after `since`). A deload week keeps round(mini_sets × depth) mini-sets,
+ * at least 1. Each counts clusterCount of its mini-sets toward the slot's muscles.
+ */
+export function blockClusterSlots(block: Block, week: number, kind: WeekKind, list: readonly ClusterEntry[], depthVolume: number, tax?: Taxonomy): ClusterSlotSets[] {
+  if (list.length === 0) return [];
+  const start = blockWeekStart(block, week);
+  const out: ClusterSlotSets[] = [];
+  for (const d of block.days ?? []) {
+    const date = addDays(start, WEEKDAYS.indexOf(d.day));
+    for (const s of d.slots ?? []) {
+      const e = slotEntry(s.exercise, list);
+      if (!e || (e.since && date < e.since)) continue;
+      const mini = kind === "deload" ? Math.max(1, Math.round(e.mini_sets * depthVolume)) : e.mini_sets;
+      const counted = clusterCount(Array.from({ length: mini }, () => ({ reps: e.reps })), e.rm);
+      let muscles: string[] = [];
+      if (tax) {
+        const c = classify({ name: s.exercise!, exerciseId: s.exercise }, tax);
+        muscles = c.source !== "none" ? c.muscles : (tax.patterns[s.pattern]?.muscles ?? []);
+      }
+      out.push({ day: d.day, exercise: s.exercise!, mini_sets: mini, reps: e.reps, rm: e.rm, counted, muscles });
+    }
+  }
+  return out;
+}
+
+/**
+ * The cluster prescription wins over a volume target (B.5): the straight slots get each target
+ * minus the clusters' counted sets (never below 0), and a muscle whose clusters alone count more
+ * than its target is listed (advisory; the clusters stay as prescribed).
+ */
+export function splitClusterTargets(targets: Record<string, number>, clusters: readonly ClusterSlotSets[]): { straight: Record<string, number>; above: ClusterAboveTarget[] } {
+  const byMuscle: Record<string, number> = {};
+  for (const c of clusters) for (const m of c.muscles) byMuscle[m] = (byMuscle[m] ?? 0) + c.counted;
+  const straight: Record<string, number> = {};
+  const above: ClusterAboveTarget[] = [];
+  for (const [m, t] of Object.entries(targets).sort(([a], [b]) => (a < b ? -1 : 1))) {
+    const c = byMuscle[m] ?? 0;
+    straight[m] = Math.max(0, t - c);
+    if (c > t) above.push({ muscle: m, target: t, cluster_sets: c });
+  }
+  return { straight, above };
+}
 
 function readCap(rules: Rules, warnings: string[], ruleIds: string[]): number {
   const c = findCheck(rules, "weekly_volume_increase_max");
@@ -132,7 +188,7 @@ export function nextWeekTargets(block: Block, ref: WeekLog | null, rules: Rules,
   let reference: Targets["reference"];
   if (ref) {
     if (!opts.tax) throw new CoachError("TAXONOMY_REQUIRED", "nextWeekTargets needs opts.tax to count the sets of a logged reference week");
-    reference = { source: "log", week_start: ref.week_start, sets: weeklySetsByMuscle(ref, opts.tax) };
+    reference = { source: "log", week_start: ref.week_start, sets: weeklySetsByMuscle(ref, opts.tax, opts.clusters ?? []) };
   } else {
     const w1 = block.weeks.find((w) => w.week === 1);
     if (!w1?.targets) throw new CoachError("BLOCK_WEEK_MISSING", `block ${block.id} week 1 has no targets to bootstrap from`);
@@ -143,10 +199,12 @@ export function nextWeekTargets(block: Block, ref: WeekLog | null, rules: Rules,
   const sets: Record<string, number> = {};
   const capped: CappedMuscle[] = [];
   let loadFactor = 1;
+  let depthVolume = DEFAULT_DELOAD_DEPTH.volume;
 
   if (tw.kind === "deload") {
     const depth = readDepth(rules, warnings, ruleIds);
     loadFactor = depth.load;
+    depthVolume = depth.volume;
     for (const m of Object.keys(base)) {
       sets[m] = Math.round(base[m] * depth.volume);
       if (m in planned && planned[m] !== sets[m]) {
@@ -183,6 +241,9 @@ export function nextWeekTargets(block: Block, ref: WeekLog | null, rules: Rules,
   for (const c of capped) {
     if (tw.kind !== "deload") warnings.push(`${c.muscle}: planned ${c.planned} sets over a base of ${c.base}; capped at ${c.allowed}`);
   }
+  const clusters = blockClusterSlots(block, weekNo, tw.kind, opts.clusters ?? [], depthVolume, opts.tax);
+  const split = splitClusterTargets(sets, clusters);
+  for (const a of split.above) warnings.push(`${a.muscle}: the clusters alone count ${a.cluster_sets} sets, above the target ${a.target}; they stay as prescribed`);
 
   return {
     week: weekNo,
@@ -193,6 +254,9 @@ export function nextWeekTargets(block: Block, ref: WeekLog | null, rules: Rules,
     planned: tw.targets ? { ...tw.targets } : {},
     load_factor: loadFactor,
     capped,
+    clusters,
+    straight: split.straight,
+    cluster_above_target: split.above,
     rule_ids: ruleIds,
     warnings,
   };

@@ -241,6 +241,8 @@ function historySession(s: Record<string, unknown>, server?: string): SnapshotSe
       weight: typeof x.weight === "number" ? x.weight : null,
       reps: typeof x.reps === "number" ? x.reps : null,
       rpe: typeof x.rpe === "number" ? x.rpe : null,
+      // 0.2.4: a warm-up marker is kept where the source has one (Tally history has none).
+      ...(x.warmup === true ? { warmup: true } : {}),
     })),
     ...(text(e.notes) ? { notes: e.notes as string } : {}),
   }));

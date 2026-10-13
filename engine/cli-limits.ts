@@ -9,6 +9,7 @@ import { readFileSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { CoachError } from "./errors.ts";
+import { loadClusters } from "./clusters.ts";
 import { checkLimits } from "./limits-check.ts";
 import { limitsSchema, regionsReport } from "./limits-schema.ts";
 import { loadLimits } from "./limits.ts";
@@ -62,7 +63,8 @@ export function limitsCommand(cmd: string, argv: string[]): number | null {
     if (!days) throw new CoachError("INPUT_ERROR", "limits check input must be {week: {days}} or {days}");
     const tax = loadTaxonomy({ root });
     const file = values.file ? (isAbsolute(values.file) ? values.file : resolve(values.file)) : join(root, "athlete/limits.yaml");
-    const findings = checkLimits(days as DayPlan[], loadLimits(file, tax), tax);
+    // Clusters count their counted sets (0.2.4): the input's list, else coach.yaml's.
+    const findings = checkLimits(days as DayPlan[], loadLimits(file, tax), tax, loadClusters(root, raw));
     out({ ok: findings.every((f) => f.kind === "unclassified"), findings });
     return 0;
   }

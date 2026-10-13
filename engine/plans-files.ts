@@ -14,6 +14,7 @@
 // (fix 3), and every row keeps its own unit (fix 2).
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
+import { clusterNote, clusterOf, stripClusterNotes, type ClusterEntry } from "./clusters.ts";
 import { addDays, isCalendarDate, weekStart } from "./dates.ts";
 import { CoachError } from "./errors.ts";
 import type { NotesHistoryEntry } from "./safety.ts";
@@ -364,6 +365,22 @@ function rowFromExercise(date: CalendarDate, day: DayInput, ex: ExerciseEntry | 
 
 export type WritePlanResult = { files: string[]; dates: CalendarDate[]; rows: number; kept_done: number; dropped_done: { date: CalendarDate; exercise: string }[]; warnings: string[] };
 
+/**
+ * A cluster row's note (B.7): "Cluster: 6 × 6 at 12RM, 10 s between mini-sets", from the row's
+ * planned mini-sets and reps and the list entry; null for straight sets. The CSV stores no style:
+ * after `plans read`, the list (by name) or the name word recognizes the row again.
+ */
+function rowClusterNote(row: PlanRow, ex: ExerciseEntry | Record<string, unknown>, clusters: readonly ClusterEntry[]): string | null {
+  const e = ex as Record<string, unknown>;
+  const c = clusterOf({ exerciseId: typeof e.exerciseId === "string" ? e.exerciseId : null, name: row.exercise }, row.date, clusters);
+  if (!c) return null;
+  const mini = /^\d+$/.test(row.sets) ? Number(row.sets) : (c.entry?.mini_sets ?? 1);
+  const range = /^(\d+)(?:\s*[-–]\s*(\d+))?$/.exec(row.reps);
+  const reps = range ? Number(range[2] ?? range[1]) : (c.entry?.reps ?? null);
+  const rm = c.entry?.rm ?? (reps !== null ? 2 * reps : null);
+  return clusterNote(mini, reps, rm, c.entry?.rest_s);
+}
+
 const isLoggedRow = (r: PlanRow) => DONE_COLUMNS.some((c) => r[c] !== "");
 
 /**
@@ -372,8 +389,13 @@ const isLoggedRow = (r: PlanRow) => DONE_COLUMNS.some((c) => r[c] !== "");
  * done_ columns and its own columns when the new plan has the same exercise on that date, and
  * keeps its unit: the new plan load is converted to the logged unit (fix 2). A logged row the
  * new plan drops is kept as it is and listed in `dropped_done` (a log is never lost).
+ *
+ * Notes (0.2.4): the day note goes on the first row of the day; a cluster row (coach.yaml
+ * `clusters`) gets its "Cluster: …" line, after the day note when both are on one row
+ * ("<day note> | Cluster: …"). Old "Cluster:" text is removed from the day note first, so writing
+ * the same day again never duplicates it.
  */
-export function writePlan(root: string, days: DayInput[], units: Units): WritePlanResult {
+export function writePlan(root: string, days: DayInput[], units: Units, clusters: readonly ClusterEntry[] = []): WritePlanResult {
   refuseUnderUrgentStop(root, "plans write");
   if (!Array.isArray(days) || days.length === 0) throw new CoachError("INPUT_ERROR", "plans write needs at least one day");
   const byFile = new Map<string, DayInput[]>();
@@ -391,10 +413,11 @@ export function writePlan(root: string, days: DayInput[], units: Units): WritePl
     const kept = file.rows.filter((r) => !dates.has(r.date));
     const used = new Set<PlanRow>();
     for (const d of list) {
+      const dayNote = stripClusterNotes(d.notes);
       d.exercises.forEach((ex, i) => {
         const row = rowFromExercise(d.date, d, ex, units);
         if (row.exercise === "") throw new CoachError("INPUT_ERROR", `${d.date}: exercise ${i + 1} has no name`);
-        if (i === 0 && d.notes) row.notes = d.notes;
+        row.notes = [i === 0 ? dayNote : "", rowClusterNote(row, ex, clusters) ?? ""].filter((x) => x !== "").join(" | ");
         const prev = old.find((r) => !used.has(r) && r.date === d.date && key(r.exercise) === key(row.exercise));
         if (prev) {
           used.add(prev);

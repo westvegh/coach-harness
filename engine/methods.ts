@@ -22,6 +22,7 @@ export const CHECK_TYPES = [
   "off_mornings_short_pattern",
   "off_mornings_long_pattern",
   "aversion_scale_max",
+  "max_sets_per_exercise_session",
 ] as const;
 export type CheckType = (typeof CHECK_TYPES)[number];
 
@@ -59,7 +60,10 @@ export type Check =
   | { type: "single_day_action"; value: "note" }
   | { type: "off_mornings_short_pattern"; value: number }
   | { type: "off_mornings_long_pattern"; value: number }
-  | { type: "aversion_scale_max"; value: number };
+  | { type: "aversion_scale_max"; value: number }
+  // 0.2.4: when the coach drafts a week, one exercise of these adaptations gets at most `value`
+  // hard sets in a session (a drafting default and an audit finding, never a refusal).
+  | { type: "max_sets_per_exercise_session"; value: number; adaptations: Adaptation[] };
 
 export type RuleSource = {
   ref: string; // key in sources.md
@@ -154,7 +158,7 @@ function readYaml(path: string): unknown {
 
 // Checks the value shape for a known check type. Unknown types are left to the
 // lint, which reports them as errors, so the loader stays usable for linting.
-export function checkValueError(check: { type: string; value: unknown }): string | null {
+export function checkValueError(check: { type: string; value: unknown; adaptations?: unknown }): string | null {
   const v = check.value;
   switch (check.type) {
     case "weekly_volume_increase_max":
@@ -172,6 +176,13 @@ export function checkValueError(check: { type: string; value: unknown }): string
       return Number.isInteger(v) && (v as number) > 0 ? null : "value must be a positive integer";
     case "aversion_scale_max":
       return Number.isInteger(v) && (v as number) >= 1 && (v as number) <= 5 ? null : "value must be a whole number from 1 to 5";
+    case "max_sets_per_exercise_session": {
+      if (!(Number.isInteger(v) && (v as number) >= 1)) return "value must be a whole number of 1 or more";
+      const a = (check as { adaptations?: unknown }).adaptations;
+      if (!Array.isArray(a) || a.length === 0) return "adaptations must list the adaptations the maximum applies to";
+      const bad = a.filter((x) => !(ADAPTATIONS as readonly string[]).includes(x as string));
+      return bad.length === 0 ? null : `adaptations: unknown adaptation ${bad.map(String).join(", ")}`;
+    }
     case "single_day_action":
       return v === "note" ? null : 'value must be "note"';
     case "weekly_sets_per_muscle_range":

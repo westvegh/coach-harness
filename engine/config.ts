@@ -1,4 +1,5 @@
 // coach.yaml loader and validator (contracts §1).
+import { clusterProblems, parseClusters } from "./clusters.ts";
 import { CoachError } from "./errors.ts";
 import { isValidTimezone, WEEKDAYS } from "./dates.ts";
 import { DEFAULT_THRESHOLDS, thresholdErrors } from "./readiness.ts";
@@ -29,7 +30,7 @@ export const ALL_KINDS: readonly ChangeKind[] = [...SMALL_KINDS, ...BIG_KINDS];
 export const DEFAULT_SLEEP_TARGET_MIN = 480;
 export const SLEEP_TARGET_RANGE: readonly [number, number] = [240, 720];
 
-const TOP_KEYS = ["version", "athlete", "method", "template", "signals", "logger", "tally_mentioned", "consent", "automation", "approval", "thresholds"];
+const TOP_KEYS = ["version", "athlete", "method", "template", "signals", "logger", "tally_mentioned", "consent", "automation", "approval", "thresholds", "clusters"];
 /** Where plans live (v0.2, contracts §1, §12a). */
 export const LOGGERS = ["tally", "files", "other"] as const;
 /** The tool-name prefix of a connected logger server, in any of its name forms (launch review finding 7). */
@@ -174,8 +175,12 @@ export function validateConfig(raw: unknown, where = "coach.yaml"): CoachConfig 
     c.errors.push(...thresholdErrors(thresholds));
   }
 
+  // 0.2.4: optional; the coach writes it (engine/clusters.ts). Default none, in code.
+  c.errors.push(...clusterProblems(raw.clusters));
+
   if (c.errors.length > 0) throw invalid(where, c.errors);
   const r = raw as Record<string, any>;
+  const clusters = parseClusters(r.clusters);
   return {
     version: 1,
     athlete: {
@@ -200,6 +205,7 @@ export function validateConfig(raw: unknown, where = "coach.yaml"): CoachConfig 
     },
     approval,
     thresholds,
+    ...(clusters.length > 0 ? { clusters } : {}),
   };
 }
 
