@@ -55,9 +55,12 @@ test("safety scan-notes reads the snapshot history and reports pain notes; it wr
   assert.equal(existsSync(join(dir, "athlete/.urgent-stop")), false);
 });
 
-test("safety scan-notes needs --since, and is a no-op without a snapshot", () => {
+test("safety scan-notes needs --since, and writes nothing without a snapshot; V7: no history is unknown, not 'no urgent sign'", () => {
   const dir = tempRoot();
   assert.equal(cli(["safety", "scan-notes", "--root", dir]).code, 2);
   const r = cli(["safety", "scan-notes", "--since", "2026-10-10", "--root", dir]);
-  assert.deepEqual(r.json, { server: null, sessions: 0, matches: [], urgent_terms: [], urgent_stop: null });
+  const { coverage_detail, ...rest } = r.json;
+  assert.deepEqual(rest, { server: null, sessions: 0, matches: [], urgent_terms: [], urgent_stop: null, coverage: "incomplete", urgent_unknown: true });
+  assert.equal(coverage_detail.status, "missing");
+  assert.ok(coverage_detail.need.length > 0, "it names the reads to make");
 });

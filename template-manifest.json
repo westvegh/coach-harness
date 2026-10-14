@@ -1,7 +1,7 @@
 {
   "version": 1,
   "repo": "https://github.com/westvegh/coach-harness",
-  "release": "0.2.5",
+  "release": "0.2.6",
   "files": {
     ".claude/agents/analyst.md": {
       "mode": "100644",
@@ -17,7 +17,7 @@
     },
     ".claude/hooks/capture-reads.body.ts": {
       "mode": "100644",
-      "blob": "ee3b31bd47aa3cec7b8fe5830a2620db8c26111c"
+      "blob": "dcf48611cd30b0239caa8c76bc5212c0c936277d"
     },
     ".claude/hooks/capture-reads.ts": {
       "mode": "100644",
@@ -69,7 +69,7 @@
     },
     ".claude/settings.json": {
       "mode": "100644",
-      "blob": "ccad0443c0892f4b3968869f76a60348a276beba"
+      "blob": "50e96263a65b81c6e9504d20770e75938f0a3a72"
     },
     ".claude/skills/audit/SKILL.md": {
       "mode": "100644",
@@ -85,7 +85,7 @@
     },
     ".claude/skills/check-in/SKILL.md": {
       "mode": "100644",
-      "blob": "5fd4ae5ae99b24a28cb8560151257aaa7171dfea"
+      "blob": "c6c4a7f923a80905ea807206caf2bc205a3f8125"
     },
     ".claude/skills/explain/SKILL.md": {
       "mode": "100644",
@@ -113,7 +113,7 @@
     },
     ".claude/skills/safety/SKILL.md": {
       "mode": "100644",
-      "blob": "79002f856fce7210e32e0a95e65968175d266d2d"
+      "blob": "ad5684c14edeef2ee86eb53c14a163b31f968877"
     },
     ".claude/skills/setup/SKILL.md": {
       "mode": "100644",
@@ -121,7 +121,7 @@
     },
     ".claude/skills/today/SKILL.md": {
       "mode": "100644",
-      "blob": "ff4539663f738974ff61fba58805a6e447a8779a"
+      "blob": "927bcc9a7a266dff57b3fd615cd81fa6bf2119b6"
     },
     ".claude/skills/update/SKILL.md": {
       "mode": "100644",
@@ -157,11 +157,11 @@
     },
     "CHANGELOG.md": {
       "mode": "100644",
-      "blob": "2d17a96764e5fe4f02dcb619083e3b01bbc2c01d"
+      "blob": "33ac9985042db9ca75aade5a52048ed03ab0cb5d"
     },
     "CLAUDE.md": {
       "mode": "100644",
-      "blob": "337b10576de0616040d94906c609f0aa98e43699"
+      "blob": "f5040b5c009470b1f5180b509643787870dd5fb2"
     },
     "CONTRIBUTING.md": {
       "mode": "100644",
@@ -241,15 +241,15 @@
     },
     "automation/github-actions/today.yml": {
       "mode": "100644",
-      "blob": "786685237023ed2d0f039215c350e9c94087adbd"
+      "blob": "a1dfe25ef138d0c6bfb979a4d25514895532523f"
     },
     "automation/launchd/README.md": {
       "mode": "100644",
-      "blob": "a7e7e3ef40a80d8187a5f5ffa64b939554087363"
+      "blob": "ff2f4c0b71e2e85a255ffc440a637af5248eb2dc"
     },
     "automation/routine.md": {
       "mode": "100644",
-      "blob": "838d262cb3ad5fd6cf68aab89e585bfb8459e2ca"
+      "blob": "c665ce215842138cd6c0cf37485671df70ac9048"
     },
     "coach.example.yaml": {
       "mode": "100644",
@@ -265,11 +265,11 @@
     },
     "docs/contracts.md": {
       "mode": "100644",
-      "blob": "ea1a598c6fa18e78fb6b3d0c0ae7e95af59dc9d8"
+      "blob": "bf0b567951e53ddd6650a7b93e27f34db9be55d1"
     },
     "docs/how-it-works.md": {
       "mode": "100644",
-      "blob": "96aba1a8ffafdf43558df671f0e5c41ca31e342f"
+      "blob": "d3b2264597d6c9950d929e16cbe07a9bdde2c88d"
     },
     "docs/safety-and-privacy.md": {
       "mode": "100644",
@@ -293,11 +293,11 @@
     },
     "engine/automation.test.ts": {
       "mode": "100644",
-      "blob": "3a7c3d84c601d44ce2c2c3fa149c036efbd35de1"
+      "blob": "9a721b74e499eeae9472cccc9d34311119b2f18b"
     },
     "engine/automation.ts": {
       "mode": "100644",
-      "blob": "929c08803715e0acb373c47b598f533b3f5a0d16"
+      "blob": "dd9506e5b55d487f5bb97ac2b28409d0e7e7a6f0"
     },
     "engine/block-draft.ts": {
       "mode": "100644",
@@ -325,7 +325,7 @@
     },
     "engine/cli-core.ts": {
       "mode": "100644",
-      "blob": "75c06fa5c338bd415eb6141d1851a2c2ff256e93"
+      "blob": "4a1d6f4b9ab7ed5198ccea4e3b87ada44b805ecc"
     },
     "engine/cli-git.ts": {
       "mode": "100644",
@@ -333,15 +333,15 @@
     },
     "engine/cli-help.ts": {
       "mode": "100644",
-      "blob": "c1cf1e1150ad4cc9edbd800f781684709f8b24f6"
+      "blob": "b3498a33c0a94e12b8ab0e3f3b149c32f263ddb7"
     },
     "engine/cli-helpers.ts": {
       "mode": "100644",
-      "blob": "62689ae65798d5ee73a82defd6340fd51ff8cb70"
+      "blob": "42f82105d309fdb720282e3b785ab96ddd928cda"
     },
     "engine/cli-helpers2.ts": {
       "mode": "100644",
-      "blob": "e802ea1fdf3fb84aa9cba68f79bff05c98c8cbf3"
+      "blob": "391b579034bb54f5e881caac39e74e95dc91470d"
     },
     "engine/cli-limits.ts": {
       "mode": "100644",
@@ -359,13 +359,17 @@
       "mode": "100644",
       "blob": "626bf50689386c94c6f726a0577124755c758504"
     },
+    "engine/cli-today.ts": {
+      "mode": "100644",
+      "blob": "561a513ce69becb18c99ecd232e49132aa804b41"
+    },
     "engine/cli-update.ts": {
       "mode": "100644",
       "blob": "8ed138165f4c6fb79b72bf391d6320b97d471b09"
     },
     "engine/cli.ts": {
       "mode": "100644",
-      "blob": "c28e2c739216202ba7786318fb9be7f884504ba8"
+      "blob": "12004aa7d5ef298e65b779564df70e4a501c31db"
     },
     "engine/clusters.ts": {
       "mode": "100644",
@@ -383,6 +387,10 @@
       "mode": "100644",
       "blob": "90fe3dee18f45462b01514758531cb1b599d4937"
     },
+    "engine/coverage.ts": {
+      "mode": "100644",
+      "blob": "9151d456dbed2845408c80e4d4ebbb5dbc7fce4f"
+    },
     "engine/dates.ts": {
       "mode": "100644",
       "blob": "113a5cadafcd8477eb673c504bc9d2008e18c87d"
@@ -390,6 +398,10 @@
     "engine/errors.ts": {
       "mode": "100644",
       "blob": "a3142ce2ec93d7b23c73359e753ff592e5b21c8c"
+    },
+    "engine/history-windows.ts": {
+      "mode": "100644",
+      "blob": "024db22e9552ccdaea86de66cda559ed1654784b"
     },
     "engine/ids.ts": {
       "mode": "100644",
@@ -515,6 +527,10 @@
       "mode": "100644",
       "blob": "247337af18d276455c765d056404d3923efdc51a"
     },
+    "engine/save.ts": {
+      "mode": "100644",
+      "blob": "fb5aba36d73e3f7b0ad0e1c9dd251741bc25680f"
+    },
     "engine/session-max.ts": {
       "mode": "100644",
       "blob": "e3afd05cd31488712dc20111db6fc4959eba21dc"
@@ -535,9 +551,13 @@
       "mode": "100644",
       "blob": "22bebb804dc8fb9ed9a59bfd80b45dc9857d5750"
     },
+    "engine/snapshot-lock.ts": {
+      "mode": "100644",
+      "blob": "8e884f37d3f070aa942052ef7a51612d737a4a27"
+    },
     "engine/snapshot.ts": {
       "mode": "100644",
-      "blob": "8f7be41893ccd2d4eb594a33d522c5d2b3dcbdd8"
+      "blob": "d130be7b0e8d4244800beef16572ececcd44b35f"
     },
     "engine/tally-shape.ts": {
       "mode": "100644",
@@ -551,9 +571,25 @@
       "mode": "100644",
       "blob": "b9492a5bcf7039b5cdafad7256bbeb3ce403ebfa"
     },
+    "engine/today-brief.ts": {
+      "mode": "100644",
+      "blob": "fdd014f889f19b48067c95d82c98089a4f5d5a14"
+    },
+    "engine/today-run.ts": {
+      "mode": "100644",
+      "blob": "46e7cb6a04ea8733b1da7d99b083a8f0d93936f7"
+    },
+    "engine/today-write-prep.ts": {
+      "mode": "100644",
+      "blob": "584a3713b0f3d0c2d419a304e06819480e950055"
+    },
+    "engine/transcript.ts": {
+      "mode": "100644",
+      "blob": "3564524c53b17f0e7baaf9c51652f66d58733bcf"
+    },
     "engine/types.ts": {
       "mode": "100644",
-      "blob": "4a03c8208fababd1bf6718905432378f3ca215fd"
+      "blob": "8f9b09b850156694ba1eba1273fcca4362d9638d"
     },
     "engine/update.ts": {
       "mode": "100644",
@@ -753,11 +789,11 @@
     },
     "evals/lib/claude.test.ts": {
       "mode": "100644",
-      "blob": "608b57b510b3f67c46617f79d9cc8b75ec1614c7"
+      "blob": "7bb91262ebed8bf3c78a50cdceae78b3bcd97015"
     },
     "evals/lib/claude.ts": {
       "mode": "100644",
-      "blob": "e5798397fb3ce5be507cbfa498a723a4979921a7"
+      "blob": "591cc2a4c75b45668dc1aebecbb3158039f9f5b5"
     },
     "evals/lib/collect.ts": {
       "mode": "100644",
@@ -781,7 +817,7 @@
     },
     "evals/lib/types.ts": {
       "mode": "100644",
-      "blob": "da90a663cdb1c1ed1d4da8b9983fab6ff2df158b"
+      "blob": "cb339ff4578e1f3eed57c17987721d5e4177fb53"
     },
     "evals/mock-tally/client.ts": {
       "mode": "100644",
@@ -801,7 +837,7 @@
     },
     "evals/run.ts": {
       "mode": "100644",
-      "blob": "840503bcf6f448b5bc548fab9e6147e5a002601a"
+      "blob": "ad0b8a865d12b82551c841ca61b88c7d18f4b0b7"
     },
     "evals/scenarios/01-setup-scripted.ts": {
       "mode": "100644",
@@ -915,6 +951,14 @@
       "mode": "100644",
       "blob": "c5cfe9cc746b13c3b5bd4a147daf1c57ad02e414"
     },
+    "evals/scenarios/34-fast-today.ts": {
+      "mode": "100644",
+      "blob": "c22b1b4f24a1b49e343d3c4ff69f6ab0748a6501"
+    },
+    "evals/scenarios/35-fast-today-write.ts": {
+      "mode": "100644",
+      "blob": "1a1ca2dde5d02ae130dd2f8a59d6706dabbd384b"
+    },
     "evals/scenarios/_common.ts": {
       "mode": "100644",
       "blob": "d6c8c47f0922451d3026e93bc265c93d7506ea94"
@@ -927,9 +971,17 @@
       "mode": "100644",
       "blob": "3cab7d303644423c74ba0afb3e4db5d1b6df1f02"
     },
+    "evals/scenarios/_speed.ts": {
+      "mode": "100644",
+      "blob": "3841fd29e9ea84f56578a1873e4f574af81fbcd8"
+    },
     "evals/scenarios/fixtures.test.ts": {
       "mode": "100644",
-      "blob": "bcd0358549a5cee9e4e3a52676a787aba44b7cea"
+      "blob": "afbcc167085340eb8ad750d55a3ebc111a8b5d45"
+    },
+    "evals/scenarios/speed.test.ts": {
+      "mode": "100644",
+      "blob": "d13e9be09afe3ea8e48548a0286fb1f8642298ee"
     },
     "git-hooks/pre-push": {
       "mode": "100755",
@@ -1001,11 +1053,11 @@
     },
     "package-lock.json": {
       "mode": "100644",
-      "blob": "b6c9cc7e150cd068788f3b14ce718caca160d6b9"
+      "blob": "223b54ea2c68fad9ca51ffaf954808b077328add"
     },
     "package.json": {
       "mode": "100644",
-      "blob": "8a327082b677e78c4608e7c5c2e40b2cc13b3395"
+      "blob": "88dfc84114360251b46f86c188131a3fe33b1a2a"
     },
     "scripts/bench-cli.ts": {
       "mode": "100644",
@@ -1125,7 +1177,7 @@
     },
     "tests/hooks/settings.test.ts": {
       "mode": "100644",
-      "blob": "10d565e44cb356241adf510af66db00763cafc68"
+      "blob": "446dd29e35d5d2ab27c60a3cc29975d1a117ab9e"
     },
     "tests/hooks/v4-capture.test.ts": {
       "mode": "100644",
@@ -1153,7 +1205,7 @@
     },
     "tests/safety-cli.test.ts": {
       "mode": "100644",
-      "blob": "3f01f720a53b6c449d0ca628e771c979c05b9a70"
+      "blob": "e06bc87685feb73adfdcb4b445fb31a03439c3e1"
     },
     "tests/safety-text.test.ts": {
       "mode": "100644",
@@ -1213,7 +1265,7 @@
     },
     "tests/v4-engine.test.ts": {
       "mode": "100644",
-      "blob": "2d3311687b45bb3353a13db9cdfc85e132649b13"
+      "blob": "0cf371f983263110b3f71be4f7545f10e6073920"
     },
     "tests/v4-skills.test.ts": {
       "mode": "100644",
@@ -1238,6 +1290,42 @@
     "tests/v6-checkin.test.ts": {
       "mode": "100644",
       "blob": "58a21e3934ee11f5eaa8418db42808ae312e4521"
+    },
+    "tests/v7-brief.test.ts": {
+      "mode": "100644",
+      "blob": "dc9d539b3c2af46809116ca18ecf25bd7c58d31a"
+    },
+    "tests/v7-capture.test.ts": {
+      "mode": "100644",
+      "blob": "64687bbdf780081d8cc721fe050eb1bc38553ef6"
+    },
+    "tests/v7-helpers.ts": {
+      "mode": "100644",
+      "blob": "bea025755a9b41d364068e04e56bfdbfcb5ac8df"
+    },
+    "tests/v7-review-fixes.test.ts": {
+      "mode": "100644",
+      "blob": "6550e0eae659d96d3de8b7e558474bd55d0781c5"
+    },
+    "tests/v7-save.test.ts": {
+      "mode": "100644",
+      "blob": "9e528857fc210f9004320bb63b50b9543ca4c2c8"
+    },
+    "tests/v7-skill.test.ts": {
+      "mode": "100644",
+      "blob": "4e94d49a814dce793f624e6852e5bf8767bb39ea"
+    },
+    "tests/v7b-fixes.test.ts": {
+      "mode": "100644",
+      "blob": "9016b8c3bac18164df8bfa7454dbb83eb1532763"
+    },
+    "tests/v7c-fixes.test.ts": {
+      "mode": "100644",
+      "blob": "6664f67abf5d4d9c7d83cbaf81be28b13c4685f2"
+    },
+    "tests/v7d-fixes.test.ts": {
+      "mode": "100644",
+      "blob": "e01c5123a841d0478a013801bbebb3e1d74e17cf"
     },
     "tsconfig.json": {
       "mode": "100644",

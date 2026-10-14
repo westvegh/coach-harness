@@ -52,10 +52,10 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: >-
-            First run: node engine/cli.ts window-check --kind daily. If it exits with a nonzero code, stop and do nothing else.
-            Otherwise read .claude/skills/today/SKILL.md and follow it exactly. Unattended run.
+            First run: node engine/cli.ts today-brief --stage pre. If it exits with a nonzero code, stop and do nothing else.
+            Otherwise read .claude/skills/today/SKILL.md and follow it exactly. Unattended run. Step 1's pre has run: use its output and do not run it again.
             This is a scheduled GitHub Actions run.
-            Commit to the main branch: run git pull --rebase before you push.
+            Commit to the main branch with the skill's save step (node engine/cli.ts save): it runs git pull --rebase before it pushes through node engine/cli.ts push.
           claude_args: >-
             --mcp-config .github/coach-mcp.json
             --allowedTools Bash,Read,Write,Edit,Glob,Grep,mcp__tally__get_training_context,mcp__tally__get_workout_history,mcp__tally__get_planned_workout,mcp__tally__get_exercise_progress,mcp__tally__search_exercises,mcp__tally__plan_workout_day,mcp__tally__plan_workout_range,mcp__tally__update_planned_workout,mcp__tally__move_planned_workout,mcp__tally__skip_planned_workout,mcp__tally__delete_planned_workout

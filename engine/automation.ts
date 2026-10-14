@@ -160,6 +160,18 @@ const SKILL: Record<RoutineKind, string> = { daily: "today", weekly: "week" };
 
 export function routinePrompt(kind: RoutineKind, where: "cloud" | "mac"): string {
   if (kind !== "daily" && kind !== "weekly") throw new CoachError("USAGE", `kind must be daily or weekly, got ${JSON.stringify(kind)}`);
+  // V7: the daily run starts with today-brief --stage pre, which runs window-check first (exit 4
+  // outside the window); the skill then goes on from pre's output. save commits, syncs and pushes.
+  if (kind === "daily") {
+    return [
+      "First run: node engine/cli.ts today-brief --stage pre (if node_modules is missing, run npm ci first). If it exits with a nonzero code, stop and do nothing else.",
+      "Otherwise read .claude/skills/today/SKILL.md and follow it exactly. Unattended run. Step 1's pre has run: use its output and do not run it again.",
+      where === "cloud" ? "This is a scheduled cloud routine." : "This is a scheduled run on the Mac.",
+      "If node_modules is missing, run npm ci first.",
+      "Push only with node engine/cli.ts push: it installs the git hooks, checks that the repository is private, and then pushes. If it exits nonzero, nothing was pushed; log the reason and stop.",
+      "Commit to the main branch with the skill's save step (node engine/cli.ts save): it runs git pull --rebase before it pushes through node engine/cli.ts push.",
+    ].join(" ");
+  }
   return [
     `First run: node engine/cli.ts window-check --kind ${kind}. If it exits with a nonzero code, stop and do nothing else.`,
     `Otherwise read .claude/skills/${SKILL[kind]}/SKILL.md and follow it exactly. Unattended run.`,

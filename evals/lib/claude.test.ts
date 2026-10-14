@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { chmodSync, existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { childEnv, claudeArgs, DISALLOWED, MOCK_TOOLS, preflight, runClaude, type ClaudeOptions } from "./claude.ts";
+import { apiMessagesFromEvents, childEnv, claudeArgs, DISALLOWED, mainCalls, MOCK_TOOLS, preflight, runClaude, type ClaudeOptions } from "./claude.ts";
 
 const init = (tools: string[], servers: string[]) => ({ type: "system", subtype: "init", tools, mcp_servers: servers.map((name) => ({ name, status: "connected" })) });
 const OK = init(["Bash", "Read", "mcp__tallymock__get_planned_workout", "mcp__tallymock__plan_workout_day"], ["tallymock"]);
@@ -111,4 +111,35 @@ test("the scripted user's server passes the preflight only for a run that uses i
   assert.match(String(preflight(withApprover)), /foreign/);
   assert.equal(preflight(withApprover, ["tallymock", "evalapprover"]), null);
   assert.match(String(preflight(init(["mcp__claude_ai_Tally_Workout__plan_workout_day"], ["tallymock", "evalapprover"]), ["tallymock", "evalapprover"])), /foreign/);
+});
+
+// ---------- V7: main-thread API calls per turn ----------
+
+
+const asst = (id: string, content: unknown[], parent: string | null = null) => ({ type: "assistant", parent_tool_use_id: parent, message: { id, content } });
+const tu = (id: string) => ({ type: "tool_use", id, name: "Bash", input: {} });
+
+test("V7: one message sent as several assistant events counts once; a subagent's messages are not main-thread calls", () => {
+  const events = [
+    { type: "system", subtype: "init" },
+    asst("msg_1", [{ type: "text", text: "Reading." }]),
+    asst("msg_1", [tu("t1")]),
+    asst("msg_1", [tu("t2")]),
+    { type: "user", message: { content: [{ type: "tool_result", tool_use_id: "t1" }] } },
+    asst("msg_sub", [tu("t3")], "t2"),
+    asst("msg_sub", [{ type: "text", text: "sub" }], "t2"),
+    asst("msg_2", [{ type: "text", text: "Done." }]),
+  ];
+  const msgs = apiMessagesFromEvents(events);
+  assert.deepEqual(msgs.map((m) => [m.id, m.parent, m.tools]), [["msg_1", null, ["t1", "t2"]], ["msg_sub", "t2", ["t3"]], ["msg_2", null, []]]);
+  assert.equal(mainCalls(msgs), 2);
+});
+
+test("V7: a resumed turn counts only its own messages, even when the stream replays an earlier one", () => {
+  const seen = new Set<string>();
+  const first = apiMessagesFromEvents([asst("a1", [tu("x")]), asst("a2", [{ type: "text", text: "ok" }])], seen);
+  const resumed = apiMessagesFromEvents([asst("a2", [{ type: "text", text: "ok" }]), asst("b1", [tu("y")]), asst("b1", [tu("z")]), asst("b2", [])], seen);
+  assert.equal(mainCalls(first), 2);
+  assert.deepEqual(resumed.map((m) => m.id), ["b1", "b2"]);
+  assert.deepEqual(resumed[0].tools, ["y", "z"]);
 });

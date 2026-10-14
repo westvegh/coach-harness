@@ -28,6 +28,8 @@ Read these at the start of every session, in this order:
 
 If `coach.yaml` does not exist, the athlete is not set up. Offer the `setup` skill.
 
+For a `today` request ("how should I train today?", "heading to the gym", "check in" and the scheduled daily run), `node engine/cli.ts today-brief --stage pre` prints what items 1 to 4 give: run the `today` skill and skip those Reads.
+
 ## The rhythm
 
 - **Today:** the daily run adjusts today's session from readiness and gives a short report (`today` skill). "Check in" gives the same report. The coach reads the data first; it asks one "How do you feel today?" question only on a day when the answer can change the workout.
@@ -82,13 +84,13 @@ Cluster sets are a preference too. When the athlete chooses clusters, or the bri
 
 `node engine/cli.ts mode` prints `unattended` in a scheduled run (cloud or Mac). In an unattended run:
 
-- Run `node engine/cli.ts window-check --kind daily|weekly` first. A nonzero exit means: stop and do nothing else.
+- Run `node engine/cli.ts window-check --kind daily|weekly` first (in the `today` skill, `today-brief --stage pre` runs it first). A nonzero exit means: stop and do nothing else.
 - Never ask questions. No one is there to answer.
 - Do the job of the skill. Small changes are written; a big change becomes one log line for the next live session.
 - Pain in a check-in: avoid the region that day, leave a note, and ask at the next live session.
 - Never clear the urgent stop. Under the stop, write no plan change.
 - Leave a one-line generic note in the day's notes (an `annotate` write) when you change or keep a session for a reason the athlete should see (never on a protected day: there, write nothing and log the proposal line), for example "Adjusted for recovery" or "Rest day: see your coach repo". Symptoms, body regions, pain scores and readiness values stay in the private repo; they go into a logger note only when `coach.yaml` has `consent.logger_health_notes: true`.
-- Commit and push to `main`: `git pull --rebase`, then `node engine/cli.ts push`. It installs the git hooks, checks that the repository is private, and pushes only then; a nonzero exit means nothing was pushed (log it).
+- Commit and push to `main`: `git pull --rebase`, then `node engine/cli.ts push`. It installs the git hooks, checks that the repository is private, and pushes only then; a nonzero exit means nothing was pushed (log it). The `today` skill does all of this in one command: `node engine/cli.ts save --run <run_id>`.
 - If `node_modules` is missing (a fresh clone), run `npm ci` first.
 
 ## Git
@@ -97,6 +99,7 @@ Cluster sets are a preference too. When the athlete chooses clusters, or the bri
 - `athlete/.urgent-stop` is committed and pushed at once (`node engine/cli.ts push`): a cloud run starts from a fresh clone and must see it. It holds only term names, sources and a time.
 - Commit messages carry plan changes and rule IDs only. Never put brief text, pain details or clinician text in them.
 - Push with `node engine/cli.ts push`. It refuses a public repository: athlete data never goes to one.
+- The `today` skill ends with `node engine/cli.ts save --run <run_id>`: its log entry once, the commit, the sync with the remote (`git pull --rebase`; in a worktree, the branch onto `origin/main` and `main` fast-forwarded) and the push through `node engine/cli.ts push`, in one command.
 - Switch branches with `git switch`, not `git checkout <branch>`. Never force-push.
 
 ## Style

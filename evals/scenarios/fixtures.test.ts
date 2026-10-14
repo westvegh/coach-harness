@@ -27,9 +27,9 @@ import { saidAlreadyAdjusted } from "./16-failed-trim-retried.ts";
 
 const scenarios = await loadScenarios();
 
-test("28 scenarios (07, 08a, 08b, 13, 14 and 15 tested guard denials and went in v0.2; V4 added 26 to 29; V5 added 30; V6 added 31 to 33), unique names", () => {
-  assert.equal(scenarios.length, 28);
-  assert.equal(new Set(scenarios.map((s) => s.name)).size, 28);
+test("30 scenarios (07, 08a, 08b, 13, 14 and 15 tested guard denials and went in v0.2; V4 added 26 to 29; V5 added 30; V6 added 31 to 33; V7 added 34 and 35), unique names", () => {
+  assert.equal(scenarios.length, 30);
+  assert.equal(new Set(scenarios.map((s) => s.name)).size, 30);
 });
 
 /** Every file under root, relative (node_modules and .git not entered). */
@@ -144,6 +144,8 @@ const EXPECTED_DECISION: Record<string, string> = {
   "17-aversion-recovery": "recovery",
   // V6: no check-in today, so the subjective category is unknown and the pattern trims; the one question decides.
   "32-pattern-check-in": "trim",
+  // V7: the short pattern with a low rating recorded: trim, with no question.
+  "35-fast-today-write": "trim",
 };
 
 /** Scenarios where a run that does nothing is already correct. */

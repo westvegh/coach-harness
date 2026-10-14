@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { decodeTallyVersion, encodeTallyVersion } from "../adapters/loggers/tally/version.ts";
 import { isCalendarDate, parseInstant } from "./dates.ts";
 import { CoachError } from "./errors.ts";
+import { isSavedFileNotice, markHistoryFailed, mergeHistoryPage, type PageInput } from "./history-windows.ts";
 import { isPlainObject } from "./yaml-file.ts";
 import type { CalendarDate, HistoryExercise, Instant, LoggerExercise, PlannedListing, Snapshot, SnapshotDay, SnapshotSession, Units } from "./types.ts";
 
@@ -270,6 +271,18 @@ export function sessionKey(s: SnapshotSession): string {
   return s.id ? `id:${s.id}` : `at:${s.date}|${s.name ?? ""}|${s.startedAt ?? ""}`;
 }
 
+/** The window fields of a history read's input. */
+function pageInput(input: Record<string, unknown>, batch?: string | null, m?: { tool_use_id?: string | null; resolve?: (id: string) => string | null }): PageInput {
+  return {
+    ...(batch !== undefined ? { batch } : {}),
+    ...(m?.tool_use_id ? { tool_use_id: m.tool_use_id } : {}),
+    ...(m?.resolve ? { resolve: m.resolve } : {}),
+    ...(isCalendarDate(input.since) ? { since: input.since } : {}),
+    ...(isCalendarDate(input.until) ? { until: input.until } : {}),
+    ...(typeof input.cursor === "string" ? { cursor: input.cursor } : {}),
+  };
+}
+
 /** True when a payload is a usable result for the tool (a read that passes its schema, or a write's object result). */
 function validResult(tool: string, p: unknown): boolean {
   if (!isPlainObject(p)) return false;
@@ -293,6 +306,11 @@ export type MergeInput = {
    * V4b: the snapshot belongs to one server; a read from another server starts a new snapshot.
    */
   server?: string;
+  /** V7b: the assistant message that sent the request (a history page's generation binding); null when not known. */
+  batch?: string | null;
+  /** V7c: the request's tool use id, and a lookup of a tool use id's message (the transcript, read later). */
+  tool_use_id?: string | null;
+  resolve?: (toolUseId: string) => string | null;
 };
 
 /**
@@ -329,10 +347,19 @@ export function mergeResponse(prev: Snapshot | null, m: MergeInput): Snapshot {
   };
   // an error or a malformed read is never evidence. It removes what it would
   // have refreshed: the day, the planned listing, or the history coverage.
+  // V7: a failed day read and a failed history window are recorded, so the today brief can say
+  // `failed` (not just `missing`) and name the read to make again.
   const invalidRead = () => {
-    if (m.tool === "get_planned_workout") forget(input.date);
+    const reason = isSavedFileNotice(m.response) ? "the result was too large for the hook (saved to a file)" : "the read returned an error or a malformed result";
+    if (m.tool === "get_planned_workout") {
+      forget(input.date);
+      if (isCalendarDate(input.date)) (snap.failed_days ??= {})[input.date] = { at: m.now, reason };
+    }
     if (m.tool === "get_training_context") delete snap.planned;
-    if (m.tool === "get_workout_history") delete snap.history_coverage;
+    if (m.tool === "get_workout_history") {
+      if (!snap.history_windows) delete snap.history_coverage;
+      markHistoryFailed(snap, pageInput(input, m.batch, m), m.now, reason, isSavedFileNotice(m.response));
+    }
     return snap;
   };
   // Tally T2 replay: nothing new was written and the result has no content. Every date the
@@ -358,6 +385,7 @@ export function mergeResponse(prev: Snapshot | null, m: MergeInput): Snapshot {
     case "get_planned_workout": {
       const d = r.date as string;
       snap.days[d] = dayFromPlannedWorkout(r, m.now);
+      if (snap.failed_days) delete snap.failed_days[d];
       const u = unitOf(r);
       if (u.weightUnit) Object.assign(snap, u);
       break;
@@ -387,23 +415,10 @@ export function mergeResponse(prev: Snapshot | null, m: MergeInput): Snapshot {
         .filter(isPlainObject)
         .map((x) => historySession(x, m.server))
         .filter((s): s is SnapshotSession => s !== null);
-      // V4: merge by session identity, so a page never removes another page's session on the same date.
-      const keys = new Set(sessions.map(sessionKey));
-      const prev = snap.history_coverage;
-      const str = (v: unknown) => (isCalendarDate(v) ? v : undefined);
-      if (typeof input.cursor === "string") {
-        // A later page continues an incomplete chain; alone, it covers nothing known.
-        snap.history_coverage = prev && !prev.complete ? { ...prev, captured_at: m.now, complete: typeof r.nextCursor !== "string" } : { captured_at: m.now, complete: false };
-      } else {
-        snap.history_coverage = { captured_at: m.now, complete: typeof r.nextCursor !== "string", ...(str(input.since) ? { since: str(input.since) } : {}), ...(str(input.until) ? { until: str(input.until) } : {}) };
-      }
-      // V4b: a 0.2.1 snapshot's sessions have no id, start time or server; one on a page's date
-      // is the same session read again under the old rule, so it goes (a new capture always has a server).
-      const pageDates = new Set(sessions.map((x) => x.date));
-      snap.history = snap.history.filter((x) => !(pageDates.has(x.date) && !x.id && !x.startedAt && !x.server));
+      // V4: one session per identity within the page. V7: the page joins its window (contracts §9a).
       const seen = new Set<string>();
       const page = sessions.filter((s) => (seen.has(sessionKey(s)) ? false : (seen.add(sessionKey(s)), true)));
-      snap.history = [...snap.history.filter((s) => !keys.has(sessionKey(s))), ...page].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+      mergeHistoryPage(snap, pageInput(input, m.batch, m), { sessions: page, next: typeof r.nextCursor === "string" ? r.nextCursor : null }, m.now, sessionKey);
       break;
     }
     case "update_planned_workout": {

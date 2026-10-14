@@ -117,7 +117,10 @@ test("routine body: the prompt dispatches explicitly; cron, repo and options", (
   const daily = routineBody("daily", cfg(), REPO, tally, { now: JULY, environment_id: "env_1", model: "claude-sonnet-5-5" }) as any;
   const weekly = routineBody("weekly", cfg(), REPO, tally, { now: JULY }) as any;
   const content = (b: any) => b.job_config.ccr.events[0].data.message.content as string;
-  assert.ok(content(daily).startsWith("First run: node engine/cli.ts window-check --kind daily. If it exits with a nonzero code, stop and do nothing else."));
+  // V7: the daily run starts with today-brief --stage pre (it runs window-check first).
+  assert.ok(content(daily).startsWith("First run: node engine/cli.ts today-brief --stage pre (if node_modules is missing, run npm ci first). If it exits with a nonzero code, stop and do nothing else."));
+  assert.match(content(daily), /Step 1's pre has run: use its output and do not run it again\./);
+  assert.match(content(daily), /the skill's save step \(node engine\/cli\.ts save\): it runs git pull --rebase before it pushes through node engine\/cli\.ts push\./);
   assert.match(content(daily), /read \.claude\/skills\/today\/SKILL\.md and follow it exactly\. Unattended run\./);
   assert.ok(content(weekly).startsWith("First run: node engine/cli.ts window-check --kind weekly."));
   assert.match(content(weekly), /read \.claude\/skills\/week\/SKILL\.md and follow it exactly\. Unattended run\./);
@@ -141,7 +144,7 @@ test("launchd plist: unsets ANTHROPIC_API_KEY and ANTHROPIC_AUTH_TOKEN, sets COA
   const args = [...plist.matchAll(/<string>([^<]*)<\/string>/g)].map((m) => m[1]);
   const i = args.indexOf("/usr/bin/env");
   assert.deepEqual(args.slice(i, i + 8), ["/usr/bin/env", "-u", "ANTHROPIC_API_KEY", "-u", "ANTHROPIC_AUTH_TOKEN", "COACH_UNATTENDED=1", "/home/alex/.local/bin/claude", "-p"]);
-  assert.match(args[i + 8], /^First run: node engine\/cli\.ts window-check --kind daily\..*read \.claude\/skills\/today\/SKILL\.md and follow it exactly\. Unattended run\. This is a scheduled run on the Mac\./);
+  assert.match(args[i + 8], /^First run: node engine\/cli\.ts today-brief --stage pre .*read \.claude\/skills\/today\/SKILL\.md and follow it exactly\. Unattended run\. Step 1's pre has run: use its output and do not run it again\. This is a scheduled run on the Mac\./);
   assert.match(plist, /<key>PATH<\/key>\s*<string>\/home\/alex\/\.local\/bin:\/opt\/homebrew\/bin:/);
   assert.deepEqual(args.slice(i + 9, i + 12).slice(0, 2), ["--permission-mode", "dontAsk"]);
   assert.equal(args[i + 11], "--allowedTools");

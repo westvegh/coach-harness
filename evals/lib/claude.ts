@@ -82,6 +82,39 @@ export function messagesFromEvents(events: unknown[]): Message[] {
   return out;
 }
 
+/**
+ * One assistant API response (V7): its message id, the subagent it belongs to (the stream's
+ * `parent_tool_use_id`; null on the main thread), when it was first seen, and its tool uses.
+ */
+export type ApiMessage = { id: string; parent: string | null; at: number | null; tools: string[] };
+
+/**
+ * The assistant API responses of a stream, in order, one per message id: stream-json sends one
+ * `assistant` event per content block, all with the same message id. `seen`: ids an earlier turn
+ * already counted (a resumed session that replays a message counts it once).
+ */
+export function apiMessagesFromEvents(events: unknown[], seen: Set<string> = new Set()): ApiMessage[] {
+  const out: ApiMessage[] = [];
+  const byId = new Map<string, ApiMessage>();
+  for (const ev of events as any[]) {
+    if (ev?.type !== "assistant" || !ev.message) continue;
+    const id = typeof ev.message.id === "string" ? ev.message.id : null;
+    if (!id || seen.has(id)) continue;
+    let m = byId.get(id);
+    if (!m) {
+      m = { id, parent: typeof ev.parent_tool_use_id === "string" ? ev.parent_tool_use_id : null, at: typeof ev._rt === "number" ? ev._rt : null, tools: [] };
+      byId.set(id, m);
+      out.push(m);
+    }
+    for (const b of Array.isArray(ev.message.content) ? ev.message.content : []) if (b?.type === "tool_use" && typeof b.id === "string" && !m.tools.includes(b.id)) m.tools.push(b.id);
+  }
+  for (const m of out) seen.add(m.id);
+  return out;
+}
+
+/** Main-thread API calls (subagent responses left out). */
+export const mainCalls = (msgs: ApiMessage[]): number => msgs.filter((m) => m.parent === null).length;
+
 export type ClaudeRun = {
   tools: ToolUse[];
   text: string;
@@ -96,6 +129,8 @@ export type ClaudeRun = {
   stderr: string;
   /** The session id from the init event (a follow-up turn resumes it). */
   sessionId: string | null;
+  /** V7: the assistant API responses of this turn, one per message id. */
+  apiMessages?: ApiMessage[];
 };
 
 export type ClaudeOptions = {
@@ -201,7 +236,8 @@ export function runClaude(o: ClaudeOptions): Promise<ClaudeRun> {
       if (ev.type === "assistant" && Array.isArray(ev.message?.content)) {
         for (const b of ev.message.content) {
           if (b.type === "tool_use") {
-            const t: ToolUse = { id: b.id, name: b.name, input: b.input, at: now };
+            // V7: the link from each tool use to its API response and thread.
+            const t: ToolUse = { id: b.id, name: b.name, input: b.input, at: now, ...(typeof ev.message.id === "string" ? { messageId: ev.message.id } : {}), parent: typeof ev.parent_tool_use_id === "string" ? ev.parent_tool_use_id : null };
             byId.set(b.id, t);
             run.tools.push(t);
           }
@@ -245,6 +281,7 @@ export function runClaude(o: ClaudeOptions): Promise<ClaudeRun> {
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", (c: string) => (run.stderr += c));
     child.on("close", (code) => {
+      run.apiMessages = apiMessagesFromEvents(run.events);
       clearTimeout(timer);
       run.messages = messagesFromEvents(run.events);
       if (first && !run.aborted) run.aborted = "preflight: no init event";

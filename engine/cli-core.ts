@@ -158,7 +158,7 @@ export async function cmdSnapshot(argv: string[]): Promise<number> {
  * pushes the urgent stop (`source: "note"`; not with --dry-run).
  */
 export async function cmdSafety(argv: string[]): Promise<number> {
-  const [{ detect, scanSessionNotes, urgentTermsOf }, { isCalendarDate }, urgent] = await Promise.all([import("./safety.ts"), import("./dates.ts"), import("./urgent.ts")]);
+  const { detect } = await import("./safety.ts");
   const { values, positionals } = parseArgs({
     args: argv,
     allowPositionals: true,
@@ -179,18 +179,72 @@ export async function cmdSafety(argv: string[]): Promise<number> {
     return 0;
   }
   if (sub === "scan-notes") {
+    out(await scanNotesResult(values));
+    return 0;
+  }
+  throw new CoachError("USAGE", "usage: safety detect --text <text> | safety scan-notes --since <YYYY-MM-DD> [--input <file>] [--dry-run]  (an urgent term in a note writes, commits and pushes the urgent stop)");
+}
+
+export type ScanNotesOptions = { root?: string; since?: string; input?: string; now?: string; "dry-run"?: boolean; history?: unknown; coverage?: { status: string; reason?: string; need?: unknown[] }; session_id?: string | null };
+
+/**
+ * The `safety scan-notes` result (V7: today-brief --stage post calls the same code). `history`
+ * and `coverage` let the today brief pass the other logger's evidence without a file.
+ */
+export async function scanNotesResult(values: ScanNotesOptions): Promise<Record<string, unknown>> {
+  const [{ scanSessionNotes, urgentTermsOf }, { isCalendarDate }, urgent] = await Promise.all([import("./safety.ts"), import("./dates.ts"), import("./urgent.ts")]);
+  {
     const root = resolve(values.root ?? ".");
     if (!values.since || !isCalendarDate(values.since)) throw new CoachError("USAGE", "safety scan-notes needs --since <YYYY-MM-DD>");
     let history: unknown;
     let server: string | string[] | null = null;
-    if (values.input) history = readJson(values.input);
-    else {
+    // V7: "no urgent match" counts only on complete coverage (contracts §9a). The coach's --input is
+    // that tool's history: {history, complete: true} when the coach knows it is complete; a bare list
+    // is scanned, but its coverage is unknown (V7 review finding 5).
+    let coverage: { status: string; reason?: string; need?: unknown[] } = values.coverage ?? { status: "complete" };
+    const unproven = { status: "missing", reason: "the input does not say its history is complete: pass {history, complete: true}" };
+    if (values.history !== undefined) history = values.history;
+    else if (values.input) {
+      history = readJson(values.input);
+      if (isPlainObject(history) && Array.isArray(history.history)) {
+        coverage = history.complete === true ? { status: "complete" } : unproven;
+        history = history.history;
+      } else coverage = unproven;
+    } else {
       // logger: files: the notes and felt columns of the week files (contracts §12a). logger: other:
-      // no cache (V2b fix 4); the coach passes that tool's notes with --input.
+      // no cache (V2b fix 4); the coach passes that tool's notes with --input. Tally: ONE snapshot
+      // load backs both the coverage and the notes scanned (V7 review finding 4).
       const cs = await import("./coach-snapshot.ts");
-      const fromFiles = cs.filesNotes(root);
-      const path = join(root, SNAPSHOT_RELATIVE);
-      history = fromFiles ?? (cs.loggerOf(root) === "other" ? [] : existsSync(path) ? (readJson(path) as { history?: unknown }).history : []);
+      const cov = await import("./coverage.ts");
+      const { loadConfig } = await import("./config.ts");
+      const cfg = existsSync(join(root, "coach.yaml")) ? loadConfig(join(root, "coach.yaml")) : null;
+      const now = values.now ?? new Date().toISOString();
+      const { athleteToday } = await import("./clusters.ts");
+      const today = athleteToday(root, now);
+      const until = today < values.since ? values.since : today;
+      const session = values.session_id === undefined ? cov.envSession() : values.session_id;
+      const fromFiles = cs.filesNotes(root, cfg);
+      if (fromFiles) {
+        history = fromFiles;
+        const c = cov.loggerHistoryCoverage(root, cfg, values.since, until, now, session);
+        coverage = { status: c.status, ...(c.reason ? { reason: c.reason } : {}), need: c.need };
+      } else if (cs.loggerOf(root, cfg) === "other") {
+        history = [];
+        coverage = { status: "missing", reason: "logger other: the engine cannot read that tool; pass its history with --input" };
+      } else {
+        let snap: import("./types.ts").Snapshot | null = null;
+        try {
+          snap = (await import("./snapshot.ts")).loadSnapshot(root);
+          history = snap?.history ?? [];
+          const c = cov.loggerHistoryCoverage(root, cfg, values.since, until, now, session, snap);
+          coverage = { status: c.status, ...(c.reason ? { reason: c.reason } : {}), need: c.need };
+        } catch (e) {
+          // A snapshot that does not validate: scan what it holds (a match still sets the stop); coverage failed.
+          const path = join(root, SNAPSHOT_RELATIVE);
+          history = existsSync(path) ? ((readJson(path) as { history?: unknown }).history ?? []) : [];
+          coverage = { status: "failed", reason: (e as Error).message };
+        }
+      }
       // V4: which Tally connection the scanned sessions came from, so the coach can check it read the chosen account.
       if (!fromFiles && Array.isArray(history)) {
         const servers = [...new Set(history.map((h) => (isPlainObject(h) && typeof h.server === "string" ? h.server : null)).filter((x): x is string => x !== null))].sort();
@@ -203,10 +257,19 @@ export async function cmdSafety(argv: string[]): Promise<number> {
     const terms = urgentTermsOf(matches);
     const stop = terms.length > 0 && !values["dry-run"] ? await urgent.recordStop(root, { terms, source: "note", now: values.now }, { push: true }) : null;
     const scanned = (history as NotesHistoryEntry[]).filter((h) => isPlainObject(h) && (!values.since || String(h.date) >= values.since)).length;
-    out({ server, sessions: scanned, matches, urgent_terms: terms, urgent_stop: stop });
-    return 0;
+    const complete = coverage.status === "complete";
+    return {
+      server,
+      sessions: scanned,
+      matches,
+      urgent_terms: terms,
+      urgent_stop: stop,
+      coverage: complete ? "complete" : "incomplete",
+      ...(complete ? {} : { coverage_detail: coverage }),
+      // Incomplete coverage and no urgent term: the note scan cannot say "no urgent sign" (unknown).
+      urgent_unknown: !complete && terms.length === 0,
+    };
   }
-  throw new CoachError("USAGE", "usage: safety detect --text <text> | safety scan-notes --since <YYYY-MM-DD> [--input <file>] [--dry-run]  (an urgent term in a note writes, commits and pushes the urgent stop)");
 }
 
 // ---------- end safety ----------
@@ -215,7 +278,42 @@ export async function cmdSafety(argv: string[]): Promise<number> {
 
 /** classify --exercise "<name>" [--id <exerciseId>] [--muscle <m>] | classify --input <file.json> ({before, after, tool, today?, volume?}). */
 export async function cmdClassify(argv: string[]): Promise<number> {
-  const [{ classifyChange }, { loadConfig }, { localDate }, { readBlock }, { loadRules }, { loadSnapshot }, { classify, loadTaxonomy }] = await Promise.all([
+  const { classify, loadTaxonomy } = await import("./taxonomy.ts");
+  const { values } = parseArgs({
+    args: argv,
+    strict: true,
+    options: { root: { type: "string" }, input: { type: "string" }, exercise: { type: "string" }, id: { type: "string" }, muscle: { type: "string" }, "before-snapshot": { type: "string" }, now: { type: "string" }, session: { type: "string" } },
+  });
+  const root = resolve(values.root ?? ".");
+  const tax = loadTaxonomy({ root });
+  // V7: --before-snapshot <date>: `before` and `snapshotDay` are the one snapshot read of that date
+  // (this session's, under 15 minutes old); the input gives {after, tool, today?}.
+  const at = values["before-snapshot"];
+  if (at !== undefined) {
+    if (!values.input) throw new CoachError("USAGE", "classify --before-snapshot <date> needs --input <{after, tool}.json>");
+    const input = readJson(values.input) as Record<string, any>;
+    const [{ loadConfig }, { snapshotBefore }, { asTallyDay, snapshotDayToPlan, tallyDayToPlan }, { loadSnapshot }] = await Promise.all([import("./config.ts"), import("./today-write-prep.ts"), import("./tally-shape.ts"), import("./snapshot.ts")]);
+    const cfg = loadConfig(join(root, "coach.yaml"));
+    const now = values.now ?? new Date().toISOString();
+    const snap = cfg.logger === "files" ? (await import("./coach-snapshot.ts")).coachSnapshot(root, { now, cfg }) : loadSnapshot(root);
+    const sd = snapshotBefore(snap, at, values.session ?? (process.env.CLAUDE_CODE_SESSION_ID || null), now, cfg.logger);
+    const td = asTallyDay(input.after);
+    const after = td ? tallyDayToPlan({ ...td, found: true }, { units: cfg.athlete.units }) : input.after;
+    out(await classifyResult(root, { ...input, before: snapshotDayToPlan(at, sd, cfg.athlete.units), after, snapshotDay: sd }));
+    return 0;
+  }
+  if (values.exercise) {
+    out(classify({ name: values.exercise, exerciseId: values.id ?? null, muscle: values.muscle ?? null }, tax));
+    return 0;
+  }
+  if (!values.input) throw new CoachError("USAGE", "classify needs --exercise <name> or --input <file.json>");
+  out(await classifyResult(root, readJson(values.input) as Record<string, any>));
+  return 0;
+}
+
+/** V7: the `classify --input` result for an input object (today-write-prep calls the same code). */
+export async function classifyResult(root: string, input: Record<string, any>) {
+  const [{ classifyChange }, { loadConfig }, { localDate }, { readBlock }, { loadRules }, { loadSnapshot }, { loadTaxonomy }] = await Promise.all([
     import("./classify.ts"),
     import("./config.ts"),
     import("./dates.ts"),
@@ -224,27 +322,14 @@ export async function cmdClassify(argv: string[]): Promise<number> {
     import("./snapshot.ts"),
     import("./taxonomy.ts"),
   ]);
-  const { values } = parseArgs({
-    args: argv,
-    strict: true,
-    options: { root: { type: "string" }, input: { type: "string" }, exercise: { type: "string" }, id: { type: "string" }, muscle: { type: "string" } },
-  });
-  const root = resolve(values.root ?? ".");
   const tax = loadTaxonomy({ root });
-  if (values.exercise) {
-    out(classify({ name: values.exercise, exerciseId: values.id ?? null, muscle: values.muscle ?? null }, tax));
-    return 0;
-  }
-  if (!values.input) throw new CoachError("USAGE", "classify needs --exercise <name> or --input <file.json>");
-  const input = readJson(values.input) as Record<string, any>;
   const config = loadConfig(join(root, "coach.yaml"));
   const rules = loadRules(join(root, "methods", config.method)) as unknown as Rules;
   // With logger: files the history is the week files (contracts §12a).
   const snap = config.logger === "tally" ? loadSnapshot(root) : (await import("./coach-snapshot.ts")).coachSnapshot(root, { cfg: config });
   const today = typeof input.today === "string" ? input.today : localDate(new Date().toISOString(), config.athlete.timezone);
   const { loadClusters } = await import("./clusters.ts");
-  out(
-    classifyChange(input.before ?? null, input.after ?? null, {
+  return classifyChange(input.before ?? null, input.after ?? null, {
       block: readBlock(root),
       history: snap?.history ?? [],
       tool: String(input.tool ?? "plan_workout_day") as LoggerTool,
@@ -255,7 +340,5 @@ export async function cmdClassify(argv: string[]): Promise<number> {
       today,
       clusters: loadClusters(root, input),
       ...(input.volume ? { volume: input.volume } : {}),
-    }),
-  );
-  return 0;
+    });
 }

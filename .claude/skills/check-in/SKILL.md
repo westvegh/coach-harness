@@ -38,7 +38,7 @@ A check-in writes no plan. It reads `coach.yaml logger` only to route: a report 
    Pass only what step 3 recorded. It merges into today's check-in by answer (`athlete/signals/<today>.json`, `source: chat`): a new value replaces the old one, `none` clears it, and what you leave out stays. With `--urgent` it also writes, commits and pushes the urgent stop: give the urgent-care text and stop (the `safety` skill step 1).
    Then run `node engine/cli.ts commit --message "check-in <today>"`. No pain text in the message. A nonzero exit: stop, and say in one line that the commit failed and why. When the athlete also reported a finished session, run the `log` skill now (`logger: files` or `other`).
 5. **Pain at or above the threshold.** Read `pain_threshold` in `athlete/limits.yaml` (default 4). For a pain score at or above it, run the `safety` skill for that region: one question screen, then the limit the athlete chose. When it finishes, append "- pain handled: <region> <checkin_at>" to the log, with the check-in's time that step 4 printed (`file.checkin.submitted_at`), so the `today` run does not ask again. Below the threshold, note it and plan as usual.
-6. **Run the `today` skill** (interactive) at once, with no question first. It gives today's report.
+6. **Run the `today` skill** (interactive) at once, with no question first, and once only: its first step (`today-brief --stage pre`) reads the check-in you just wrote. It gives today's report.
 
 ## Writes
 

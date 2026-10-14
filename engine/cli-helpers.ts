@@ -29,7 +29,7 @@ import { CoachError } from "./errors.ts";
 // a command loads only its own modules, so the CLI starts fast.
 import type { TallyDayPlan, TallyExerciseEntry } from "./tally-shape.ts";
 import type { Connector, RoutineKind } from "./automation.ts";
-import type { SessionHistory } from "./loads.ts";
+import type { LoadSuggestion, SessionHistory } from "./loads.ts";
 import type { Template } from "./methods.ts";
 import type { OpKind } from "./opid.ts";
 import type { Block, CoachConfig, DayPlan, Limits, Rules, Snapshot, Units, WeekLog } from "./types.ts";
@@ -216,6 +216,16 @@ async function dayInput(a: Args, root: string, units: Units): Promise<DayInput> 
 }
 
 async function cmdAdjust(a: Args): Promise<number> {
+  out(await computeAdjust(a));
+  return 0;
+}
+
+/** V7: the adjust result for these arguments, as `adjust` prints it (today-brief calls the same code). */
+export async function adjustFor(argv: string[]): Promise<Record<string, unknown>> {
+  return computeAdjust(args(argv));
+}
+
+async function computeAdjust(a: Args): Promise<Record<string, unknown>> {
   const root = rootOf(a);
   const cfg = await maybeConfig(root);
   const { inp, day, tally } = await dayInput(a, root, cfg?.athlete.units ?? "lbs");
@@ -232,13 +242,9 @@ async function cmdAdjust(a: Args): Promise<number> {
     limits: await limitsAt(root),
     ...(typeof pm === "number" ? { planned_minutes: pm } : {}),
   });
-  if (!tally) {
-    out(res);
-    return 0;
-  }
+  if (!tally) return res as unknown as Record<string, unknown>;
   const back = planToTallyDay(res.day);
-  out({ ...res, tally_day: back.day, warnings: back.warnings });
-  return 0;
+  return { ...res, tally_day: back.day, warnings: back.warnings };
 }
 
 /**
@@ -248,6 +254,16 @@ async function cmdAdjust(a: Args): Promise<number> {
  */
 async function cmdLoads(a: Args): Promise<number> {
   if (a.values.fill) return cmdLoadsFill(a);
+  out(await computeLoads(a));
+  return 0;
+}
+
+/** V7: the loads result for these arguments (not --fill), as `loads` prints it (today-brief calls the same code). */
+export async function loadsFor(argv: string[]): Promise<Record<string, unknown>> {
+  return computeLoads(args(argv));
+}
+
+async function computeLoads(a: Args): Promise<Record<string, unknown>> {
   if (a.values.history) throw new CoachError("USAGE", "--history goes with loads --input <week file> --fill");
   const root = rootOf(a);
   const cfg = await maybeConfig(root);
@@ -264,10 +280,12 @@ async function cmdLoads(a: Args): Promise<number> {
   const inp = d.inp;
   let history = inp.history as SessionHistory | undefined;
   const strictUnits = tallyDay !== null || history === undefined;
+  // V7: the snapshot whose history the loads use also backs the coverage (one read; V7 review finding 4).
+  let used: Snapshot | null = null;
   if (!history) {
     // The snapshot already read for --from-snapshot is reused.
-    const snap = d.snap ?? (await import("./coach-snapshot.ts")).coachSnapshot(root, { now: a.values.now, cfg });
-    history = snap?.history ?? [];
+    used = d.snap ?? (await import("./coach-snapshot.ts")).coachSnapshot(root, { now: a.values.now, cfg });
+    history = used?.history ?? [];
   }
   const exercises = tallyDay ? tallyDay.exercises : inp.exercises;
   if (!Array.isArray(exercises)) throw new CoachError("INPUT_ERROR", "loads input needs exercises or a Tally day");
@@ -277,13 +295,29 @@ async function cmdLoads(a: Args): Promise<number> {
   const { athleteToday, loadClusters } = await import("./clusters.ts");
   const { isCalendarDate } = await import("./dates.ts");
   const date = tallyDay ? tallyDay.date : isCalendarDate(inp.date) ? inp.date : athleteToday(root, a.values.now);
-  const suggestions = suggestLoads(exercises as never, history, await rulesAt(root, cfg), units, { tax: loadTaxonomy({ root }), strictUnits, clusters: loadClusters(root, inp), date });
-  if (!tallyDay) {
-    out({ units, suggestions });
-    return 0;
+  let suggestions: LoadSuggestion[] = suggestLoads(exercises as never, history, await rulesAt(root, cfg), units, { tax: loadTaxonomy({ root }), strictUnits, clusters: loadClusters(root, inp), date });
+  // V7: the history came from the cache, so say whether it covers the 8 weeks to the day
+  // (contracts §9a). From the snapshot (today's progression), an incomplete history holds every
+  // load: the latest session may be missing, so no load changes on it.
+  let coverage: Record<string, unknown> | undefined;
+  if (inp.history === undefined) {
+    const [{ loggerHistoryCoverage, standardRange }, { athleteToday: todayOf }] = await Promise.all([import("./coverage.ts"), import("./clusters.ts")]);
+    const now = a.values.now ?? new Date().toISOString();
+    const today = todayOf(root, now);
+    const r = standardRange(date < today ? date : today);
+    const cov = loggerHistoryCoverage(root, cfg, r.since, r.until, now, sessionOf(a), used);
+    coverage = { status: cov.status, since: r.since, until: r.until, ...(cov.reason ? { reason: cov.reason } : {}) };
+    if (cov.status !== "complete" && a.values["from-snapshot"]) {
+      suggestions = suggestions.map((s) => ({
+        exerciseId: s.exerciseId,
+        reason: `held: the history is incomplete (${cov.reason ?? cov.status}); the planned load stays`,
+        rule_ids: [],
+        ...(s.suggestedWeight !== undefined ? { held_suggestion: s.suggestedWeight } : {}),
+      }));
+    }
   }
-  out({ units, suggestions, update: loadOperations(tallyDay, suggestions, units) });
-  return 0;
+  if (!tallyDay) return { units, suggestions, ...(coverage ? { coverage } : {}) };
+  return { units, suggestions, update: loadOperations(tallyDay, suggestions, units), ...(coverage ? { coverage } : {}) };
 }
 
 /**
@@ -435,14 +469,25 @@ async function cmdLaunchdPlist(a: Args): Promise<number> {
  * and launchd prompts, run it first. Interactive runs are never refused.
  */
 async function cmdWindowCheck(a: Args): Promise<number> {
+  const r = await computeWindowCheck(a);
+  out(r.result);
+  return r.exit;
+}
+
+/** V7: the window-check result and exit code for these arguments (today-brief --stage pre calls the same code). */
+export async function windowCheckFor(argv: string[]): Promise<{ result: Record<string, unknown>; exit: number }> {
+  return computeWindowCheck(args(argv));
+}
+
+async function computeWindowCheck(a: Args): Promise<{ result: Record<string, unknown>; exit: number }> {
   const root = rootOf(a);
   const [kind] = kindOf(a);
   const [{ windowCheck }, { parseInstant }, { mode }] = await Promise.all([import("./automation.ts"), import("./dates.ts"), import("./mode.ts")]);
   const now = a.values.now ? parseInstant(a.values.now, "--now") : Date.now();
   const res = windowCheck(kind, await config(root), now);
   const enforced = mode() === "unattended";
-  out({ ...res, enforced, inside: enforced ? res.inside : true, ...(enforced ? {} : { reason: `interactive run: no window (${res.reason})` }) });
-  return enforced && !res.inside ? EXIT_OUTSIDE_WINDOW : 0;
+  const result = { ...res, enforced, inside: enforced ? res.inside : true, ...(enforced ? {} : { reason: `interactive run: no window (${res.reason})` }) };
+  return { result, exit: enforced && !res.inside ? EXIT_OUTSIDE_WINDOW : 0 };
 }
 
 /** Writes to ~/Library/LaunchAgents only with --yes; --load also runs launchctl bootstrap. */

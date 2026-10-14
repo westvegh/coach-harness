@@ -77,6 +77,12 @@ export const ALLOW_RULES = [
     "block write *",
     "tally-days *",
     "snapshot reset",
+    // V7: the fast today (docs/build/reports/V7-fast-today.md).
+    "today-brief --stage pre",
+    "today-brief --stage post",
+    "today-brief --stage post *",
+    "today-write-prep --input *",
+    "save --run *",
   ].map((c) => `Bash(node engine/cli.ts ${c})`),
   "Bash(npm ci)",
   "Bash(git -C * merge --ff-only *)",

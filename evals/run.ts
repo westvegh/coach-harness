@@ -19,7 +19,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
 import { writeState, type MockState } from "./mock-tally/client.ts";
-import { BASE_TOOLS, messagesFromEvents, MOCK_TOOLS, runClaude } from "./lib/claude.ts";
+import { apiMessagesFromEvents, BASE_TOOLS, mainCalls, messagesFromEvents, MOCK_TOOLS, runClaude, type ApiMessage } from "./lib/claude.ts";
 import { check } from "./lib/checks.ts";
 import { collectGh, collectGit, collectMock, collectVerdicts, snapshotFiles } from "./lib/collect.ts";
 import { createInstance, git, MOCK_SERVER, mcpConfigWithFlags, publicExport, REPO, TZ, todayLocal, type Instance } from "./lib/instance.ts";
@@ -94,6 +94,8 @@ export async function runOnce(s: Scenario, n: number, opts: { model: string; tim
   const turns = [{ prompt: s.prompt, resume: false }, ...(s.turns ?? [])];
   const all = { tools: [] as RunArtifacts["tools"], events: [] as unknown[], stderr: "", text: "", isError: false, turns: 0, costUsd: null as number | null, durationMs: 0, exitCode: null as number | null, aborted: null as string | null };
   const records: TurnRecord[] = [];
+  const apiMessages: (ApiMessage & { turn: number })[] = [];
+  const seenMessages = new Set<string>();
   let sessionId: string | null = null;
   // The permission proxy runs in a trusted folder, as an athlete's copy is (lib/trust.ts).
   const untrust = opts.proxy ? trustWorkspace(inst.root) : () => {};
@@ -129,6 +131,12 @@ export async function runOnce(s: Scenario, n: number, opts: { model: string; tim
     record.costUsd = claude.costUsd;
     record.exitCode = claude.exitCode;
     record.isError = claude.isError;
+    // V7: main-thread API calls per turn; a resumed session's replayed message counts once.
+    const msgs = apiMessagesFromEvents(claude.events, seenMessages);
+    apiMessages.push(...msgs.map((m) => ({ ...m, turn: records.length })));
+    record.mainCalls = mainCalls(msgs);
+    record.messageIds = msgs.filter((m) => m.parent === null).map((m) => m.id);
+    record.durationMs = claude.durationMs;
     record.after = snapshotFiles(inst.root, s.watch);
     record.commits = git(inst.root, "rev-list", "HEAD", `^${instanceSha}`).split("\n").filter(Boolean);
     records.push(record);
@@ -166,6 +174,8 @@ export async function runOnce(s: Scenario, n: number, opts: { model: string; tim
     ...(opts.proxy ? { proxy: true, trusted: !UNTRUSTED.test(all.stderr) } : {}),
     instance: { exportSha: exp.sha, exportDirty: exp.dirty, fresh: !!s.fresh },
     model,
+    claudeVersion: claudeVersion(),
+    apiMessages,
     paths: { root: inst.root, historyHome: inst.historyHome },
     ...(bootstrap ? { bootstrap } : {}),
   };
@@ -189,6 +199,19 @@ export async function runOnce(s: Scenario, n: number, opts: { model: string; tim
   if (!opts.keep) rmSync(inst.dir, { recursive: true, force: true });
   else writeFileSync(join(out, "instance-path.txt"), inst.dir + "\n");
   return rec;
+}
+
+let version: string | undefined;
+/** The Claude Code version (V7: recorded for every speed run). */
+function claudeVersion(): string {
+  if (version === undefined) {
+    try {
+      version = execFileSync("claude", ["--version"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    } catch {
+      version = "unknown";
+    }
+  }
+  return version;
 }
 
 /** The screens the scripted athlete answered (one line per AskUserQuestion call). */

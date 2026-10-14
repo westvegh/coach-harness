@@ -23,7 +23,7 @@ To see one plist without installing it: `node engine/cli.ts launchd-plist --kind
 
 ```sh
 env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN COACH_UNATTENDED=1 \
-  /absolute/path/to/claude -p "First run: node engine/cli.ts window-check --kind daily. … Otherwise read .claude/skills/today/SKILL.md and follow it exactly. Unattended run. …" \
+  /absolute/path/to/claude -p "First run: node engine/cli.ts today-brief --stage pre … Otherwise read .claude/skills/today/SKILL.md and follow it exactly. Unattended run. Step 1's pre has run: use its output and do not run it again. …" \
   --permission-mode dontAsk --allowedTools Read Glob Grep "Bash(node engine/cli.ts:*)" "Bash(git status:*)" … "Write(athlete/log/**)" … mcp__claude_ai_Tally_Workout__…
 ```
 

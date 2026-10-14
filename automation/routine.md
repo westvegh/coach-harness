@@ -49,11 +49,13 @@ v0.2 has no hook that checks this list again. Code enforces two rules in every r
 
 The prompt never relies on skill descriptions. It says, for example:
 
-> First run: node engine/cli.ts window-check --kind daily. If it exits with a nonzero code, stop and do nothing else. Otherwise read .claude/skills/today/SKILL.md and follow it exactly. Unattended run. This is a scheduled cloud routine. If node_modules is missing, run npm ci first. Push only with node engine/cli.ts push: it installs the git hooks, checks that the repository is private, and then pushes. If it exits nonzero, nothing was pushed; log the reason and stop. Commit to the main branch: run git pull --rebase before you push.
+> First run: node engine/cli.ts today-brief --stage pre (if node_modules is missing, run npm ci first). If it exits with a nonzero code, stop and do nothing else. Otherwise read .claude/skills/today/SKILL.md and follow it exactly. Unattended run. Step 1's pre has run: use its output and do not run it again. This is a scheduled cloud routine. If node_modules is missing, run npm ci first. Push only with node engine/cli.ts push: it installs the git hooks, checks that the repository is private, and then pushes. If it exits nonzero, nothing was pushed; log the reason and stop. Commit to the main branch with the skill's save step (node engine/cli.ts save): it runs git pull --rebase before it pushes through node engine/cli.ts push.
+
+The weekly prompt starts with `node engine/cli.ts window-check --kind weekly` in the same way, and ends "Commit to the main branch: run git pull --rebase before you push."
 
 A cloud run starts from a fresh clone with no `node_modules` and no git hooks (git does not clone the hooks folder). The urgent gate needs no packages, so it works before `npm ci`. Every push goes through `node engine/cli.ts push`: it installs the pre-push hook, runs `prepush-check` (the hook is installed and `gh api` reports the repository as private), and pushes only after both pass. A raw `git push` is not on the run's tool list.
 
-The `today` and `week` skills also run `window-check` first, before any other step.
+The `today` and `week` skills also run `window-check` first, before any other step. In the `today` skill, `node engine/cli.ts today-brief --stage pre` runs it first (exit 4 outside the window) and the daily prompt starts with it, so the skill goes on from its output. The skill ends with `node engine/cli.ts save`: the log entry, the commit, the sync with the remote and the push through `node engine/cli.ts push`, in one command.
 
 `window-check` reads the athlete's local time from `coach.yaml`:
 

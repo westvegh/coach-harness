@@ -2,6 +2,21 @@
 
 All notable changes to this project are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [semantic versioning](https://semver.org/).
 
+## [0.2.6]
+
+A fast daily run. From a coach run on 0.2.5 that took 6 minutes to answer "heading to the gym".
+
+### Changed for the athlete
+
+- **Today's report comes faster.** The coach now reads your files and Tally in a few steps, not dozens: one engine pass before the Tally reads, every Tally read at once, one engine pass after them, and one step to log, commit and push. In the test run, "heading to the gym" on a normal day took 6 model steps and 34 seconds (before: 11 steps and 44 seconds); a day with a lighter session took 10 steps and 36 seconds (before: 17 steps and 54 seconds).
+- **The same answer and the same safety.** The report, the questions and the rules do not change. When the coach cannot read your whole history, it says safety is unknown and changes nothing that day.
+
+### Fixed
+
+- **Parallel Tally reads could lose data.** Reads that finish at the same time no longer overwrite each other in the coach's cache.
+- **A note scan with no history said "no warning sign".** It now says the history is incomplete, so the answer is unknown, not "nothing found".
+- **Loads from an incomplete history.** The coach no longer raises a load when the latest session may be missing from what it read.
+
 ## [0.2.5]
 
 A data-first check-in, and the coach recommends. From a coach run on 0.2.4.

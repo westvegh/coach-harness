@@ -53,6 +53,8 @@ It acts on patterns, not on single days. An "off-morning" is a morning when HRV 
 | "Want to train" at 1 (you do not want to train at all) | A recovery day. The coach tells you why. You can keep the session instead. |
 | 7 or more off-mornings in a row, plus a low check-in and a performance drop | Propose an early deload or a new block. You approve it. |
 
+**The daily run is fast.** It takes a few model steps, not dozens: one engine command (`today-brief --stage pre`) reads the coach's own files, then the coach makes every Tally read in one step, then one more engine command (`today-brief --stage post`) gives the note scan, today's day, readiness, the loads and the change to make. A change gets one preparation command (`today-write-prep`), then the write and a read-back. One command (`save`) writes the log, commits and pushes. Safety is never faster by skipping work: when the history could not be read in full, safety is unknown, and the coach changes nothing that day.
+
 The coach recommends: it says its pick and the reason, and you change it if you want. On a run of off-mornings, the report also invites you to say whether your sleep, eating or drinking changed. It never sets food or supplement targets. A change to the whole program needs all three kinds of evidence, and it needs your yes. The output of `node engine/cli.ts readiness --date <date>` shows the run (`pattern`), the `decision`, the reasons and the rule IDs.
 
 ### Method packs

@@ -498,8 +498,10 @@ test("F4: pages merge by session identity: same-date sessions across pages, a re
   // With ids, the id is the identity; a page with the same session twice keeps one.
   let ids = m(null, [sess("2026-10-03", "A", { id: "x1" }), sess("2026-10-03", "A", { id: "x2" }), sess("2026-10-03", "A", { id: "x1" })], { since: "2026-09-01" });
   assert.equal(ids.history.length, 2);
+  // V7: a new first page of the same window is a new generation; it replaces the old one, so x2
+  // (gone from the server's answer) leaves (contracts §9a; changed on purpose from V4's "both stay").
   ids = m(ids, [sess("2026-10-03", "A renamed", { id: "x1" })], { since: "2026-09-01" });
-  assert.deepEqual(ids.history.map((s) => s.name).sort(), ["A", "A renamed"]);
+  assert.deepEqual(ids.history.map((s) => s.name).sort(), ["A renamed"]);
   // A stopped chain: the first page's sessions stay; the coverage says incomplete.
   const stopped = m(null, [sess("2026-10-05", "Lower")], { since: "2026-09-01" }, "c9");
   assert.equal(stopped.history.length, 1);

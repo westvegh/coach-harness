@@ -81,12 +81,15 @@ function readJsonFile(path: string): unknown {
 }
 
 async function cmdReadinessDate(a: Args): Promise<number> {
-  const root = rootOf(a);
+  out(await readinessDateResult(rootOf(a), a.values.date!, await nowOf(a)));
+  return 0;
+}
+
+/** V7: the `readiness --date` result (today-brief --stage post calls the same code). */
+export async function readinessDateResult(root: string, date: string, now: string) {
   const cfg = await config(root);
   const [{ readinessForDate }, { coachSnapshot }] = await Promise.all([import("./readiness-date.ts"), import("./coach-snapshot.ts")]);
-  const now = await nowOf(a);
-  out(readinessForDate({ root, date: a.values.date!, now, config: cfg, rules: await packRules(root, cfg), snapshot: coachSnapshot(root, { now, cfg }) }));
-  return 0;
+  return readinessForDate({ root, date, now, config: cfg, rules: await packRules(root, cfg), snapshot: coachSnapshot(root, { now, cfg }) });
 }
 
 async function cmdWeeks(a: Args): Promise<number> {

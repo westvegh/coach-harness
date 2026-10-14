@@ -48,6 +48,12 @@
 //   node engine/cli.ts commit --message <text> | tally-mention [--sessions <n>] | logger set tally|files|other | history-files
 //   --- end setup v2 ---
 //
+//   --- V7: the fast today (contracts §22b) ---
+//   node engine/cli.ts today-brief --stage pre|post [--input <evidence.json>]   (pre exit 4: outside the window)
+//   node engine/cli.ts today-write-prep --input <{after, tool, kind}.json>
+//   node engine/cli.ts save --run <run_id> --message <text> [--no-change <reason>] [--input <{lines}.json>] [--sessions <n>]
+//   --- end V7 ---
+//
 //   --- update (handlers in engine/cli-update.ts; contracts §24) ---
 //   node engine/cli.ts update --check [--ref <tag or branch>] [--root <main checkout>]
 //   node engine/cli.ts update --yes --to <sha> [--keep-mine <path>]... [--take-template <path>]... [--root <main checkout>]
@@ -152,6 +158,14 @@ export async function main(argv: string[]): Promise<number> {
       case "config-check":
         return await (await import("./cli-update.ts")).cmdConfigCheck(rest);
       // --- end update ---
+      // --- V7: the fast today (contracts §22b) ---
+      case "save":
+        return await (await import("./save.ts")).cmdSave(rest);
+      case "today-brief":
+        return await (await import("./cli-today.ts")).cmdTodayBrief(rest);
+      case "today-write-prep":
+        return await (await import("./cli-today.ts")).cmdTodayWritePrep(rest);
+      // --- end V7 ---
       // --- signals ---
       case "signals":
         return (await import("./signals-cli.ts")).cmdSignals(rest);

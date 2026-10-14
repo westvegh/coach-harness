@@ -44,10 +44,25 @@ export type Turn = { prompt: string | ((ctx: { today: string }) => string); resu
 
 /** Where each turn of a run starts, and the watched files after it. */
 /** `commits`: the commits on HEAD since the instance, at the end of the turn (V4b). */
-export type TurnRecord = { firstTool: number; firstMessage: number; firstScreen: number; mockCalls: number; after: Record<string, string | null>; costUsd: number | null; exitCode?: number | null; isError?: boolean; commits?: string[] };
+export type TurnRecord = {
+  firstTool: number;
+  firstMessage: number;
+  firstScreen: number;
+  mockCalls: number;
+  after: Record<string, string | null>;
+  costUsd: number | null;
+  exitCode?: number | null;
+  isError?: boolean;
+  commits?: string[];
+  /** V7: main-thread assistant API calls in this turn (one per message id; subagents left out), the ids, and the turn's wall time. */
+  mainCalls?: number;
+  messageIds?: string[];
+  durationMs?: number;
+};
 
 /** `at` and `resultAt`: when the runner received the tool use and its result (epoch ms; V4). */
-export type ToolUse = { id: string; name: string; input: any; result?: { isError: boolean; text: string }; at?: number; resultAt?: number };
+/** V7: `messageId` links the tool use to its assistant API response; `parent` is its subagent's tool use id (null: the main thread). */
+export type ToolUse = { id: string; name: string; input: any; result?: { isError: boolean; text: string }; at?: number; resultAt?: number; messageId?: string; parent?: string | null };
 
 /** Everything a run leaves behind. Checks are pure functions of this. */
 export type RunArtifacts = {
@@ -96,6 +111,10 @@ export type RunArtifacts = {
   bootstrap?: BootstrapState;
   /** The model the run used (V4: the setup scenarios pin one). */
   model?: string;
+  /** V7: the Claude Code version of the run (`claude --version`). */
+  claudeVersion?: string;
+  /** V7: every assistant API response of the run, one per message id, with its turn. */
+  apiMessages?: (import("./claude.ts").ApiMessage & { turn: number })[];
   /** The instance root and the COACH_HISTORY_HOME folder of the run (V4: reads outside them fail the history scenarios). */
   paths?: { root: string; historyHome: string };
 };

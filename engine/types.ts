@@ -411,7 +411,45 @@ export type SnapshotDay = {
  * the exercise notes feed the note scan; `id` and `startedAt` identify a session across pages;
  * `server` is the MCP server that returned it (V4).
  */
-export type SnapshotSession = { date: CalendarDate; name?: string; weightUnit?: Units; exercises: HistoryExercise[]; notes?: string; id?: string; startedAt?: string; server?: string };
+export type SnapshotSession = {
+  date: CalendarDate;
+  name?: string;
+  weightUnit?: Units;
+  exercises: HistoryExercise[];
+  notes?: string;
+  id?: string;
+  startedAt?: string;
+  server?: string;
+  /** V7: the history pages that returned this session, as `<window key>#<generation>#<page index>` (engine/history-windows.ts). */
+  windows?: string[];
+};
+
+/**
+ * V7: one history window (contracts §9a): a `get_workout_history` chain over an inclusive
+ * `since`/`until` range. A first page starts a new generation; a later page counts only when its
+ * cursor continues this chain. Complete when the chain ended with no `nextCursor`.
+ */
+export type HistoryWindow = {
+  since?: CalendarDate;
+  until?: CalendarDate;
+  generation: number;
+  /** The pages of the current generation, in chain order: the cursor each read sent and the `nextCursor` it returned. */
+  pages: { cursor: string | null; next: string | null; captured_at: Instant; suspect?: boolean }[];
+  complete: boolean;
+  /**
+   * The cursor the previous generation's chain still had open when this generation started, with
+   * the assistant message that sent the refresh (null: not known). A page that brings that cursor
+   * from the same message is the old read (dropped); from a known later message it is this
+   * generation's; from an unknown message it is data, not coverage, until read again.
+   */
+  superseded?: { cursor: string; batch: string | null; tool_use_id?: string }[];
+  /** V7c: a page with an unknown binding, or a failed later page: incomplete until a new first page. */
+  ambiguous?: boolean;
+  /** V7d: how many times a new first page restarted this window after it was ambiguous (one allowed). */
+  restarts?: number;
+  /** The last read of this window failed (an error, a malformed page, a saved-file notice, or more than 10 pages). */
+  failed?: { at: Instant; reason: string; oversized?: boolean; overflow?: boolean; cursor?: string };
+};
 
 /** A future day the logger listed in its training context (no exercise detail, no version). */
 export type PlannedListing = { dayName: string; source: string; userModified: boolean; skipped: boolean; exerciseCount: number };
@@ -427,7 +465,13 @@ export type Snapshot = {
    * What the history reads cover. Absent: no valid history read. `complete`
    * is false while more pages remain. `since`/`until` echo the requested range.
    */
-  history_coverage?: { captured_at: Instant; complete: boolean; since?: CalendarDate; until?: CalendarDate };
+  history_coverage?: { captured_at: Instant; complete: boolean; since?: CalendarDate; until?: CalendarDate; reason?: string };
+  /** V7: the history windows read in this session, by key `<since>..<until>` (engine/history-windows.ts). */
+  history_windows?: Record<string, HistoryWindow>;
+  /** V7: history pages whose cursor continued no window's chain; they count for nothing. */
+  history_orphans?: number;
+  /** V7: dates whose last get_planned_workout read failed (an error or a malformed result), cleared by a good read. */
+  failed_days?: Record<CalendarDate, { at: Instant; reason: string }>;
   profile?: Record<string, unknown> | null;
   /** From the training-context read: every planned day from `planned_from` on. */
   planned?: { captured_at: Instant; from: CalendarDate; dates: Record<CalendarDate, PlannedListing> };

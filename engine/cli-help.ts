@@ -44,7 +44,13 @@ export const HELP: Record<string, string> = {
   "limits-hash": "limits-hash [--file <limits.yaml>]  — the limits file's hash (§2)",
   snapshot: "snapshot show | snapshot reset  — print the Tally snapshot cache; empty it (it is a cache; setup resets it after the account question) (§9)",
   safety: "safety detect --text <text> | safety scan-notes --since <YYYY-MM-DD> [--input <history.json>] [--dry-run]  — urgent and pain terms in text; in logged notes (an urgent term writes the urgent stop) (§10)",
-  classify: "classify --exercise \"<name>\" [--id <exerciseId>] [--muscle <m>] | classify --input <{before, after, tool, today?}.json>  — an exercise's patterns, or a change's kind (small or big) (§6)",
+  classify: "classify --exercise \"<name>\" [--id <exerciseId>] [--muscle <m>] | classify --input <{before, after, tool, today?}.json> | classify --before-snapshot <date> --input <{after, tool}.json>  — an exercise's patterns, or a change's kind (small or big); --before-snapshot takes before and snapshotDay from one snapshot read (§6)",
+  "today-brief":
+    "today-brief --stage pre  — the window (exit 4 outside it), a new run_id, the mode, local time, logger, limits, Preferences, check-in pain, open proposals, the wearable refresh and the reads to make in one message\n" +
+    "today-brief --stage post [--input <evidence.json>]  — after the reads: coverage, the note scan (an urgent term writes the stop), urgent, today's day, already adjusted, limits, readiness with report facts, loads and adjust when they apply, need_reads; --input: logger other's {history, history_complete, today: {read, found, day}}  (§22b)",
+  "today-write-prep":
+    'today-write-prep --input <{after|edit, tool, kind}.json>  — classify, the limits on the final day (and the week with today replaced when a weekly cap applies), and the write arguments (plain; approved on a protected day), each with its opId\n' +
+    'input: {"edit": {"notes": "...", "exercises": [{"index": 0, "set": {"suggestedWeight": 195}}]}} (applied to today as read; annotate: notes only) or {"after": <adjust\'s tally_day, or post\'s write_base day, changed>}, with "tool": "update_planned_workout"|"plan_workout_day", "kind": "trim_session" — after: {"date","dayType","dayName","notes","exercises":[{"exerciseId","name","suggestedSets","suggestedReps","repsMax","suggestedWeight","perSide","notes"}],"weightUnit"}  (§22b)',
   checkin: "checkin --date <YYYY-MM-DD> [--overall 1-5 | --sleep-quality 1-5 --energy 1-5 --soreness 1-5 --stress 1-5] [--want-to-train 1-5|none] [--pain region:score,...|none] [--urgent <term>,...]  — record today's check-in (live only; §11): at least one answer or --urgent; merges into today's check-in by group, none clears an answer, --urgent alone writes only the stop",
   oplog: "oplog done --date <YYYY-MM-DD> --kind <kind>  — whether a Tally write of that kind is done on that date, from the write log (§15)",
   mode: "mode  — interactive or unattended (§15)",
@@ -57,6 +63,9 @@ export const HELP: Record<string, string> = {
   "install-git-hooks": "install-git-hooks  — install the pre-push privacy hook (§10a)",
   "prepush-check": "prepush-check [--remote origin]  — ok: true when the pre-push hook is installed and the repository is private; exit 1: do not push (§10a)",
   push: "push [--branch <name>]  — the hooks, the privacy check, then git push origin; exit 1: nothing pushed (§10a)",
+  save:
+    "save --run <run_id> --message <text> [--no-change <reason>] [--input <{lines}.json>] [--part safety-<region>-<event>] [--sessions <n>]  — the end of a today run: the log entry once (- run: <run_id>), tally-mention (files|other, live), commit, main up to date with origin, the trusted push of main\n" +
+    'input: {"lines": ["- proposal for the next live session: <the change>"]}; --no-change takes the readiness line from the run\'s post result (a run already in the log is only published); --part safety-<region>-<event> saves lines as their own entry (- run: <run_id> <part>), one marker per event; outcome published | local_sync_failed | not_published (exit 1; the log gets "push skipped") | nothing_to_save  (§22b)',
   update: "update --check [--ref <tag or branch>] [--root <main checkout>] | update --yes --to <sha> [--keep-mine <path>]... [--take-template <path>]... [--root <main checkout>]  — bring in the template's fixes (update skill; §24)",
   "config-check": "config-check  — the problems in coach.yaml; exit 1 when it has any (§24)",
   help: "help [<command> [<subcommand>]]  — the usage and input shape of a command",
