@@ -45,6 +45,7 @@ export const DAY_RECORD_SCHEMA: Schema = {
     hrv: { type: "object", required: ["value_ms", "method"], properties: { value_ms: { type: "number", minimum: 0, maximum: 500 }, method: { enum: ["rmssd", "sdnn"] } } },
     rhr: { type: "object", required: ["bpm"], properties: { bpm: { type: "number", minimum: 20, maximum: 250 } } },
     vendor_score: { type: "number", minimum: 0, maximum: 100 },
+    temperature: { type: "object", required: ["deviation_c"], properties: { deviation_c: { type: "number", minimum: -5, maximum: 5 } } },
     checkin_at: INSTANT,
     subjective: {
       type: "object",

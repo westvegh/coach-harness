@@ -139,7 +139,7 @@ export function setupScenario(name: string, logger: "tally" | "files", v: SetupV
     answers: [...(v.answers ?? []), ...SETUP_ANSWERS],
     prompt: v.prompt ?? "Set me up as a new athlete.",
     setup(ctx) {
-      // Tally: 9 weeks of history and no planned day. Files: no Tally server at all.
+      // Tally: completed sessions before today in this week and the previous 9 weeks; no planned day. Files: no Tally server at all.
       if (tally) Object.assign(ctx.mock, { ...tallyState(ctx.today), days: {} });
       v.setup?.(ctx);
     },

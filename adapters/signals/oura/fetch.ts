@@ -3,7 +3,8 @@
 //   node adapters/signals/oura/fetch.ts --days 30 [--root <repo>] [--tz <IANA>]
 //
 // Reads /v2/usercollection/sleep (average_hrv as RMSSD, lowest_heart_rate, the sleep
-// period) and /v2/usercollection/daily_readiness (score → vendor_score), normalizes them to
+// period) and /v2/usercollection/daily_readiness (score → vendor_score,
+// temperature_deviation → temperature.deviation_c), normalizes them to
 // DayRecord[] (method rmssd; the main sleep period only) and merges them into
 // athlete/.cache/signals/oura.json: fetched dates are replaced, older dates are kept so
 // the 30-day baseline survives a short fetch.
@@ -45,7 +46,7 @@ export type OuraSleep = {
 };
 
 /** The fields of PublicDailyReadiness this adapter reads. */
-export type OuraReadiness = { id: string; day: string; score?: number | null; timestamp: string };
+export type OuraReadiness = { id: string; day: string; score?: number | null; temperature_deviation?: number | null; timestamp: string };
 
 const MAIN_TYPES = new Set(["long_sleep", "sleep", null, undefined]);
 
@@ -89,6 +90,12 @@ export function normalizeOura(sleep: OuraSleep[], readiness: OuraReadiness[], ra
     const main = mainSleep(sleepByDay.get(day) ?? []);
     const ready = scoreByDay.get(day);
     const score = typeof ready?.score === "number" ? ready.score : undefined;
+    let temperature: DayRecord["temperature"];
+    const deviation = ready?.temperature_deviation;
+    if (typeof deviation === "number" && Number.isFinite(deviation)) {
+      if (deviation >= -5 && deviation <= 5) temperature = { deviation_c: deviation };
+      else warnings.push(`daily_readiness on ${day}: temperature_deviation out of range; dropped`);
+    }
     if (main) {
       const rec: DayRecord = {
         date: day,
@@ -107,13 +114,14 @@ export function normalizeOura(sleep: OuraSleep[], readiness: OuraReadiness[], ra
       if (typeof main.average_hrv === "number") rec.hrv = { value_ms: main.average_hrv, method: "rmssd" };
       if (typeof main.lowest_heart_rate === "number") rec.rhr = { bpm: main.lowest_heart_rate };
       if (score !== undefined) rec.vendor_score = score;
+      if (temperature !== undefined) rec.temperature = temperature;
       records.push(rec);
-    } else if (ready && score !== undefined) {
+    } else if (ready && (score !== undefined || temperature !== undefined)) {
       if (!validInstant(ready.timestamp)) {
         warnings.push(`daily_readiness on ${day} skipped: timestamp is not an ISO instant with an offset`);
         continue;
       }
-      records.push({ date: day, source: SOURCE, observed_at: ready.timestamp, complete: false, vendor_score: score });
+      records.push({ date: day, source: SOURCE, observed_at: ready.timestamp, complete: false, ...(score !== undefined ? { vendor_score: score } : {}), ...(temperature !== undefined ? { temperature } : {}) });
     }
   }
   return { records, warnings };

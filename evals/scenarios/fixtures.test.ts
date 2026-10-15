@@ -15,7 +15,7 @@ import { validateLimits } from "../../engine/limits.ts";
 import { readiness } from "../../engine/readiness.ts";
 import { opDone } from "../../engine/oplog.ts";
 import { loadSignals } from "../../engine/signals.ts";
-import { adapterDeclaresT2, createInstance, EXCLUDED, MOCK_SERVER, publicExport } from "../lib/instance.ts";
+import { adapterDeclaresT2, createInstance, EXCLUDED, MOCK_SERVER, publicExport, sessionWeekdays, tallyState, todayLocal, weekdayOf, weekStart } from "../lib/instance.ts";
 import { readState } from "../mock-tally/client.ts";
 import { snapshotFiles } from "../lib/collect.ts";
 import { limitsCheck, replyText, taxonomy } from "../lib/checks.ts";
@@ -26,6 +26,45 @@ import { changeProblems } from "./02-one-category-no-change.ts";
 import { saidAlreadyAdjusted } from "./16-failed-trim-retried.ts";
 
 const scenarios = await loadScenarios();
+
+for (let offset = 0; offset < 7; offset++) {
+  const today = addDays("2026-10-12", offset);
+  test(`mock history on ${weekdayOf(today)} (${today}): completed sessions at -3 and -4, none today or later`, () => {
+    const state = tallyState(today);
+    const sessions = state.sessions as { date: string; totalExercises: number; completedExercises: number; totalSetsCompleted: number }[];
+    const recent = [-3, -4].map((n) => addDays(today, n));
+    assert.deepEqual(recent.filter((d) => !sessions.some((s) => s.date === d)), [], "missing completed sessions");
+    assert.ok(sessions.every((s) => s.completedExercises === s.totalExercises && s.totalSetsCompleted > 0), "history sessions are completed");
+    assert.ok(sessions.every((s) => s.date < today), "history contains only past sessions");
+    const monday = weekStart(today);
+    const expected = Array.from({ length: 70 }, (_, i) => addDays(monday, i - 63))
+      .filter((d) => d < today && sessionWeekdays(today).includes(weekdayOf(d)));
+    assert.deepEqual(sessions.map((s) => s.date).sort(), expected, "all session dates in this week and the previous 9 weeks, without duplicates");
+    assert.deepEqual(Object.keys(state.days), [0, 1, 3, 4].map((n) => addDays(today, n)).filter((d) => d < addDays(monday, 7)), "planned dates stay today and the rest of this week");
+    const todayOnly = tallyState(today, { weekDays: false });
+    assert.deepEqual(todayOnly.sessions, sessions, "the planning option does not change history");
+    assert.deepEqual(Object.keys(todayOnly.days), [today]);
+  });
+}
+
+test("the offline fixture date override pins today; without it, today uses the timezone's clock date", (t) => {
+  const saved = process.env.COACH_EVAL_TODAY;
+  t.mock.method(Date, "now", () => Date.parse("2026-10-15T00:30:00Z"));
+  try {
+    delete process.env.COACH_EVAL_TODAY;
+    assert.equal(todayLocal(), "2026-10-14");
+    assert.equal(todayLocal("UTC"), "2026-10-15");
+    process.env.COACH_EVAL_TODAY = "2026-10-18";
+    assert.equal(todayLocal(), "2026-10-18");
+    for (const invalid of ["", "2026-10-1", "2026-02-30", "2026-13-01", "invalid"]) {
+      process.env.COACH_EVAL_TODAY = invalid;
+      assert.throws(() => todayLocal(), /COACH_EVAL_TODAY must be a valid YYYY-MM-DD date/);
+    }
+  } finally {
+    if (saved === undefined) delete process.env.COACH_EVAL_TODAY;
+    else process.env.COACH_EVAL_TODAY = saved;
+  }
+});
 
 test("30 scenarios (07, 08a, 08b, 13, 14 and 15 tested guard denials and went in v0.2; V4 added 26 to 29; V5 added 30; V6 added 31 to 33; V7 added 34 and 35), unique names", () => {
   assert.equal(scenarios.length, 30);
@@ -162,9 +201,11 @@ for (const s of scenarios) {
         validateBlock(parse(ctx.read("athlete/block.yaml")));
         validateLimits(parse(ctx.read("athlete/limits.yaml")), taxonomy());
         // The baseline window (42 days) plus the long pattern (7) before today.
-        const sig = loadSignals({ root, from: addDays(ctx.today, -50), to: ctx.today });
+        // Signal validation and readiness share the fixture's date, even when it is pinned ahead of the clock.
+        const now = `${ctx.today}T20:00:00Z`;
+        const sig = loadSignals({ root, from: addDays(ctx.today, -50), to: ctx.today, now });
         assert.deepEqual(sig.warnings, [], "signal files load cleanly");
-        const r = readiness({ today: ctx.today, now: new Date().toISOString(), tz: cfg.athlete.timezone, records: sig.records, sessions: [], sleep_target_min: 450 });
+        const r = readiness({ today: ctx.today, now, tz: cfg.athlete.timezone, records: sig.records, sessions: [], sleep_target_min: 450 });
         const want = EXPECTED_DECISION[s.name];
         if (want === "note-or-none") {
           assert.equal(r.wearable.state, "red", JSON.stringify(r.wearable));

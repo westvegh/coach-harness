@@ -45,7 +45,16 @@ export function git(root: string, ...args: string[]): string {
   });
 }
 
+/** The local clock date, or COACH_EVAL_TODAY (YYYY-MM-DD) for offline fixture tests only. */
 export function todayLocal(tz = TZ): string {
+  const pinned = process.env.COACH_EVAL_TODAY;
+  if (pinned !== undefined) {
+    const ms = Date.parse(`${pinned}T00:00:00Z`);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(pinned) || !Number.isFinite(ms) || new Date(ms).toISOString().slice(0, 10) !== pinned) {
+      throw new Error("COACH_EVAL_TODAY must be a valid YYYY-MM-DD date");
+    }
+    return pinned;
+  }
   return localDate(Date.now(), tz);
 }
 
@@ -472,7 +481,7 @@ export function offMornings(write: (rel: string, text: string) => void, today: s
 }
 
 // ---------------------------------------------------------------------------
-// Tally: this week's planned days (from today on) and 9 weeks of completed sessions.
+// Tally: this week's planned days from today on; completed sessions before today in this week and the previous 9 weeks.
 // ---------------------------------------------------------------------------
 
 export function plannedRow(date: string, s: (typeof SESSIONS)[number], extra: Record<string, unknown> = {}) {
@@ -511,7 +520,7 @@ function session(date: string, s: (typeof SESSIONS)[number]) {
   };
 }
 
-/** The mock state: today and the rest of this week planned; 9 weeks of fully completed history. */
+/** The mock state: today and the rest of this week planned; every session before today in this week and the 9 weeks before it completed. */
 export function tallyState(today: string, opts: { weekDays?: boolean } = {}): MockState {
   const wds = sessionWeekdays(today);
   const days: MockState["days"] = {};
@@ -521,7 +530,7 @@ export function tallyState(today: string, opts: { weekDays?: boolean } = {}): Mo
     if (i === 0 || (opts.weekDays !== false && d < addDays(monday, 7))) days[d] = plannedRow(d, s) as any;
   });
   const sessions: unknown[] = [];
-  for (let w = 1; w <= 9; w++) {
+  for (let w = 0; w <= 9; w++) {
     const mon = addDays(monday, -7 * w);
     SESSIONS.forEach((s, i) => {
       const d = dateIn(mon, wds[i]);

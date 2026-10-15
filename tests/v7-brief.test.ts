@@ -126,6 +126,9 @@ test("pre skips the reads this session already made in the last 15 minutes", () 
 test("post, a calm day: complete coverage, today's day, readiness with report facts, loads with the coach's own bounds; nothing to read", () => {
   const dir = instance();
   hrv(dir);
+  const records = JSON.parse(readFileSync(join(dir, "athlete/.cache/signals/oura.json"), "utf8"));
+  records[records.length - 1].temperature = { deviation_c: 0.12 };
+  writeJson(dir, "athlete/.cache/signals/oura.json", records);
   pre(dir);
   readAll(dir);
   const r = post(dir);
@@ -156,6 +159,8 @@ test("post, a calm day: complete coverage, today's day, readiness with report fa
   const file = JSON.parse(readFileSync(join(dir, `.tmp/coach/today-${j.run_id}-post.json`), "utf8"));
   assert.equal(file.session_id, SESSION);
   assert.match(file.log.readiness_line, /→ none$/);
+  const diagnostic = JSON.parse(readFileSync(join(dir, ".tmp/coach/today-brief-post.json"), "utf8"));
+  assert.deepEqual(diagnostic.readiness.inputs.records.at(-1).temperature, { deviation_c: 0.12 });
 });
 
 test("post on a trim day: the adjust draft is in post (tally_day), loads are held", () => {

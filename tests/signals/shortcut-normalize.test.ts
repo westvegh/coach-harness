@@ -38,6 +38,22 @@ test("valid full file → one complete record with every block", () => {
   });
 });
 
+test("temperature: kept on the source record, including temperature alone", () => {
+  for (const deviation_c of [-5, 0, 0.12, 5]) {
+    const temperature = { deviation_c };
+    const full = normalize(file({ temperature }), { now: NOW });
+    assert.deepEqual(full[0].temperature, temperature);
+    const alone = normalize(file({ temperature }, ["sleep", "hrv", "rhr", "checkin"]), { now: NOW });
+    assert.deepEqual(alone, [{ date: FULL.date, source: FULL.source, observed_at: FULL.submitted_at, complete: false, temperature }]);
+  }
+});
+
+test("temperature: malformed blocks are rejected", () => {
+  for (const temperature of [null, [], {}, { deviation_c: null }, { deviation_c: "x" }, { deviation_c: Number.NaN }, { deviation_c: Infinity }, { deviation_c: -6 }, { deviation_c: 9 }]) {
+    invalid(file({ temperature }), /\$\.temperature/);
+  }
+});
+
 test("missing optional blocks", () => {
   // No check-in: wearable only.
   const noCheckin = normalize(file({}, ["checkin"]), { now: NOW });

@@ -46,6 +46,7 @@ export type SignalFile = {
   sleep?: { start_at: Instant; end_at: Instant; duration_min: number };
   hrv?: { value_ms: number; method?: "rmssd" | "sdnn"; samples?: number };
   rhr?: { bpm: number };
+  temperature?: { deviation_c: number };
   checkin?: SignalCheckin;
 };
 
@@ -105,6 +106,7 @@ export function normalize(raw: unknown, opts: { now?: Instant | number; expectDa
   if (f.sleep) main.sleep = { duration_min: f.sleep.duration_min, start_at: f.sleep.start_at, end_at: f.sleep.end_at };
   if (f.hrv) main.hrv = { value_ms: f.hrv.value_ms, method: f.hrv.method === "rmssd" ? "rmssd" : "sdnn" };
   if (f.rhr) main.rhr = { bpm: f.rhr.bpm };
+  if (f.temperature) main.temperature = { deviation_c: f.temperature.deviation_c };
 
   const out: DayRecord[] = [];
   let separate: DayRecord | undefined;
@@ -126,7 +128,7 @@ export function normalize(raw: unknown, opts: { now?: Instant | number; expectDa
       };
     }
   }
-  if (main.sleep || main.hrv || main.rhr || main.subjective) out.push(main);
+  if (main.sleep || main.hrv || main.rhr || main.temperature || main.subjective) out.push(main);
   if (separate) out.push(separate);
   return out;
 }

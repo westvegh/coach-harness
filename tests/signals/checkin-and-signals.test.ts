@@ -56,6 +56,30 @@ test("checkin: a Shortcut file → merged; wearable data and both sources kept",
   assert.deepEqual(recs.map((x) => x.source), ["apple-health-shortcut", "chat"]);
 });
 
+test("checkin: a merge preserves temperature on its source, including a temperature-only file", () => {
+  for (const wearable of [JSON.parse(SHORTCUT), { version: 1, date: "2026-10-10", source: "apple-health-shortcut", submitted_at: "2026-10-10T06:41:12-07:00" }]) {
+    const dir = root();
+    writeFileSync(signalPath(dir, "2026-10-10"), JSON.stringify({ ...wearable, temperature: { deviation_c: 0.12 } }));
+    writeCheckin({ root: dir, date: "2026-10-10", answers: ANSWERS, now: NOW });
+    const file = readFile(signalPath(dir, "2026-10-10"));
+    assert.deepEqual(file.temperature, { deviation_c: 0.12 });
+    const loaded = loadSignals({ root: dir, from: "2026-10-10", to: "2026-10-10", now: NOW });
+    assert.deepEqual(loaded.warnings, []);
+    assert.deepEqual(loaded.records.map((r) => [r.source, r.temperature]), [["apple-health-shortcut", { deviation_c: 0.12 }], ["chat", undefined]]);
+  }
+});
+
+test("checkin: malformed temperature refuses a merge without changing the file", () => {
+  const dir = root();
+  for (const temperature of [null, {}, { deviation_c: "x" }, { deviation_c: -6 }, { deviation_c: 9 }]) {
+    const before = JSON.stringify({ ...JSON.parse(SHORTCUT), temperature });
+    const path = signalPath(dir, "2026-10-10");
+    writeFileSync(path, before);
+    assert.throws(() => writeCheckin({ root: dir, date: "2026-10-10", answers: ANSWERS, now: NOW }), (e: unknown) => e instanceof CoachError && e.code === "SIGNAL_INVALID");
+    assert.equal(readFileSync(path, "utf8"), before);
+  }
+});
+
 test("checkin: a second chat check-in replaces the first", () => {
   const dir = root();
   writeCheckin({ root: dir, date: "2026-10-10", answers: ANSWERS, now: "2026-10-10T07:00:00-07:00" });
@@ -147,7 +171,7 @@ test("signals: an empty repo gives no records; bad ranges are usage errors", () 
 test("signals: malformed cached records become per-record warnings; the rest still load", () => {
   const dir = root();
   mkdirSync(join(dir, "athlete/.cache/signals"), { recursive: true });
-  const ok = oura("2026-10-10", true, "2026-10-10T06:00:00-07:00");
+  const ok = { ...oura("2026-10-10", true, "2026-10-10T06:00:00-07:00"), temperature: { deviation_c: 0.12 } };
   const base = { date: "2026-10-09", source: "oura", observed_at: "2026-10-09T06:00:00-07:00", complete: true };
   const bad = [
     { ...base, hrv: null },
@@ -161,6 +185,11 @@ test("signals: malformed cached records become per-record warnings; the rest sti
     { ...base, subjective: { sleep_quality: 9, energy: 3, soreness: 3, stress: 3 } },
     { ...base, subjective: { sleep_quality: 3, energy: 3, soreness: 3, stress: 3, pain: [{ region: 4, score: 2 }] } },
     { ...base, vendor_score: "high" },
+    { ...base, temperature: null },
+    { ...base, temperature: {} },
+    { ...base, temperature: { deviation_c: "x" } },
+    { ...base, temperature: { deviation_c: -6 } },
+    { ...base, temperature: { deviation_c: 9 } },
     { ...base, complete: "yes" },
   ];
   writeFileSync(join(dir, "athlete/.cache/signals/oura.json"), JSON.stringify([...bad, ok]));
@@ -168,4 +197,17 @@ test("signals: malformed cached records become per-record warnings; the rest sti
   assert.deepEqual(r.records, [ok]);
   assert.equal(r.warnings.length, bad.length, r.warnings.join("\n"));
   bad.forEach((_, i) => assert.ok(r.warnings.some((w) => w.includes(`oura.json[${i}] skipped`)), `warning for record ${i}`));
+});
+
+test("signals: cached temperature survives check-in timestamp backfill", () => {
+  const dir = root();
+  mkdirSync(join(dir, "athlete/.cache/signals"), { recursive: true });
+  const records = [-5, 0, 5].map((deviation_c, i) => ({
+    date: `2026-10-0${i + 7}`, source: "oura", observed_at: `2026-10-0${i + 7}T06:00:00-07:00`, complete: false,
+    temperature: { deviation_c }, subjective: { overall: 3 },
+  }));
+  writeFileSync(join(dir, "athlete/.cache/signals/oura.json"), JSON.stringify(records));
+  const result = loadSignals({ root: dir, from: "2026-10-07", to: "2026-10-09", now: NOW });
+  assert.deepEqual(result.warnings, []);
+  assert.deepEqual(result.records, records.map((r) => ({ ...r, checkin_at: r.observed_at })));
 });

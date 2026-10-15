@@ -140,6 +140,12 @@ function checkRecord(r: DayRecord, i: number, nowMs: number): void {
     if (r.hrv.method !== "rmssd" && r.hrv.method !== "sdnn") throw new CoachError("READINESS_INPUT", `records[${i}].hrv.method must be rmssd | sdnn`);
   }
   if (r.rhr) num(r.rhr.bpm, "rhr.bpm");
+  if (r.temperature !== undefined) {
+    const t = r.temperature;
+    if (typeof t !== "object" || t === null || Array.isArray(t) || typeof t.deviation_c !== "number" || !Number.isFinite(t.deviation_c) || t.deviation_c < -5 || t.deviation_c > 5) {
+      throw new CoachError("READINESS_INPUT", `records[${i}].temperature must be an object with deviation_c a number from -5 to 5`);
+    }
+  }
   if (r.subjective !== undefined) {
     const problems = checkinBlockProblems(r.subjective, `records[${i}].subjective`);
     if (problems.length > 0) throw new CoachError("READINESS_INPUT", problems.join("; "));

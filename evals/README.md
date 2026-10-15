@@ -20,6 +20,18 @@ A zero-dependency stdio MCP server with Tally's semantics, ported from Tally's M
 - `MOCK_T3=1`: Tally T3 (server training limits; off for users today): `update_training_limits`, the worse-only checks with move lineage, the `training_limit` refusals and `trainingLimits` in `get_training_context`.
 - `MOCK_NOW`: a fixed instant. Scenario runs use the real clock, because the engine CLI has no clock override.
 
+### Offline fixture dates
+
+The mock history includes every session date before today in the current week and the 9 weeks before it. Today and the rest of this week's session dates stay planned.
+
+Set `COACH_EVAL_TODAY=YYYY-MM-DD` to pin the eval instance's local date for offline fixture tests. `prepare` uses this date for `ctx.today`, so each scenario's setup uses it too. The value must be a valid calendar date. Without it, the instance uses the clock in `America/Los_Angeles`.
+
+```sh
+COACH_EVAL_TODAY=2026-10-12 node --test evals/scenarios/fixtures.test.ts
+```
+
+Repeat with October 12 through 18 to cover Monday through Sunday. The fixture tests also check the history directly for all seven weekdays on every run. Their signal validation and readiness checks use a fixed instant on the fixture's date. This override changes only the eval instance date. It does not change the engine CLI's clock or the mock server's clock. Do not set it for live model scenario runs.
+
 ## Golden parity
 
 Each golden is a stored day, one mutation call, and the day Tally stores afterwards. It was derived by hand from Tally's behavior, and each one cites where that behavior is defined. v0.2 removed the parity test (it checked the guard's rebuild against the mock); the files stay as reference data for the mock server.

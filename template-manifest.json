@@ -1,7 +1,7 @@
 {
   "version": 1,
   "repo": "https://github.com/westvegh/coach-harness",
-  "release": "0.2.6",
+  "release": "0.2.7",
   "files": {
     ".claude/agents/analyst.md": {
       "mode": "100644",
@@ -157,7 +157,7 @@
     },
     "CHANGELOG.md": {
       "mode": "100644",
-      "blob": "33ac9985042db9ca75aade5a52048ed03ab0cb5d"
+      "blob": "d70f0bc263f9f89c52d969a17fba022478a76fc6"
     },
     "CLAUDE.md": {
       "mode": "100644",
@@ -201,11 +201,11 @@
     },
     "adapters/signals/apple-health-shortcut/normalize.ts": {
       "mode": "100644",
-      "blob": "c6b7280b6bb35848051a0d81fabe572256175181"
+      "blob": "285ac31179b7bea719cb3380ce55110e36f3dd07"
     },
     "adapters/signals/apple-health-shortcut/schema.json": {
       "mode": "100644",
-      "blob": "7b5d513ffa301e21d2be8f0ab9f38afacd656eb2"
+      "blob": "3a9c12bac853fee0b88fc46e65a672cca686e99a"
     },
     "adapters/signals/checkin/write.ts": {
       "mode": "100644",
@@ -225,7 +225,7 @@
     },
     "adapters/signals/oura/fetch.ts": {
       "mode": "100644",
-      "blob": "84354a7ebf0f62031291ae1355979d46af385a18"
+      "blob": "864b160e94d5b4792803f5df5e63c7170a8a2c78"
     },
     "adapters/signals/oura/lock.ts": {
       "mode": "100644",
@@ -257,7 +257,7 @@
     },
     "docs/adding-a-logger-or-signal.md": {
       "mode": "100644",
-      "blob": "3cb7d3a245396cd1c295a20c1de8293167a72993"
+      "blob": "8fe5c940f1041f2f54ab84eaf6f7834579e51c96"
     },
     "docs/adding-a-method.md": {
       "mode": "100644",
@@ -265,7 +265,7 @@
     },
     "docs/contracts.md": {
       "mode": "100644",
-      "blob": "bf0b567951e53ddd6650a7b93e27f34db9be55d1"
+      "blob": "d8170d1bc6dfbd4e87aa289fdd322d7608016b38"
     },
     "docs/how-it-works.md": {
       "mode": "100644",
@@ -505,11 +505,11 @@
     },
     "engine/readiness.test.ts": {
       "mode": "100644",
-      "blob": "baf7a635a60795aeafb62517a8f46858fec20708"
+      "blob": "3adc103e4b6dcd38c8714cdf023133445f57bf9d"
     },
     "engine/readiness.ts": {
       "mode": "100644",
-      "blob": "991bad98f7940f294f69314580ac4ff19b900c2b"
+      "blob": "555875bdf65831c3685d25b84ea996458a2fc098"
     },
     "engine/safety-terms.yaml": {
       "mode": "100644",
@@ -549,7 +549,7 @@
     },
     "engine/signals.ts": {
       "mode": "100644",
-      "blob": "22bebb804dc8fb9ed9a59bfd80b45dc9857d5750"
+      "blob": "d96004c15e4561225e53f40d62065a7d41ae79b5"
     },
     "engine/snapshot-lock.ts": {
       "mode": "100644",
@@ -589,7 +589,7 @@
     },
     "engine/types.ts": {
       "mode": "100644",
-      "blob": "8f9b09b850156694ba1eba1273fcca4362d9638d"
+      "blob": "a9b7557c69dce3c655fa3a5f7e2340bebb32a824"
     },
     "engine/update.ts": {
       "mode": "100644",
@@ -625,7 +625,7 @@
     },
     "evals/README.md": {
       "mode": "100644",
-      "blob": "3cde04413f7651b9aed9a3ed29f743596698f6de"
+      "blob": "e85287e1395d736c459cfaf01cb19878a93ded8f"
     },
     "evals/golden/01-pwd-new-date.json": {
       "mode": "100644",
@@ -801,7 +801,7 @@
     },
     "evals/lib/instance.ts": {
       "mode": "100644",
-      "blob": "c5f2d68c785e1a96cc4b5ce1c837d409988e53c7"
+      "blob": "1cbbe0c57ff2f9648cc27f33a5a1400a2d4e22e1"
     },
     "evals/lib/probes.ts": {
       "mode": "100644",
@@ -969,7 +969,7 @@
     },
     "evals/scenarios/_setup.ts": {
       "mode": "100644",
-      "blob": "3cab7d303644423c74ba0afb3e4db5d1b6df1f02"
+      "blob": "0ade8ec941f7b3f73c7cb1ec996d338b3fe8ed66"
     },
     "evals/scenarios/_speed.ts": {
       "mode": "100644",
@@ -977,7 +977,7 @@
     },
     "evals/scenarios/fixtures.test.ts": {
       "mode": "100644",
-      "blob": "afbcc167085340eb8ad750d55a3ebc111a8b5d45"
+      "blob": "dc64e4803f587193ff56c32ddbf1f30f383912b3"
     },
     "evals/scenarios/speed.test.ts": {
       "mode": "100644",
@@ -1053,11 +1053,11 @@
     },
     "package-lock.json": {
       "mode": "100644",
-      "blob": "223b54ea2c68fad9ca51ffaf954808b077328add"
+      "blob": "351bc50944d4a2ec7924d74169f5bf9c4ce6047e"
     },
     "package.json": {
       "mode": "100644",
-      "blob": "88dfc84114360251b46f86c188131a3fe33b1a2a"
+      "blob": "2e66e6ce182d6fa95404335a95c97222772ff743"
     },
     "scripts/bench-cli.ts": {
       "mode": "100644",
@@ -1129,7 +1129,7 @@
     },
     "tests/e3/readiness-date.test.ts": {
       "mode": "100644",
-      "blob": "abd0f9e443e7f839e848bc041c7c24b58a29b1e8"
+      "blob": "6eebae4a6cc93758bbc51122f92591dca02ee554"
     },
     "tests/e3/refresh-lint.test.ts": {
       "mode": "100644",
@@ -1217,7 +1217,7 @@
     },
     "tests/signals/checkin-and-signals.test.ts": {
       "mode": "100644",
-      "blob": "065fef7135971505291487fa0343548da612be64"
+      "blob": "e4c05e46d0e4a48c60bb37f4c59a15e25c6404dc"
     },
     "tests/signals/cli-signals.test.ts": {
       "mode": "100644",
@@ -1245,11 +1245,11 @@
     },
     "tests/signals/oura.test.ts": {
       "mode": "100644",
-      "blob": "a7716631fcce61d02965cd3e8f210ee4a5a71c91"
+      "blob": "c2206fa2b87b834c65c4831c5b90cf0c6d4fd78b"
     },
     "tests/signals/shortcut-normalize.test.ts": {
       "mode": "100644",
-      "blob": "ff6232d4347e3c926281485635379d9740915099"
+      "blob": "d4b9e8b6d320cdcb0b22b8b37f70c8897de367e2"
     },
     "tests/skills.test.ts": {
       "mode": "100644",
@@ -1293,7 +1293,7 @@
     },
     "tests/v7-brief.test.ts": {
       "mode": "100644",
-      "blob": "dc9d539b3c2af46809116ca18ecf25bd7c58d31a"
+      "blob": "a2d622e3e352e4e7e5f627b8987185638ed232e0"
     },
     "tests/v7-capture.test.ts": {
       "mode": "100644",

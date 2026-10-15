@@ -329,6 +329,12 @@ describe("decision table: patterns, not single days", () => {
 });
 
 describe("input errors", () => {
+  test("malformed temperature throws READINESS_INPUT", () => {
+    for (const temperature of [null, [], {}, { deviation_c: null }, { deviation_c: "x" }, { deviation_c: Number.NaN }, { deviation_c: Infinity }, { deviation_c: -6 }, { deviation_c: 9 }]) {
+      assert.throws(() => run([{ ...todayRecord(), temperature } as DayRecord]), (e: unknown) => e instanceof CoachError && e.code === "READINESS_INPUT" && /temperature/.test(e.message));
+    }
+  });
+
   test("bad input throws CoachError", () => {
     assert.throws(() => run([], [], { today: "12/10/2026" }), CoachError);
     assert.throws(() => run([], [], { now: "2026-10-12T07:00:00" }), CoachError); // no offset
@@ -339,6 +345,13 @@ describe("input errors", () => {
 });
 
 describe("regressions", () => {
+  test("temperature is shown, not scored, in baseline and current records", () => {
+    const records = [...history(), todayRecord({ hrv_ms: 30 }), checkin(2, 2, 4, 4)];
+    for (const deviation_c of [-5, 0, 0.21, 5]) {
+      assert.deepEqual(run(records.map((r) => ({ ...r, temperature: { deviation_c } }))), run(records));
+    }
+  });
+
   const flat = (n = 30) => history({ n, hrv: () => 50, rhr: () => 55 });
 
   test("A3: a later sleep-only record does not hide a red HRV", () => {

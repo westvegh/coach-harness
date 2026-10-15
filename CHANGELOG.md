@@ -2,6 +2,18 @@
 
 All notable changes to this project are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [semantic versioning](https://semver.org/).
 
+## [0.2.7]
+
+Body temperature from Oura.
+
+### Changed for the athlete
+
+- **The coach reads your Oura body temperature.** Each night's temperature change from your own Oura baseline is now in your recovery data, so the coach can show it in your report. Readiness does not use it: the coach's decision for the day stays the same.
+
+### Fixed
+
+- **A test failed from Thursday to Sunday.** The update runs the tests, and the coach does not coach while a test fails. A test's practice data left out the sessions earlier in the current week. It now passes on every day of the week.
+
 ## [0.2.6]
 
 A fast daily run. From a coach run on 0.2.5 that took 6 minutes to answer "heading to the gym".

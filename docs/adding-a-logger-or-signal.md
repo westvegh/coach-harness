@@ -25,6 +25,7 @@ type DayRecord = {
   hrv?: { value_ms: number; method: "rmssd" | "sdnn" };
   rhr?: { bpm: number };
   vendor_score?: number; // the vendor's own score (Oura readiness, Whoop recovery); shown, not scored
+  temperature?: { deviation_c: number }; // the vendor's nightly deviation from the athlete's baseline, °C; shown, not scored
   subjective?: {         // the check-in; scales 1-5. The rating is one group: overall, or the four scales together
     overall?: 1|2|3|4|5;   // "How do you feel today?"; never with the four scales
     sleep_quality?: 1|2|3|4|5; energy?: 1|2|3|4|5; soreness?: 1|2|3|4|5; stress?: 1|2|3|4|5;
@@ -43,6 +44,7 @@ Field rules:
 - **`sleep.duration_min`** is time asleep, not time in bed. `efficiency` is a percent (0–100) when the source gives one.
 - **`hrv.method`** must be the real method. Apple Health reports SDNN. Oura, Whoop and Garmin report RMSSD. The engine keeps a separate baseline per source and per method. It never mixes them, so a wrong method label corrupts a baseline.
 - **`rhr.bpm`** is the resting heart rate for the night. For Oura it is `lowest_heart_rate`.
+- **`temperature.deviation_c`** is the vendor's nightly deviation from the athlete's baseline in °C, from -5 to 5. It is shown, not scored. Oura reads it from `daily_readiness.temperature_deviation`.
 - Leave out a block that has no data. Do not send zeros for missing values.
 
 ### Freshness

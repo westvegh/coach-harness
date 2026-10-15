@@ -140,6 +140,16 @@ test("CLI: readiness --date prints the readiness JSON plus the inputs it used", 
   assert.equal(cli(["readiness", "--date", "2026-10-15", "--now", NOW, "--root", dir]).code, 2);
 });
 
+test("CLI: readiness --date keeps temperature in its reported input records", () => {
+  const dir = instance();
+  const record = { date: TODAY, source: "oura", observed_at: `${TODAY}T06:30:00-07:00`, complete: false, temperature: { deviation_c: 0.12 } };
+  writeJson(dir, "athlete/.cache/signals/oura.json", [record]);
+  const result = cli(["readiness", "--date", TODAY, "--now", NOW, "--root", dir]);
+  assert.equal(result.code, 0, result.stderr);
+  assert.deepEqual(result.json.inputs.records, [record]);
+  assert.deepEqual(result.json.inputs.signals_warnings, []);
+});
+
 test("a past date sees only what was known by the end of that day", () => {
   const dir = instance();
   sleepCache(dir, 400);

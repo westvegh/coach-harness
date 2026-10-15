@@ -39,6 +39,14 @@
         "bpm": { "type": "number", "minimum": 20, "maximum": 250 }
       }
     },
+    "temperature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["deviation_c"],
+      "properties": {
+        "deviation_c": { "type": "number", "minimum": -5, "maximum": 5, "description": "The vendor's nightly deviation from the athlete's baseline, in °C; shown, not scored." }
+      }
+    },
     "checkin": {
       "type": "object",
       "additionalProperties": false,

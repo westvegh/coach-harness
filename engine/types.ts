@@ -153,6 +153,8 @@ export type DayRecord = {
   hrv?: { value_ms: number; method: "rmssd" | "sdnn" };
   rhr?: { bpm: number };
   vendor_score?: number;
+  /** The vendor's nightly deviation from the athlete's baseline, in °C; shown, not scored. */
+  temperature?: { deviation_c: number };
   /**
    * A check-in (contracts §5). The rating is one group: `overall` (1-5), or the four scales
    * together; never both. want_to_train (optional): 1 means aversion, not wanting to train at
@@ -503,5 +505,6 @@ export type ShortcutSignalFile = {
   sleep?: { start_at: Instant; end_at: Instant; duration_min: number };
   hrv?: { value_ms: number; method: "rmssd" | "sdnn"; samples?: number };
   rhr?: { bpm: number };
+  temperature?: { deviation_c: number };
   checkin?: { sleep_quality: Scale; energy: Scale; soreness: Scale; stress: Scale; want_to_train?: Scale; pain?: PainEntry[] };
 };

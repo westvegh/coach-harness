@@ -18,14 +18,15 @@ import {
   type FetchFn,
   type StoredTokens,
 } from "../../adapters/signals/oura/auth.ts";
-import { CACHE_RELATIVE, fetchOura, mainSleep, normalizeOura, type OuraSleep } from "../../adapters/signals/oura/fetch.ts";
+import { CACHE_RELATIVE, fetchOura, mainSleep, normalizeOura, type OuraReadiness, type OuraSleep } from "../../adapters/signals/oura/fetch.ts";
 import { LOCK_NAME, withLock } from "../../adapters/signals/oura/lock.ts";
 import type { SecretStore } from "../../adapters/signals/oura/secrets.ts";
 import { CoachError } from "../../engine/errors.ts";
+import type { DayRecord } from "../../engine/types.ts";
 
 const fixture = (name: string) => JSON.parse(readFileSync(new URL(`./fixtures/oura/${name}`, import.meta.url), "utf8"));
 const SLEEP: OuraSleep[] = [...fixture("sleep-page1.json").data, ...fixture("sleep-page2.json").data];
-const READINESS = fixture("daily_readiness.json").data;
+const READINESS: OuraReadiness[] = fixture("daily_readiness.json").data;
 
 const T0 = Date.parse("2026-10-10T08:00:00-07:00");
 const CLIENT_SECRET = "dummy-client-secret-value";
@@ -103,7 +104,7 @@ test("normalizeOura: RMSSD HRV, lowest HR, main period, readiness score", () => 
   const { records, warnings } = normalizeOura(SLEEP, READINESS, { from: "2026-10-08", to: "2026-10-10" });
   assert.deepEqual(warnings, []);
   assert.deepEqual(records, [
-    { date: "2026-10-08", source: "oura", observed_at: "2026-10-08T00:00:00.000-07:00", complete: false, vendor_score: 77 },
+    { date: "2026-10-08", source: "oura", observed_at: "2026-10-08T00:00:00.000-07:00", complete: false, vendor_score: 77, temperature: { deviation_c: 0.12 } },
     {
       date: "2026-10-09",
       source: "oura",
@@ -113,6 +114,7 @@ test("normalizeOura: RMSSD HRV, lowest HR, main period, readiness score", () => 
       hrv: { value_ms: 48, method: "rmssd" },
       rhr: { bpm: 51 },
       vendor_score: 82,
+      temperature: { deviation_c: -0.11 },
     },
     {
       date: "2026-10-10",
@@ -123,8 +125,35 @@ test("normalizeOura: RMSSD HRV, lowest HR, main period, readiness score", () => 
       hrv: { value_ms: 39, method: "rmssd" },
       rhr: { bpm: 55 },
       vendor_score: 71,
+      temperature: { deviation_c: 0.21 },
     },
   ]);
+});
+
+test("normalizeOura: temperature accepts bounds and zero, drops missing or invalid values", () => {
+  const range = { from: "2026-10-09", to: "2026-10-09" };
+  const ready = READINESS.find((r) => r.day === range.from)!;
+  for (const sleep of [[], SLEEP.filter((s) => s.day === range.from)]) {
+    for (const value of [-5, 0, 5, null, undefined, "x", Number.NaN, Infinity, -Infinity, -6, 9]) {
+      const input = { ...ready, temperature_deviation: value };
+      if (value === undefined) delete input.temperature_deviation;
+      const { records, warnings } = normalizeOura(sleep, [input as OuraReadiness], range);
+      assert.equal(records.length, 1, `record kept for ${value}`);
+      if (typeof value === "number" && Number.isFinite(value) && value >= -5 && value <= 5) {
+        assert.deepEqual(records[0].temperature, { deviation_c: value });
+      } else {
+        assert.equal("temperature" in records[0], false);
+      }
+      assert.deepEqual(warnings, value === -6 || value === 9 ? ["daily_readiness on 2026-10-09: temperature_deviation out of range; dropped"] : []);
+    }
+  }
+});
+
+test("normalizeOura: a readiness-only temperature record needs no score", () => {
+  const ready = { ...READINESS[0], score: null, temperature_deviation: 0.12 };
+  const { records, warnings } = normalizeOura([], [ready], { from: ready.day, to: ready.day });
+  assert.deepEqual(warnings, []);
+  assert.deepEqual(records, [{ date: ready.day, source: "oura", observed_at: ready.timestamp, complete: false, temperature: { deviation_c: 0.12 } }]);
 });
 
 test("normalizeOura: nulls are dropped, a short main sleep is incomplete, bad instants warn", () => {
@@ -308,7 +337,7 @@ test("fetchOura: paginates, normalizes and merges into the cache, keeping older 
   writeFileSync(
     cache,
     JSON.stringify([
-      { date: "2026-09-01", source: "oura", observed_at: "2026-09-01T06:00:00-07:00", complete: true, hrv: { value_ms: 50, method: "rmssd" } },
+      { date: "2026-09-01", source: "oura", observed_at: "2026-09-01T06:00:00-07:00", complete: true, hrv: { value_ms: 50, method: "rmssd" }, temperature: { deviation_c: -0.2 } },
       { date: "2026-10-09", source: "oura", observed_at: "2026-10-09T06:00:00-07:00", complete: false },
     ]),
   );
@@ -330,6 +359,7 @@ test("fetchOura: paginates, normalizes and merges into the cache, keeping older 
   const written = JSON.parse(readFileSync(cache, "utf8"));
   assert.deepEqual(written.map((x: { date: string }) => x.date), ["2026-09-01", "2026-10-08", "2026-10-09", "2026-10-10"]);
   assert.equal(written[2].complete, true, "the fetched record replaced the stale one");
+  assert.deepEqual(written.map((x: DayRecord) => x.temperature), [{ deviation_c: -0.2 }, { deviation_c: 0.12 }, { deviation_c: -0.11 }, { deviation_c: 0.21 }]);
 });
 
 test("fetchOura: the legacy personal token works with a warning and skips OAuth", async () => {
