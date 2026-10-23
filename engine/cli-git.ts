@@ -94,7 +94,8 @@ export function prepushCheck(root: string, remote = "origin"): PrepushResult {
   } catch (e) {
     return fail(`cannot look up the visibility of ${repo} with gh (${(e as Error).message.split("\n")[0]})`, { hook_installed: true, repo });
   }
-  if (visibility === "public") return fail(`${repo} is PUBLIC; athlete data never goes to a public repository`, { hook_installed: true, repo, visibility });
+  // Only private: an internal repository (GitHub Enterprise) is readable by the whole enterprise.
+  if (visibility !== "private") return fail(`${repo} is ${visibility.toUpperCase()}; athlete data goes only to a private repository`, { hook_installed: true, repo, visibility });
   return { ok: true, remote, hook_installed: true, repo, visibility, reason: `${repo} is ${visibility} and the pre-push hook is installed` };
 }
 

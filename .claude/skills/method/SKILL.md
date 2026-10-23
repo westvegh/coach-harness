@@ -15,7 +15,7 @@ A method pack follows `methods/README.md` and contracts §4. Copy the layout of 
 4. **Draft the files** (in the session first, not on disk):
    - `METHOD.md`: what it is, who it is for, how to use it, credit, and the disclaimer "A synthesis of <name>'s public teaching, written independently. Not affiliated with or endorsed by <name>. Not medical advice."
    - `sources.md`: a table with key, title, URL, date, notes.
-   - `rules.yaml`: `pack`, `version`, `rules` with `id` (`<PREFIX>-<AREA>-NNN`), `text`, `kind` (`sourced` or `policy`), `severity` (`hard` only for checks the engine enforces), `source: { ref, at, precision }` (required for `sourced`), and an optional `check` of a known type (`methods/README.md` lists them).
+   - `rules.yaml`: `pack`, `version`, `rules` with `id` (`<PREFIX>-<AREA>-NNN`), `text`, `kind` (`sourced` or `policy`), `severity` (`hard` only for checks the engine runs), `source: { ref, at, precision }` (required for `sourced`), and an optional `check` of a known type (`methods/README.md` lists them).
    - `principles/*.md`: the method in prose. Cite each rule inline as `[ID]`. Every rule ID appears in the prose, and every ID in the prose exists in `rules.yaml`.
    - `templates/3-day.yaml`, `4-day.yaml`, `5-day.yaml`: days with focus and slots (`pattern` from `engine/movements.yaml`, `adaptation`, `sets`, `reps` or `duration`, `rest_s`), and an `emphasis` table.
    - `assessments.md`: tests per quality, their order and frequency.

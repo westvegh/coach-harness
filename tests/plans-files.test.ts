@@ -269,7 +269,8 @@ test("V2b fix 3: athlete-entered counts are bounded: 4294967296, -1 and abc are 
   assert.ok(read.warnings.some((w) => /Back Squat: done sets "4294967296"/.test(w)));
   assert.deepEqual(read.logged[0].exercises.map((e) => e.sets.length).slice(0, 3), [0, 0, 0]);
   const snap = filesSnapshot(dir, { units: "lbs", timezone: "America/Los_Angeles", now: "2026-10-12T20:00:00Z" });
-  assert.equal(snap.days["2026-10-12"].exercises[0].suggestedSets, undefined);
+  // W1b: a sets cell it cannot read stays as its text, so a check that needs it is refused (never 1 set).
+  assert.equal(snap.days["2026-10-12"].exercises[0].suggestedSets, "4294967296");
   assert.equal(snap.days["2026-10-12"].exercises[3].suggestedSets, 3);
   assert.equal(snap.history_coverage?.complete, false);
   // A rewrite of another day keeps the raw cells.

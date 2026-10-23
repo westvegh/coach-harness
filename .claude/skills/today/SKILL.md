@@ -13,7 +13,7 @@ The schedule: (1) pre, with the `ToolSearch`; (2) the reads in one message; (3) 
 
 ## Notes to the logger
 
-Tally is outside the athlete's private repo. Every note you write to a Tally day is generic by default:
+Tally is outside the athlete's private repo. The note you write to a Tally day comes from this table:
 
 | Situation | Note |
 |---|---|
@@ -25,8 +25,8 @@ Tally is outside the athlete's private repo. Every note you write to a Tally day
 | `load_progression` | `[coach] Load progression (<rule_ids>)` |
 | a proposal the athlete accepted | `[coach] Change you approved` |
 
-- Never put symptoms, body regions, pain scores, readiness values, sleep or heart data in a Tally note. They stay in `athlete/log/` in the private repo.
-- Only when `coach.yaml` has `consent.logger_health_notes: true` (pre's `logger_health_notes`; the default since v0.2; setup's data question can turn it off) may the note be detailed: `[coach] <decision_reasons> (<rule_ids>)`.
+- With `consent.logger_health_notes: false` (pre's `logger_health_notes`; setup's data question sets it), never put symptoms, body regions, pain scores, readiness values, sleep or heart data in a Tally note. They stay in `athlete/log/` in the private repo.
+- With `consent.logger_health_notes: true` (the default since v0.2), the note may be detailed: `[coach] <decision_reasons> (<rule_ids>)`.
 - With `logger: files`, the note goes in the `notes` column of the day's first row, in this private repo, so the detailed form is fine. With `logger: other`, treat the tool like Tally.
 
 ## Where plans live
@@ -93,7 +93,7 @@ With `logger: other`: read and write today through that tool, by its own instruc
      1. Write the input to `.tmp/coach/write.json` with the Write tool: `tool` is `update_planned_workout` (preferred) or `plan_workout_day`; `kind` is `annotate`, `trim_session`, `swap_to_recovery` or `load_progression` (an accepted proposal: `apply`); and the change, in one of two forms:
         - `edit`, applied to today's day as read (every field kept): `{"edit": {"notes": "<the notes with the reason line>"}, "tool": "update_planned_workout", "kind": "annotate"}`, or for loads `{"edit": {"notes": "...", "exercises": [{"index": 0, "set": {"suggestedWeight": 195}}]}, "tool": "update_planned_workout", "kind": "load_progression"}` (`index` counts from 0 in today's order; `{"index": 2, "remove": true}` removes an exercise). An `annotate` takes the notes only.
         - `after`, a whole Tally-shaped day: post's `adjust.tally_day` for a trim or a recovery day (with the reason line in `notes`), or the day in the file post names in `today_day.write_base` (today as read, every field kept) for any other whole-day change. Never build `after` from the short `today_day` exercises: they leave out ids, rep ranges, per-side settings and notes.
-     2. Run `node engine/cli.ts today-write-prep --input .tmp/coach/write.json`. It reads today from the snapshot once and prints `classify` (small or big), `limits` (the final day, and the week with today replaced when a weekly cap applies; `unknown` names the days to read), `protected`, and `write`: `plain`, and on a protected day `approved` (with `overrideUserModified: true`), each with `expectedVersion` and its own `opId` when `capabilities.opId` is true. With `SNAPSHOT_STALE`, read today again and run it again. A limit it reports: change the day and run it again.
+     2. Run `node engine/cli.ts today-write-prep --input .tmp/coach/write.json`. It reads today from the snapshot once and prints `classify` (small or big), `limits` (the final day, and the week with today replaced when a weekly cap applies; `unknown` names the days to read), `protected`, and `write`: `plain`, and on a protected day `approved` (with `overrideUserModified: true`), each with `expectedVersion` and its own `opId` when `capabilities.opId` is true. With `SNAPSHOT_STALE`, read today again and run it again. A limit it reports: change the day and run it again. Its `limits` result stands for these days: run `limits check` again only after a day, the limits or the week's reads change (`unknown` days still need their reads).
      3. The consent question when it is needed (below). Then send the chosen variant's `tool` and `args` exactly as printed: `plain`, or `approved` only after "A) Yes" on a protected day. A revised list (consent B) or a new `version` means running `today-write-prep` again.
      4. Read today again with `get_planned_workout` (the read-back), and judge it before step 9: the day must show the change. With `logger: files`, `plans read --week <today>`.
    - **The coach recommends.** Every choice for today's session (a load, the sets, a swap, which exercise, a trim) is the coach's: make it, say the pick and one reason, apply it when it may, and end with the step 10 invitation to change it. Never ask the athlete to choose between the coach's own options (no "Which weight today? 40 / 45 / 50"), and never ask one question per exercise or per change.

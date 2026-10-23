@@ -452,7 +452,7 @@ export function draftBlock(
         for (const [m, n] of Object.entries(counts)) {
           if (!(m in targets) || n <= targets[m]) continue;
           warnings.push(`${m}: the 1-set minimum per slot gives ${n} sets, above the target ${targets[m]}`);
-          if (reference) warnings.push(`${m}: week 1 plans ${n} sets against ${reference.sets_by_muscle[m] ?? 0} in the reference week ${reference.week_start}; the guard allows ${allowedSets(reference.sets_by_muscle[m] ?? 0, cap)}`);
+          if (reference) warnings.push(`${m}: week 1 plans ${n} sets against ${reference.sets_by_muscle[m] ?? 0} in the reference week ${reference.week_start}; the cap allows ${allowedSets(reference.sets_by_muscle[m] ?? 0, cap)}`);
         }
       }
       prevBuild = { sets, counts };

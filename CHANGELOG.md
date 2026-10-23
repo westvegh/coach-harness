@@ -2,6 +2,35 @@
 
 All notable changes to this project are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [semantic versioning](https://semver.org/).
 
+## [0.2.8]
+
+The last fixes before the public launch. From the coach's daily use since 2026-10-12.
+
+### Changed for the athlete
+
+- **The coach reads a day as Tally gives it.** To check a day against your limits or count its sets, the coach passes the day from Tally as it is. It no longer rebuilds the day by hand.
+- **The coach no longer stops to check the engine's numbers again.** It reports the result and goes on. It checks again only when a day, your limits or a Tally read changed. On 2026-10-16 such a second check added 6 minutes to a run.
+
+### Fixed
+
+- **The urgent stop now reads the notes you add to an exercise in Tally's note sheet.** Tally gives these notes as a list, and the coach read only single notes. So a warning sign typed there did not stop training. Now the coach reads every note. When Tally cut the notes, or a note cannot be read, the coach says safety is unknown.
+- **A check could say "all fine" about a day it could not read.** The limits check counted 0 sets on a day in Tally's shape and reported no problem. It now counts those sets. Input that the engine cannot read gives an error that names the field to fix.
+- **A change to per-side work or a longer distance now counts as more work.** Before, such a change with fewer sets could count as a trim.
+- **One unreadable session no longer hides a warning sign beside it.** When Tally returns a page of sessions with one entry the coach cannot read, the coach still reads the notes on the other sessions. A warning sign there still stops training.
+- **A logged value the coach cannot read no longer gives a number.** For example, an RPE of "11". Your load suggestion, readiness and weekly counts now say "unknown" and name the day and the value.
+- **A load the coach cannot read in your plan spreadsheet is no longer "all fine".** For example, "heavy" in the load column. The limits check now says it cannot read that day, and names the cell.
+- **A unit the coach cannot read is no longer replaced.** A day sent with "kilograms" as its unit now gives an error. Before, the coach used your stored unit and reported no problem.
+- **An exercise done on a bench, such as a hip thrust or a Copenhagen plank, no longer counts as a bench press.** Before, these counted as chest and shoulder work against a shoulder limit.
+- **Your data goes only to a private repository.** The privacy check before each push now also refuses an internal repository (one that every member of a company's GitHub account can read). Before, it refused only a public one.
+- **A test failed in every copy of the template from 2026-10-20.** The update runs the tests, so it stopped there. A test's practice data used fixed dates that turned into past dates. The test now sets its own date.
+
+### Docs
+
+- **The docs say what this version does.** The contributing guide, the Tally page and the method pack no longer describe the safety locks that 0.2.0 removed. Code enforces two rules: the urgent stop, and pushes only to a private repository.
+- **Tally notes, plainly.** By default, a coach note in Tally can include readiness values and pain scores. The Tally page and the privacy page say so, and say how to keep notes generic. Tally is optional: your plans can live in files in your repo.
+- **Where your data goes.** The privacy page now says that the Oura values the coach uses reach the conversation, your log and (with detailed notes) Tally. A training export you choose at setup goes to Anthropic whole.
+- **Oura for a new user.** The recovery-data steps now walk you through your own Oura API application and the Keychain commands before the sign-in.
+
 ## [0.2.7]
 
 Body temperature from Oura.

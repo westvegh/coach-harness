@@ -469,12 +469,12 @@ test("an unattended block end writes one log line for the live session, with no 
 
 // ---------- launch review finding 5: generic logger notes by default ----------
 
-test("launch review finding 5: today writes generic logger notes by default; detail only with consent.logger_health_notes", () => {
+test("launch review finding 5: today's logger notes come from the generic table; detail only with consent.logger_health_notes true, never with false", () => {
   const today = skills.find((s) => s.name === "today")!;
   const notes = section(today.body, "Notes to the logger");
   assert.ok(notes, "today has a Notes to the logger section");
   for (const g of ["Readiness note", "Adjusted for recovery", "Recovery day", "Rest day: see your coach repo", "Load progression"]) assert.ok(notes.includes(g), g);
-  assert.match(notes, /Never put symptoms, body regions, pain scores, readiness values/);
+  assert.match(notes, /consent\.logger_health_notes: false`[^\n]*never put symptoms, body regions, pain scores, readiness values/);
   assert.match(notes, /consent\.logger_health_notes: true/);
   assert.doesNotMatch(today.body, /The reason line is `\[coach\] <decision_reasons>/);
   assert.doesNotMatch(today.body, /the reason with its rule IDs in `notes`/);

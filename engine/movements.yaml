@@ -191,8 +191,11 @@ keywords:
   "prowler": [sled]
   # horizontal and vertical push
   "press": [horizontal_push]
-  "bench": [horizontal_push]
+  # W1b: no bare "bench": a bench is also equipment (a hip thrust, a Copenhagen plank, a step-up).
   "bench press": [horizontal_push]
+  "db bench": [horizontal_push]
+  "dumbbell bench": [horizontal_push]
+  "barbell bench": [horizontal_push]
   "close grip bench": [horizontal_push, elbow_extension]
   "decline bench": [horizontal_push]
   "floor press": [horizontal_push]

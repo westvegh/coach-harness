@@ -265,15 +265,23 @@ export async function writePrep(o: WritePrepOptions): Promise<Record<string, unk
     else snap = (await import("./snapshot.ts")).loadSnapshot(root);
     sd = snapshotBefore(snap, date, session_id, now, logger);
   }
-  const before = snapshotDayToPlan(date, sd, units);
+  // W1: every value is checked in the conversion (logger other: the coach's `before`).
+  const before = logger === "other" ? tallyDayToPlan({ ...sd, date } as unknown as Record<string, unknown>, { date, units, where: { cmd: "today-write-prep", file: "before" } }) : snapshotDayToPlan(date, sd, units);
   // The unit of the stored day, and the unit the write sends (V7b finding 1): the limits check
   // reads the final day in that same unit.
   const storedUnit: Units = tallyDayUnit(sd, units);
   const after = finalDay(inp, sd, date, storedUnit);
+  // W1b: a supplied unit is checked before any fallback ("kilograms" is refused, never replaced);
+  // the stored unit is used only when the field is absent.
+  const { checkUnit } = await import("./input-values.ts");
+  checkUnit(after, "weightUnit", { cmd: "today-write-prep", file: inp.edit ? "today's day after the edit" : "after" }, "");
   const writeUnit: Units = after.weightUnit === "kg" || after.weightUnit === "lbs" ? after.weightUnit : storedUnit;
   // As write input (no read keys), so the conversion takes exactly the unit the write sends.
   const { found: _found, version: _version, weightUnitSource: _source, ...asWrite } = after;
-  const afterPlan = tallyDayToPlan({ ...asWrite, weightUnit: writeUnit }, { units });
+  // W1: values are checked on the final day, after an edit's nulls removed their fields (a null
+  // clears a field; it is never checked as a value).
+  // W1b: with logger files, a 0 sets count is the plans/ zero-work row (plans write keeps it).
+  const afterPlan = tallyDayToPlan({ ...asWrite, weightUnit: writeUnit }, { units, where: { cmd: "today-write-prep", file: inp.edit ? "today's day after the edit" : "after" }, zeroSets: logger === "files" });
   const afterExercises = after.exercises as LoggerExercise[];
 
   // ---- classify ----
@@ -291,6 +299,8 @@ export async function writePrep(o: WritePrepOptions): Promise<Record<string, unk
     const start = weekStart(date);
     const days: DayPlan[] = [afterPlan];
     const missing: string[] = [];
+    // W1b: a day of the week it cannot read (a plans/ cell, a stored value) makes the week unknown, never ok.
+    const unreadable: string[] = [];
     const nowMs = parseInstant(now, "now");
     for (let k = 0; k < 7; k++) {
       const d = addDays(start, k);
@@ -298,7 +308,14 @@ export async function writePrep(o: WritePrepOptions): Promise<Record<string, unk
       const day = snap?.days[d];
       const fresh = day && (logger !== "tally" || (nowMs - parseInstant(day.captured_at, "captured_at")) / 60_000 <= SNAPSHOT_MAX_AGE_MIN);
       if (day && fresh) {
-        if (day.found) days.push(snapshotDayToPlan(d, day, units));
+        if (day.found) {
+          try {
+            days.push(snapshotDayToPlan(d, day, units));
+          } catch (e) {
+            if (!(e instanceof CoachError) || e.code !== "INPUT_ERROR") throw e;
+            unreadable.push(e.message);
+          }
+        }
         continue;
       }
       if (logger === "files") continue; // the files are the record: no day is no plan
@@ -312,7 +329,11 @@ export async function writePrep(o: WritePrepOptions): Promise<Record<string, unk
     const over = findings.some((f) => f.kind !== "unclassified");
     week = missing.length > 0
       ? { status: "unknown", reason: `the week's other days are not all known: ${missing.join(", ")}`, missing, need_reads: missing.map((d) => ({ tool: "get_planned_workout", args: { date: d } })), findings }
-      : { status: over ? "over" : "ok", findings };
+      : over
+        ? { status: "over", findings, ...(unreadable.length > 0 ? { reason: `also, a day of the week cannot be read: ${unreadable.join("; ")}` } : {}) }
+        : unreadable.length > 0
+          ? { status: "unknown", reason: `a day of the week cannot be read: ${unreadable.join("; ")}`, findings }
+          : { status: "ok", findings };
   }
   const limitsResult = { ok: finalFindings.every((f) => f.kind === "unclassified") && (week.status === "ok" || week.status === "not_needed"), final_day: { ok: finalFindings.every((f) => f.kind === "unclassified"), findings: finalFindings }, week };
 

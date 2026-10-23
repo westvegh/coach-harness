@@ -271,7 +271,8 @@ test("V3c fix 10: the limits check replays every write: an intermediate break, a
   function runWith(writes: { date: string; exercises: unknown[]; replace?: boolean }[]): RunArtifacts {
     const dir = mkdtempSync(join(tmpdir(), "coach-v3c-"));
     const state = join(dir, "s.json");
-    const seed = { timezone: "America/Los_Angeles", weightUnit: "lbs" as const, weightUnitSource: "settings" as const, days: {}, sessions: [], operations: [], calls: [] };
+    // The mock's "now" is the fixture's today, so the fixed dates never turn into past dates.
+    const seed = { timezone: "America/Los_Angeles", weightUnit: "lbs" as const, weightUnitSource: "settings" as const, now: `${today}T16:00:00Z`, days: {}, sessions: [], operations: [], calls: [] };
     writeMock(state, seed);
     for (const w of writes) {
       const row = (readMock(state).days as any)[w.date];

@@ -182,7 +182,7 @@ type DayInput = { inp: Record<string, unknown>; day: DayPlan | TallyDayPlan | nu
  * is then true and the output carries the day back in Tally's shape. A snapshot day must be
  * from this session and read in the last 15 minutes, or it is refused.
  */
-async function dayInput(a: Args, root: string, units: Units): Promise<DayInput> {
+async function dayInput(a: Args, root: string, units: Units, cmd: string): Promise<DayInput> {
   const { asTallyDay, snapshotDayToPlan, tallyDayToPlan, tallyDayUnit } = await import("./tally-shape.ts");
   const { loadSnapshot, snapshotProblems } = await import("./snapshot.ts");
   const date = a.values["from-snapshot"];
@@ -207,12 +207,20 @@ async function dayInput(a: Args, root: string, units: Units): Promise<DayInput> 
     return { inp: {}, day: snapshotDayToPlan(date, sd, units), tally: true, unit: tallyDayUnit(sd, units), snap };
   }
   const raw = a.values.input ? readJson(a.values.input) : readStdin();
+  // W1: the day is checked in plan mode (engine/input-shapes.ts): the engine's shape or Tally's,
+  // never mixed; a value it cannot read is INPUT_ERROR with its path.
+  const { planDay } = await import("./input-shapes.ts");
+  const where = { cmd, file: a.values.input ?? "stdin" };
   const td = asTallyDay(raw);
-  if (td) return { inp: isPlainObject(raw) && isPlainObject(raw.day) ? raw : {}, day: tallyDayToPlan(td, { units }), tally: true, unit: tallyDayUnit(td, units), snap: null };
+  const wrapped = isPlainObject(raw) && isPlainObject(raw.day) && !Array.isArray(raw.exercises);
+  if (td) {
+    const { day, tally } = planDay(td, where, wrapped ? "day" : "", units, { empty: "tally" });
+    return { inp: wrapped ? (raw as Record<string, unknown>) : {}, day, tally, unit: tally ? tallyDayUnit(td, units) : units, snap: null };
+  }
   if (!isPlainObject(raw)) throw new CoachError("INPUT_ERROR", "the input must be a JSON object or a Tally day");
   const inner = isPlainObject(raw.day) ? asTallyDay(raw.day) : null;
-  if (inner) return { inp: raw, day: tallyDayToPlan(inner, { units }), tally: true, unit: tallyDayUnit(inner, units), snap: null };
-  return { inp: raw, day: isPlainObject(raw.day) ? (raw.day as DayPlan) : null, tally: false, unit: units, snap: null };
+  if (inner) return { inp: raw, day: tallyDayToPlan(inner, { units, where, path: "day" }), tally: true, unit: tallyDayUnit(inner, units), snap: null };
+  return { inp: raw, day: raw.day === undefined ? null : planDay(raw.day, where, "day", units).day, tally: false, unit: units, snap: null };
 }
 
 async function cmdAdjust(a: Args): Promise<number> {
@@ -228,7 +236,8 @@ export async function adjustFor(argv: string[]): Promise<Record<string, unknown>
 async function computeAdjust(a: Args): Promise<Record<string, unknown>> {
   const root = rootOf(a);
   const cfg = await maybeConfig(root);
-  const { inp, day, tally } = await dayInput(a, root, cfg?.athlete.units ?? "lbs");
+  const { inp, day, tally } = await dayInput(a, root, cfg?.athlete.units ?? "lbs", "adjust");
+  if (!day) throw new CoachError("INPUT_ERROR", `${a.values.input ?? "stdin"}: adjust needs a day ({day, decision}, a Tally day, or --from-snapshot <date>); see node engine/cli.ts help adjust`);
   const [{ adjustDay }, { loadTaxonomy }, { planToTallyDay }] = await Promise.all([import("./adjust.ts"), import("./taxonomy.ts"), import("./tally-shape.ts")]);
   const decision = a.values.decision ?? inp.decision;
   const pm = a.values["planned-minutes"] !== undefined ? Number(a.values["planned-minutes"]) : inp.planned_minutes;
@@ -274,11 +283,14 @@ async function computeLoads(a: Args): Promise<Record<string, unknown>> {
   if (raw !== undefined && asTallyDay(raw) === null) {
     if (!isPlainObject(raw)) throw new CoachError("INPUT_ERROR", "loads input must be a JSON object");
     d = { inp: raw, day: null, tally: false, unit, snap: null };
-  } else d = await dayInput(a, root, unit);
+  } else d = await dayInput(a, root, unit, "loads");
   const tallyDay = d.tally && d.day ? (d.day as TallyDayPlan) : null;
   if (tallyDay) unit = d.unit;
   const inp = d.inp;
-  let history = inp.history as SessionHistory | undefined;
+  // W1: a given history is logged sets only (a prescription is never a logged set).
+  const { historySessions, planExercises } = await import("./input-shapes.ts");
+  const where = { cmd: "loads", file: a.values.input ?? "stdin" };
+  let history = inp.history === undefined ? undefined : (historySessions(inp.history, where, "history") as SessionHistory);
   const strictUnits = tallyDay !== null || history === undefined;
   // V7: the snapshot whose history the loads use also backs the coverage (one read; V7 review finding 4).
   let used: Snapshot | null = null;
@@ -287,9 +299,11 @@ async function computeLoads(a: Args): Promise<Record<string, unknown>> {
     used = d.snap ?? (await import("./coach-snapshot.ts")).coachSnapshot(root, { now: a.values.now, cfg });
     history = used?.history ?? [];
   }
-  const exercises = tallyDay ? tallyDay.exercises : inp.exercises;
-  if (!Array.isArray(exercises)) throw new CoachError("INPUT_ERROR", "loads input needs exercises or a Tally day");
+  if (!tallyDay && !Array.isArray(inp.exercises)) throw new CoachError("INPUT_ERROR", "loads input needs exercises or a Tally day");
+  if (!tallyDay && inp.units !== undefined && inp.units !== "lbs" && inp.units !== "kg") throw new CoachError("INPUT_ERROR", `${where.file}: units must be lbs or kg; see node engine/cli.ts help loads`);
   const units = tallyDay ? unit : ((inp.units as "lbs" | "kg" | undefined) ?? cfg?.athlete.units ?? "lbs");
+  // {exercises}: checked in plan mode (one shape per list).
+  const exercises = tallyDay ? tallyDay.exercises : planExercises(inp.exercises, where, "exercises", units);
   // Clusters (0.2.4): the input's list, else coach.yaml's. The planned date decides `since`: the
   // day's date, else the input's `date`, else today in the athlete's timezone.
   const { athleteToday, loadClusters } = await import("./clusters.ts");
@@ -301,13 +315,18 @@ async function computeLoads(a: Args): Promise<Record<string, unknown>> {
   // load: the latest session may be missing, so no load changes on it.
   let coverage: Record<string, unknown> | undefined;
   if (inp.history === undefined) {
-    const [{ loggerHistoryCoverage, standardRange }, { athleteToday: todayOf }] = await Promise.all([import("./coverage.ts"), import("./clusters.ts")]);
+    const [{ loggerHistoryCoverage, standardRange, withHistoryValues }, { athleteToday: todayOf }] = await Promise.all([import("./coverage.ts"), import("./clusters.ts")]);
     const now = a.values.now ?? new Date().toISOString();
     const today = todayOf(root, now);
     const r = standardRange(date < today ? date : today);
-    const cov = loggerHistoryCoverage(root, cfg, r.since, r.until, now, sessionOf(a), used);
+    // W1b confirmation finding 1: suggestLoads reads every cached session (the last time each
+    // exercise was done can be older than the 8 weeks), so the value check covers all of them.
+    const cov = withHistoryValues(loggerHistoryCoverage(root, cfg, r.since, r.until, now, sessionOf(a), used), used, undefined, r.until);
     coverage = { status: cov.status, since: r.since, until: r.until, ...(cov.reason ? { reason: cov.reason } : {}) };
-    if (cov.status !== "complete" && a.values["from-snapshot"]) {
+    if (cov.values) {
+      // W1b: a logged value the engine cannot read: no number at all, not even a held one.
+      suggestions = suggestions.map((s) => ({ exerciseId: s.exerciseId, reason: `unknown: ${cov.values}; no suggestion`, rule_ids: [] }));
+    } else if (cov.status !== "complete" && a.values["from-snapshot"]) {
       suggestions = suggestions.map((s) => ({
         exerciseId: s.exerciseId,
         reason: `held: the history is incomplete (${cov.reason ?? cov.status}); the planned load stays`,
@@ -329,7 +348,7 @@ async function cmdLoadsFill(a: Args): Promise<number> {
   const path = need(a.values.input, "--input <week file> (loads --fill)");
   const cfg = await maybeConfig(root);
   const [{ readWeekFile, saveWeekFile, fillWeekLoads, parseHistoryFile }, { loadTaxonomy }] = await Promise.all([import("./week-file.ts"), import("./taxonomy.ts")]);
-  const wf = readWeekFile(path);
+  const wf = readWeekFile(path, "loads");
   const first = wf.week.days.flatMap((d) => d.exercises).find((e) => e.unit === "lbs" || e.unit === "kg");
   const units: Units = cfg?.athlete.units ?? first?.unit ?? "lbs";
   let history: SessionHistory;
@@ -341,6 +360,10 @@ async function cmdLoadsFill(a: Args): Promise<number> {
     const snap = (await import("./coach-snapshot.ts")).coachSnapshot(root, { now: a.values.now, cfg });
     history = snap?.history ?? [];
     source = history.length > 0 ? "logged weeks" : "none";
+    // W1b: a logged value the engine cannot read fills no load (the file is not written).
+    const { historyValueProblems, inputError, valueProblemsText } = await import("./input-values.ts");
+    const bad = historyValueProblems(history);
+    if (bad.length > 0) throw inputError({ cmd: "loads" }, "", `the logged weeks: ${valueProblemsText(bad)}; no load was filled`);
   }
   const { loadClusters } = await import("./clusters.ts");
   const res = fillWeekLoads(wf, history, await rulesAt(root, cfg), units, { tax: loadTaxonomy({ root }), source, clusters: loadClusters(root, wf) });
@@ -391,7 +414,10 @@ async function cmdTargets(a: Args): Promise<number> {
   if (typeof inp.today !== "string") throw new CoachError("USAGE", "targets input needs today");
   if (!Number.isInteger(inp.target_week)) throw new CoachError("USAGE", "targets input needs target_week (the block week to plan)");
   const block = inp.block as unknown as Block;
-  const ref = referenceWeek(block, (inp.logs as WeekLog[]) ?? [], inp.today);
+  // W1: logs are logged sets only (a prescription is never a logged set).
+  const { weekLogs } = await import("./input-shapes.ts");
+  const logs: WeekLog[] = inp.logs === undefined ? [] : weekLogs(inp.logs, { cmd: "targets", file: a.values.input }, "logs");
+  const ref = referenceWeek(block, logs, inp.today);
   const { loadClusters } = await import("./clusters.ts");
   const targets = nextWeekTargets(block, ref, await rulesAt(root, await maybeConfig(root)), { tax: loadTaxonomy({ root }), week: inp.target_week as number, clusters: loadClusters(root, inp) });
   out({ reference_week: ref?.week_start ?? null, targets });

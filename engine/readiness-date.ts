@@ -11,6 +11,7 @@
 import { DEFAULT_SLEEP_TARGET_MIN } from "./config.ts";
 import { addDays, diffDays, isCalendarDate, localDate, parseInstant, zonedTimeToEpoch } from "./dates.ts";
 import { CoachError } from "./errors.ts";
+import { historyValueProblems, valueProblemsText } from "./input-values.ts";
 import { DEFAULT_LONG_PATTERN_DAYS, DEFAULT_THRESHOLDS, readiness } from "./readiness.ts";
 import { loadSignals } from "./signals.ts";
 import { SNAPSHOT_MAX_AGE_MIN } from "./snapshot.ts";
@@ -294,6 +295,11 @@ export function coverageProblem(snap: Snapshot | null, date: CalendarDate, nowMs
   const from = addDays(date, -expiryDays);
   if (cov.since && cov.since > from) return `the history read starts ${cov.since}, after ${from}: earlier sessions are unknown`;
   if (cov.until && cov.until < date) return `the history read ends ${cov.until}, before ${date}: later sessions are unknown`;
+  // W1b: a logged value the engine cannot read in the window is unknown evidence, never a judgment.
+  // W1b confirmation finding 2: a session with no plan is judged against the last earlier session
+  // of each exercise, up to UNPLANNED_LOOKBACK_DAYS before it, so those sessions are checked too.
+  const bad = historyValueProblems(snap.history, addDays(from, -UNPLANNED_LOOKBACK_DAYS), date);
+  if (bad.length > 0) return valueProblemsText(bad);
   return null;
 }
 

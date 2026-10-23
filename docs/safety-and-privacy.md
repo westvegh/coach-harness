@@ -59,7 +59,8 @@ The coach changes a limit only when you ask (the `limits` skill, or the `safety`
 | Your brief, limits, block and log (`athlete/`) | Your private GitHub repository | You and GitHub |
 | Your weekly plans and logged sets, with `logger: files` (`plans/`) | Your private GitHub repository | You and GitHub |
 | Apple Health data (sleep, HRV, resting heart rate) and check-ins from the Shortcut | `athlete/signals/` in your private repo. Your own Shortcut sends it with your own GitHub token. | You and GitHub |
-| Oura data | `athlete/.cache/` on your Mac (not committed) | You |
+| Oura raw data (the fetched records) | `athlete/.cache/` on your Mac (not committed) | You |
+| Oura values the coach uses (sleep, HRV, resting heart rate; the temperature deviation when the coach reads the signals) | The conversation (Anthropic); the readiness line of each entry in `athlete/log/` (your private GitHub repo); Tally notes on changed days, when detailed notes are on (the default) | You, Anthropic, GitHub and, with detailed notes, Tally |
 | Oura app credentials and tokens | The macOS Keychain on your Mac | You |
 | Your plan, your workout log and a short coach note on each changed day, with `logger: tally` or `other` | Tally, or the tool you connected | You and that service |
 | Your conversations with the coach | Anthropic, as for any Claude Code session | You and Anthropic |
@@ -78,7 +79,7 @@ Git records every change to `athlete/`, `plans/` and `coach.yaml`: the coach com
 
 ### A training export at setup
 
-Without Tally history, setup looks for a workout export in `~/Downloads` and `~/Desktop`. It reads only the first line (the column names) of each `.csv` file there, and lists only files whose columns look like a workout export. It never prints the column names, and never names a file that does not match. The coach reads the full contents of one file only: the one you choose, and only its last 8 weeks. It writes a short summary to `athlete/brief.md` and a normalized copy to `.tmp/coach/history.json` (scratch, not committed). That file content goes to Anthropic as part of the conversation.
+Without Tally history, setup looks for a workout export in `~/Downloads` and `~/Desktop`. It reads only the first line (the column names) of each `.csv` file there, and lists only files whose columns look like a workout export. It never prints the column names, and never names a file that does not match. The coach reads the full contents of one file only: the one you choose. It reads the whole file with the Read tool, so **the whole file goes to Anthropic** as part of the conversation. The coach then keeps only the last 8 weeks: it writes a short summary to `athlete/brief.md` and a normalized copy of those weeks to `.tmp/coach/history.json` (scratch, not committed). To send less, export a shorter date range from your app if it offers one.
 
 ### The Apple Health Shortcut
 
@@ -86,7 +87,7 @@ The Shortcut runs on your phone and uses a fine-grained GitHub token that can wr
 
 ### Oura
 
-The Oura fetcher uses your own Oura API application. Its client ID, client secret and tokens are in the macOS Keychain (service `coach-harness.oura`). Nothing is written to the repository. Error messages never include a token or a server response.
+The Oura fetcher uses your own Oura API application. Its client ID, client secret and tokens are in the macOS Keychain (service `coach-harness.oura`). No credential or token is written to the repository. The Oura values themselves do reach the conversation and your log (see the table above). Error messages never include a token or a server response.
 
 ## What each automation mode sends where
 
@@ -114,12 +115,12 @@ This list is what lets the run work. It is not a second gate: no hook checks it 
 
 ## The pre-push check
 
-Setup installs a git `pre-push` hook (`git-hooks/pre-push`). Git does not clone the hooks folder, so a scheduled run pushes only through `node engine/cli.ts push`. That command installs the hook again, runs `node engine/cli.ts prepush-check` (the hook is installed and GitHub reports the repository as private), and pushes only when the check passes. A failed or public check means no push and a log entry. A fresh clone has no git hook, so the session-start hook installs it when it is missing. Before each push, the hook looks up the visibility of the destination repository on GitHub.
+Setup installs a git `pre-push` hook (`git-hooks/pre-push`). Git does not clone the hooks folder, so a scheduled run pushes only through `node engine/cli.ts push`. That command installs the hook again, runs `node engine/cli.ts prepush-check` (the hook is installed and GitHub reports the repository as private), and pushes only when the check passes. A failed check, or a repository that is public or internal, means no push and a log entry. A fresh clone has no git hook, so the session-start hook installs it when it is missing. Before each push, the hook looks up the visibility of the destination repository on GitHub.
 
 - If the lookup fails, the push is blocked.
-- If the destination is public and any commit in the push touches your athlete data, the push is blocked. Athlete data is `athlete/`, `plans/` (your weekly plans and logged sets) and `coach.yaml`.
+- If the destination is not private and any commit in the push touches your athlete data, the push is blocked. "Not private" means public, or internal (a GitHub Enterprise repository that every member of the enterprise can read). Athlete data is `athlete/`, `plans/` (your weekly plans and logged sets) and `coach.yaml`.
 
-The hook checks each push only. If you later make the repository public in GitHub's settings, the hook cannot stop that. Keep your copy private. The session-start hook also warns when a tracked file holds a token or athlete data in the wrong place.
+The hook checks each push only. If you later make the repository public or internal in GitHub's settings, the hook cannot stop that. Keep your copy private. The session-start hook also warns when a tracked file holds a token or athlete data in the wrong place.
 
 ## Delete your data
 

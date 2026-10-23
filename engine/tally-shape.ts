@@ -4,8 +4,9 @@
 // set. The skills never reshape data themselves: they pass a Tally day to the CLI, and
 // the CLI converts it both ways here.
 //
-// Forward (toPlan): `suggestedSets` copies of {weight, reps, duration_s, rpe}. reps is the
-// top of a rep range (repsMax, else suggestedReps), as in the guard's toDayPlan. Every
+// Forward (toPlan): `suggestedSets` copies of {weight, reps, duration_s, rpe, distance_m}, and
+// `perSide` on the exercise. reps is the top of a rep range (repsMax, else suggestedReps), as in
+// the guard's toDayPlan. Every value is checked first (engine/input-values.ts, W1). Every
 // exercise keeps its Tally fields in `tally`, so the way back loses nothing.
 //
 // Back (toTallyDay): an exercise whose sets still equal its forward sets comes back exactly
@@ -15,9 +16,9 @@
 // An exercise with no `tally` (a recovery exercise from adjust) gets a snake_case
 // exerciseId from its name and a warning: resolve it with search_exercises first.
 import { CoachError } from "./errors.ts";
-import { responsePayload } from "./snapshot.ts";
+import { checkTallyExercise, checkUnit, describe, inputError, MAX_SET_COUNT, type PrescriptionOptions, type Where } from "./input-values.ts";
+import { responsePayload } from "./tool-response.ts";
 import { isCalendarDate } from "./dates.ts";
-import { isPlainObject } from "./yaml-file.ts";
 import type { CalendarDate, DayPlan, ExerciseEntry, LoggerExercise, SetEntry, SnapshotDay, Units } from "./types.ts";
 
 /** An engine exercise that remembers its Tally fields. */
@@ -29,6 +30,9 @@ export type TallyDayWrite = { date: CalendarDate; dayType: string; dayName: stri
 
 /** Units Tally knows for the athlete (contracts §20 item 9). */
 const KNOWN_UNIT_SOURCES = ["settings", "history"];
+
+/** A plain object (the same test as yaml-file.ts, without loading yaml). */
+const isPlainObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
@@ -47,20 +51,31 @@ export function tallyDayUnit(day: { weightUnit?: unknown; weightUnitSource?: unk
   return u ?? fallback;
 }
 
-/** The sets a Tally exercise prescribes. A missing or bad set count counts as 1 (fail closed, as toDayPlan). */
+/**
+ * The sets a Tally exercise prescribes: `suggestedSets` copies (missing: 1 set; a present count is
+ * checked first, engine/input-values.ts), each with the distance when Tally gives one. A count of 0
+ * passes the check only as the files logger's zero-work row (W1b): no sets, as `plans read` gives it.
+ */
 export function tallySets(e: LoggerExercise): SetEntry[] {
-  const n = Number.isInteger(e.suggestedSets) && (e.suggestedSets as number) > 0 ? (e.suggestedSets as number) : 1;
-  const set: SetEntry = { weight: num(e.suggestedWeight), reps: num(e.repsMax) ?? num(e.suggestedReps), duration_s: num(e.suggestedDuration), rpe: num(e.rpe) };
+  if (e.suggestedSets === 0) return [];
+  const n = Number.isInteger(e.suggestedSets) && (e.suggestedSets as number) > 0 ? Math.min(e.suggestedSets as number, MAX_SET_COUNT) : 1;
+  const distance = num(e.distanceMeters);
+  const set: SetEntry = { weight: num(e.suggestedWeight), reps: num(e.repsMax) ?? num(e.suggestedReps), duration_s: num(e.suggestedDuration), rpe: num(e.rpe), ...(distance !== null ? { distance_m: distance } : {}) };
   return Array.from({ length: n }, () => ({ ...set }));
 }
 
-export function tallyExerciseToEntry(e: LoggerExercise, unit: Units): TallyExerciseEntry {
-  if (!isPlainObject(e) || typeof e.name !== "string" || e.name === "") throw new CoachError("TALLY_SHAPE", "a Tally exercise needs a name");
+/** Where a converted value came from, for the error (engine/input-values.ts), and what its prescription may hold. */
+type Origin = { where?: Where; path?: string } & PrescriptionOptions;
+
+/** A Tally exercise as an engine exercise, its values checked first; per side and distance are kept (classify reads both). */
+export function tallyExerciseToEntry(e: LoggerExercise, unit: Units, o: Origin = {}): TallyExerciseEntry {
+  checkTallyExercise(e, o.where ?? {}, o.path ?? "", o);
   return {
     exerciseId: typeof e.exerciseId === "string" ? e.exerciseId : null,
-    name: e.name,
+    name: e.name as string,
     muscle: typeof e.muscle === "string" ? e.muscle : null,
     unit,
+    ...(e.perSide === true ? { perSide: true } : {}),
     sets: tallySets(e),
     tally: structuredClone(e),
   };
@@ -69,12 +84,16 @@ export function tallyExerciseToEntry(e: LoggerExercise, unit: Units): TallyExerc
 /**
  * A Tally day (a get_planned_workout result, a snapshot day, or a plan_workout_day input)
  * as a DayPlan. `units` is the fallback unit when Tally does not know the athlete's unit.
+ * Each exercise's values are checked (INPUT_ERROR names `where` and the path).
  */
-export function tallyDayToPlan(day: Record<string, unknown>, opts: { date?: CalendarDate; units: Units }): TallyDayPlan {
-  if (!isPlainObject(day) || !Array.isArray(day.exercises)) throw new CoachError("TALLY_SHAPE", "a Tally day needs an exercises list");
+export function tallyDayToPlan(day: Record<string, unknown>, opts: { date?: CalendarDate; units: Units } & Origin): TallyDayPlan {
+  const w = opts.where ?? {};
+  const at = (k: string) => (opts.path ? `${opts.path}.${k}` : k);
+  if (!isPlainObject(day) || !Array.isArray(day.exercises)) throw inputError(w, at("exercises"), "must be a list (a Tally day needs an exercises list)");
   if (day.found === false) throw new CoachError("TALLY_SHAPE", "the Tally day was not found (nothing is planned on that date)");
   const date = opts.date ?? day.date;
-  if (!isCalendarDate(date)) throw new CoachError("TALLY_SHAPE", "the Tally day needs a date YYYY-MM-DD");
+  if (!isCalendarDate(date)) throw inputError(w, at("date"), `must be a date YYYY-MM-DD, got ${describe(date)}`);
+  checkUnit(day, "weightUnit", w, opts.path ?? "");
   const unit = tallyDayUnit(day, opts.units);
   const str = (k: string) => (typeof day[k] === "string" ? { [k]: day[k] as string } : {});
   return {
@@ -85,17 +104,33 @@ export function tallyDayToPlan(day: Record<string, unknown>, opts: { date?: Cale
     ...(typeof day.skipped === "boolean" ? { status: day.skipped ? ("skipped" as const) : ("planned" as const) } : {}),
     ...str("source"),
     ...(typeof day.userModified === "boolean" ? { userModified: day.userModified } : {}),
-    exercises: day.exercises.map((e, i) => {
-      if (!isPlainObject(e)) throw new CoachError("TALLY_SHAPE", `exercises[${i}] must be an object`);
-      return tallyExerciseToEntry(e, unit);
-    }),
+    exercises: day.exercises.map((e, i) => tallyExerciseToEntry(e as LoggerExercise, unit, { where: w, path: at(`exercises[${i}]`), zeroSets: opts.zeroSets })),
   };
 }
 
-/** A snapshot day as a DayPlan (it must have been found). */
+/** The plans/ columns a files snapshot day keeps as text when the cell cannot be read (W1b). */
+const FILE_CELLS: [string, string, string][] = [
+  ["suggestedSets", "sets", `is not a whole number from 0 to ${MAX_SET_COUNT}`],
+  ["suggestedWeight", "load", "is not a load (a number of 0 or more, or bw)"],
+];
+
+/**
+ * A snapshot day as a DayPlan (it must have been found). W1b: a files logger day (`source: files`)
+ * keeps a 0 in a sets cell as the zero-work row, and a cell it cannot read as its text: a check
+ * that needs that value is refused with the date, the exercise and the column, never read as clean.
+ */
 export function snapshotDayToPlan(date: CalendarDate, day: SnapshotDay, units: Units): TallyDayPlan {
   if (!day.found) throw new CoachError("TALLY_SHAPE", `nothing is planned on ${date} (the snapshot read found no day)`);
-  return tallyDayToPlan(day as unknown as Record<string, unknown>, { date, units });
+  const where = { file: `the planned day ${date} (as read)` };
+  const files = day.source === "files";
+  if (files) {
+    for (const e of day.exercises) {
+      for (const [key, column, what] of FILE_CELLS) {
+        if (typeof e[key] === "string") throw new CoachError("INPUT_ERROR", `${where.file}: ${String(e.name)}: the ${column} cell ${JSON.stringify(e[key])} ${what}; the check that needs it is unknown until the cell in plans/ is fixed`);
+      }
+    }
+  }
+  return tallyDayToPlan(day as unknown as Record<string, unknown>, { date, units, where, zeroSets: files });
 }
 
 const sameSets = (a: SetEntry[], b: SetEntry[]) =>

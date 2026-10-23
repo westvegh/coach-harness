@@ -8,6 +8,7 @@
 import { coachSnapshot } from "./coach-snapshot.ts";
 import { addDays, parseInstant } from "./dates.ts";
 import { chainOf, FRESH_MIN, HISTORY_RANGE_DAYS, historyCoverage, markHistoryFailed, windowDaysFor, type HistoryCoverage } from "./history-windows.ts";
+import { historyValueProblems, valueProblemsText } from "./input-values.ts";
 import { readCaptureFailures } from "./snapshot-lock.ts";
 import { loadSnapshot } from "./snapshot.ts";
 import type { CalendarDate, CoachConfig, Instant, Snapshot } from "./types.ts";
@@ -67,6 +68,18 @@ export function loggerHistoryCoverage(root: string, cfg: CoachConfig | null, sin
   if (logger === "files") return { logger, ...historyCoverage(snap !== undefined ? snap : coachSnapshot(root, { now, cfg }), since, until, nowMs) };
   const s = snap !== undefined ? (snap ? applyCaptureFailures(structuredClone(snap), root, session_id) : null) : tallySnapshot(root, session_id);
   return { logger, ...historyCoverage(s, since, until, nowMs, { session_id, windowDays: windowDaysFor(cfg?.template.days) }) };
+}
+
+/**
+ * W1b: coverage for a consumer that computes from logged sets: `failed` when the snapshot history
+ * holds a logged value the engine cannot read in [since, until] (the reason names the date and the
+ * field). `values` is that reason; the note scan does not use this (a bad set never stops a note).
+ */
+export function withHistoryValues<T extends HistoryCoverage>(cov: T, snap: Snapshot | null | undefined, since: CalendarDate | undefined, until: CalendarDate): T & { values?: string } {
+  const bad = snap ? historyValueProblems(snap.history, since, until) : [];
+  if (bad.length === 0) return cov;
+  const values = valueProblemsText(bad);
+  return { ...cov, status: "failed", reason: cov.reason && cov.status !== "complete" ? `${cov.reason}; ${values}` : values, values };
 }
 
 /** The standard history range for a date: 8 weeks before it to it (contracts §9a, the consumer table). */

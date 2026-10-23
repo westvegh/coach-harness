@@ -2,7 +2,7 @@
 #
 # Format: docs/contracts.md §4. Each rule has an ID, a kind (sourced:
 # the source says it; policy: this pack's own choice), a severity, a source
-# (key in sources.md plus a timestamp) and, where the engine can enforce it, a
+# (key in sources.md plus a timestamp) and, where the engine can run it, a
 # check. source.precision says whether the timestamp is the exact statement
 # or only the chapter start. Rule texts are written fresh, in our own words.
 #
@@ -271,7 +271,7 @@ rules:
     kind: policy
     severity: hard
     source: { ref: E4, at: "01:40:51", precision: exact }
-    note: "Policy, enforced by engine/progression.ts (contracts §8). The source describes returning to the highest level done before the deload."
+    note: "Policy, computed by engine/progression.ts into the weekly targets (contracts §8). The source describes returning to the highest level done before the deload."
 
   - id: NA-PROG-009
     text: "When a muscle's reference week has fewer than 10 sets, one extra set a week is always allowed, even when that exceeds 10%."

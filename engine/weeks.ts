@@ -3,6 +3,7 @@
 // in the athlete's timezone (contracts §0, §9), so a week is weekStart(date).
 import { addDays, isCalendarDate, weekStart } from "./dates.ts";
 import { CoachError } from "./errors.ts";
+import { historyValueProblems, valueProblemsText } from "./input-values.ts";
 import type { CalendarDate, DayLog, Snapshot, SnapshotSession, Units, WeekLog } from "./types.ts";
 
 export type WeeksResult = {
@@ -50,7 +51,7 @@ export function historyWeeks(history: SnapshotSession[], from: CalendarDate, to:
 export function weeksFromSnapshot(snap: Snapshot | null, from: CalendarDate, to: CalendarDate): WeeksResult {
   const logs = historyWeeks(snap?.history ?? [], from, to);
   const warnings: string[] = [];
-  const cov = snap?.history_coverage ?? null;
+  let cov = snap?.history_coverage ?? null;
   if (!snap) warnings.push("no snapshot: every week is empty; read get_workout_history first");
   else if (!cov) warnings.push("no valid history read in this session: weeks may be missing sessions; read get_workout_history first");
   else {
@@ -59,6 +60,17 @@ export function weeksFromSnapshot(snap: Snapshot | null, from: CalendarDate, to:
     else if (!cov.complete) warnings.push("the history read is incomplete (more pages remain)");
     if (cov.since && cov.since > from) warnings.push(`the history read starts ${cov.since}, after --from ${from}: earlier sessions are unknown, not absent`);
     if (cov.until && cov.until < to) warnings.push(`the history read ends ${cov.until}, before --to ${to}: later sessions are unknown, not absent`);
+    // W1b: a logged value the engine cannot read: those weeks are unknown (the coverage says so).
+    const bad = historyValueProblems(snap.history, from, to);
+    if (bad.length > 0) {
+      const reason = valueProblemsText(bad);
+      warnings.push(`${reason}: the weeks that hold it are unknown`);
+      cov = { ...cov, complete: false, reason };
+      for (const log of logs) {
+        const inWeek = historyValueProblems(snap.history, log.week_start < from ? from : log.week_start, addDays(log.week_start, 6) > to ? to : addDays(log.week_start, 6));
+        if (inWeek.length > 0) log.unknown = valueProblemsText(inWeek);
+      }
+    }
   }
   return { from, to, logs, coverage: cov, warnings };
 }

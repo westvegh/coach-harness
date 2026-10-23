@@ -10,6 +10,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { CoachError } from "./errors.ts";
+import { checkUnit, checkWriteExercise } from "./input-shapes.ts";
 import { fillDone, isoWeekMonday, readWeek, writePlan, type DayInput } from "./plans-files.ts";
 import type { Units } from "./types.ts";
 
@@ -34,6 +35,20 @@ export function daysOf(raw: unknown): DayInput[] {
   if (isObj(raw.tally_day)) return [raw.tally_day as DayInput];
   if (typeof raw.date === "string" && Array.isArray(raw.exercises)) return [raw as DayInput];
   throw new CoachError("INPUT_ERROR", "plans write input needs days, week.days, day, tally_day, or one day ({date, exercises})");
+}
+
+/**
+ * W1: the values of a write (contract unchanged: each exercise in its own shape, `sets` or Tally's
+ * suggestedSets). A count, number, unit or warm-up it cannot read is INPUT_ERROR with its path.
+ */
+export function checkWriteDays(days: DayInput[], file: string): void {
+  const where = { cmd: "plans write", file };
+  days.forEach((d, i) => {
+    if (!isObj(d) || !Array.isArray(d.exercises)) return; // writePlan names a day without a date or exercises
+    checkUnit(d, "weightUnit", where, `days[${i}]`);
+    // W1b: a 0 sets count is the zero-work row the CSV keeps (plans read gives it no sets).
+    d.exercises.forEach((e, j) => checkWriteExercise(e, where, `days[${i}].exercises[${j}]`, { zeroSets: true }));
+  });
 }
 
 export async function plansCommand(argv: string[]): Promise<number> {
@@ -66,7 +81,9 @@ export async function plansCommand(argv: string[]): Promise<number> {
     }
     // Cluster rows get their note (0.2.4): the input's `clusters`, else coach.yaml's.
     const { loadClusters } = await import("./clusters.ts");
-    out(writePlan(root, daysOf(raw), await unitsOf(root), loadClusters(root, raw)));
+    const days = daysOf(raw);
+    checkWriteDays(days, values.input);
+    out(writePlan(root, days, await unitsOf(root), loadClusters(root, raw)));
     return 0;
   }
   if (sub === "read") {

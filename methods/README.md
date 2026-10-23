@@ -37,7 +37,7 @@ rules:
 
 - **`source.ref`** must be a key in `sources.md`. **`at`** is `HH:MM:SS` into that source. **`precision`** is `exact` (the statement itself was checked) or `chapter` (only the chapter start is certain).
 - A policy rule may carry a `source` as its basis. Say in `note` what the pack chose.
-- Mark a rule `hard` only when the engine enforces it. Everything else is `soft`.
+- Mark a rule `hard` only when the engine runs its check. The engine builds the rule into its numbers and the audit reports a break; no code blocks a plan. Everything else is `soft`.
 
 ### Check types
 

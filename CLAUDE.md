@@ -15,6 +15,7 @@ The athlete should see no permission prompt in normal use. `.claude/settings.jso
 - **Reading:** read files with the Read tool. To search, run `grep -rn "<text>" <folder>` or `find <folder> -name "<pattern>"` in Bash, one command per call, with the pattern in quotes. This Claude Code version has no Glob or Grep tool.
 - **A command's usage:** `node engine/cli.ts help <command> [<subcommand>]`.
 - **No source reading.** In normal use, do not read engine source or `docs/contracts.md`. `node engine/cli.ts help <command>` gives each input shape. Read source only when a command fails in a way its help does not explain.
+- **The engine's result is the answer.** Report the number it prints in one line. Do not write your own input files to check the same result again: run a check again only when the days, the limits or the reads changed. To ask the engine about a day you read from Tally, pass the day as Tally returned it. When a command fails, its error names the field to fix. This does not change your own load choices, the read-back after a write, or what you do when safety is unknown.
 
 ## Read order
 
@@ -98,7 +99,7 @@ Cluster sets are a preference too. When the athlete chooses clusters, or the bri
 - Commit after every change that touches `athlete/`, with a clear message: what changed and why, with rule IDs. Use `node engine/cli.ts commit --message "<text>"`: it commits `athlete/`, `plans/` and `coach.yaml` only, never other staged work, with no permission prompt. It exits 0 for nothing to commit; a nonzero exit is a failed commit: stop and say so in one line. The Stop hook commits those paths itself when you leave changes behind.
 - `athlete/.urgent-stop` is committed and pushed at once (`node engine/cli.ts push`): a cloud run starts from a fresh clone and must see it. It holds only term names, sources and a time.
 - Commit messages carry plan changes and rule IDs only. Never put brief text, pain details or clinician text in them.
-- Push with `node engine/cli.ts push`. It refuses a public repository: athlete data never goes to one.
+- Push with `node engine/cli.ts push`. It refuses any repository that is not private (public, or internal to a company): athlete data goes only to a private one.
 - The `today` skill ends with `node engine/cli.ts save --run <run_id>`: its log entry once, the commit, the sync with the remote (`git pull --rebase`; in a worktree, the branch onto `origin/main` and `main` fast-forwarded) and the push through `node engine/cli.ts push`, in one command.
 - Switch branches with `git switch`, not `git checkout <branch>`. Never force-push.
 

@@ -259,17 +259,20 @@ export function isMatch(d: Detection): boolean {
 
 // ---------- session notes ----------
 
-/** A logged session as the snapshot history holds it, with the notes Tally returns. */
+/**
+ * A logged session as the snapshot history holds it, with the notes Tally returns. An exercise's
+ * notes are one string or a list of strings (Tally's note sheet, W1); each string is scanned.
+ */
 export type NotesHistoryEntry = {
   date: CalendarDate;
   notes?: string | null;
-  exercises?: { exerciseId?: string | null; name?: string; notes?: string | null }[];
+  exercises?: { exerciseId?: string | null; name?: string; notes?: string | readonly string[] | null }[];
 };
 
 export type NotesMatch = Detection & { date: CalendarDate; where: "session" | "exercise"; exerciseId?: string | null; name?: string };
 
 /**
- * Runs the matcher over logged session notes and exercise notes. Returns one match per note
+ * Runs the matcher over logged session notes and exercise notes (each string of a list). Returns one match per note
  * with urgent or pain terms, oldest first. `since` (inclusive) limits the dates scanned.
  * `cleared` maps an urgent term to the latest clearance date (engine/urgent.ts): an urgent
  * term in a note dated on or before it is dropped, so a cleared event does not stop again.
@@ -291,9 +294,11 @@ export function scanSessionNotes(history: NotesHistoryEntry[], opts: { since?: C
       if (isMatch(d)) out.push({ date: s.date, where: "session", ...d });
     }
     for (const ex of s.exercises ?? []) {
-      if (typeof ex.notes !== "string") continue;
-      const d = live(detect(ex.notes, terms), s.date);
-      if (isMatch(d)) out.push({ date: s.date, where: "exercise", exerciseId: ex.exerciseId ?? null, name: ex.name, ...d });
+      const notes = typeof ex.notes === "string" ? [ex.notes] : Array.isArray(ex.notes) ? ex.notes.filter((n): n is string => typeof n === "string") : [];
+      for (const note of notes) {
+        const d = live(detect(note, terms), s.date);
+        if (isMatch(d)) out.push({ date: s.date, where: "exercise", exerciseId: ex.exerciseId ?? null, name: ex.name, ...d });
+      }
     }
   }
   return out;

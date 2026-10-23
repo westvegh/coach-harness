@@ -299,6 +299,8 @@ export type WeekLog = {
   kind?: WeekKind;
   planned_sessions?: number;
   days: DayLog[];
+  /** W1b: `weeks` marks a week that holds a logged value the engine cannot read; `targets` and `volume` refuse it. */
+  unknown?: string;
 };
 
 export type BlockSlot = {
@@ -377,8 +379,12 @@ export type VolumeViolation = {
 
 /** `warmup`: kept from an export that marks warm-ups (0.2.4); Tally history has no marker. */
 export type HistorySet = { weight: number | null; reps: number | null; rpe: number | null; warmup?: boolean };
-/** `notes`: the exercise note Tally returns (kept for the note scan, V4). */
-export type HistoryExercise = { exerciseId: string; name: string; muscle: string; sets: HistorySet[]; notes?: string };
+/**
+ * `notes`: the exercise notes Tally returns, kept for the note scan (V4): one string, or Tally's
+ * list of strings with `notesTruncated` when Tally cut them (W1). A value of another type is kept
+ * as it came: the scan reports it (coverage incomplete).
+ */
+export type HistoryExercise = { exerciseId: string; name: string; muscle: string; sets: HistorySet[]; notes?: string | string[]; notesTruncated?: true };
 
 /**
  * One exercise as the logger stores it (for Tally: the get_planned_workout shape, with
@@ -424,6 +430,12 @@ export type SnapshotSession = {
   server?: string;
   /** V7: the history pages that returned this session, as `<window key>#<generation>#<page index>` (engine/history-windows.ts). */
   windows?: string[];
+  /**
+   * W1b: the logged values the capture could not read ("<date> <exercise>: sets[0].rpe must be …").
+   * The value is kept as null (or the set left out); every consumer that computes from logged sets
+   * reports unknown or failed with these, never a number (engine/input-shapes.ts historyValueProblems).
+   */
+  problems?: string[];
 };
 
 /**
@@ -470,6 +482,11 @@ export type Snapshot = {
   history_coverage?: { captured_at: Instant; complete: boolean; since?: CalendarDate; until?: CalendarDate; reason?: string };
   /** V7: the history windows read in this session, by key `<since>..<until>` (engine/history-windows.ts). */
   history_windows?: Record<string, HistoryWindow>;
+  /**
+   * W1b: the notes of history pages that failed validation, by window key: each session's notes,
+   * no sets. Only the note scan reads them; a new first page of the window replaces them.
+   */
+  unread_notes?: Record<string, SnapshotSession[]>;
   /** V7: history pages whose cursor continued no window's chain; they count for nothing. */
   history_orphans?: number;
   /** V7: dates whose last get_planned_workout read failed (an error or a malformed result), cleared by a good read. */

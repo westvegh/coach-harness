@@ -15,7 +15,7 @@ The file format is in [methods/README.md](../methods/README.md) and in [contract
 2. **List your sources** in `sources.md`: key, title, URL, date and notes. Use public sources only.
 3. **Write the rules** in `rules.yaml`. Give each rule a unique ID (`<PREFIX>-<AREA>-NNN`), a `kind` (`sourced` or `policy`) and a `severity`.
    - A `sourced` rule needs a `source` with a key from `sources.md` and a timestamp.
-   - Mark a rule `hard` only when it has a `check` that the engine runs. The guard denies writes that break a hard rule.
+   - Mark a rule `hard` only when it has a `check` that the engine runs. The engine builds a hard rule into its numbers, and the audit reports a plan that breaks one. No hook blocks such a plan: the coach follows the rule.
    - Use only the check types in [methods/README.md](../methods/README.md). A new check type needs engine support first.
    - Optional: a per-exercise session maximum, `check: { type: max_sets_per_exercise_session, value: 4, adaptations: [power, strength, hypertrophy, muscular_endurance] }`, kind `policy`, severity `soft`. When the coach drafts a week, one exercise of the listed adaptations then gets at most `value` hard sets in a session, and the extra sets go to another exercise. List only resistance adaptations: conditioning, recovery and cluster work is never limited. The lint accepts it only with a whole number of 1 or more and known adaptation names. Without the check, the draft has no maximum.
 4. **Write the prose** in `principles/*.md`. Cite each rule inline, for example `[NA-PROG-001]`. Every rule must be cited, and every cited ID must exist.
@@ -45,7 +45,7 @@ The file format is in [methods/README.md](../methods/README.md) and in [contract
 
 ## In an athlete repo
 
-`methods/**` is protected. In your own coaching repo, the guard asks you before the model edits a pack, and an unattended run can never edit one. Change a pack in a commit that you review.
+No hook protects `methods/**`. In a live session, Claude Code asks you before the model edits a pack, because `.claude/settings.json` does not allow those edits. A scheduled run's tool list does not include them either. Change a pack in a commit that you review.
 
 ## Share it
 

@@ -108,7 +108,8 @@ async function cmdWeeks(a: Args): Promise<number> {
   const tax = loadTaxonomy({ root });
   // The list: --input's `clusters` (for example before coach.yaml exists), else coach.yaml's.
   const clusters = loadClusters(root, a.values.input ? readJsonFile(a.values.input) : undefined);
-  out({ ...res, logs: res.logs.map((w) => ({ ...w, sets_by_muscle: weeklySetsByMuscle(w, tax, clusters) })) });
+  // W1b: a week with a logged value the engine cannot read has no count (`unknown` says why).
+  out({ ...res, logs: res.logs.map((w) => ({ ...w, sets_by_muscle: w.unknown ? null : weeklySetsByMuscle(w, tax, clusters) })) });
   return 0;
 }
 
@@ -176,6 +177,12 @@ async function cmdBlockDraft(a: Args): Promise<number> {
       : set.logger === "files"
         ? filesSnapshot(root, { units: set.units, timezone: set.timezone, now })
         : null;
+  // W1b: week 1 is never capped against a history with a logged value the engine cannot read.
+  if (snap) {
+    const { historyValueProblems, inputError, valueProblemsText } = await import("./input-values.ts");
+    const bad = historyValueProblems(snap.history);
+    if (bad.length > 0) throw inputError({ cmd: "block draft" }, "", `the logged weeks: ${valueProblemsText(bad)}; the reference week for week 1 is unknown`);
+  }
   const rules = (await import("./methods.ts")).loadRules(packDir) as unknown as Rules;
   // Clusters (0.2.4): the input's list (setup, before coach.yaml), else coach.yaml's.
   const clusters = (await import("./clusters.ts")).loadClusters(root, input);

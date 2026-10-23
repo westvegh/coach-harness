@@ -17,6 +17,7 @@ People who train and who already use Claude Code. You should be comfortable with
 - **A GitHub account and the GitHub CLI** (`gh`). Your coaching repository must be private.
 - **Optional: [Tally](docs/tally.md) on iPhone,** to log sets at the gym. Without it, your plans go in a weekly spreadsheet file in your repo, or in a tool you already use.
 - **Optional recovery data:** an Apple Watch through an iOS Shortcut that you build, or Oura on a Mac. Without them, the coach uses your check-ins and your logged sessions.
+- **For Oura:** an Oura API application of your own. You register it once on Oura's developer site, and the `recovery-data` skill gives you the steps.
 - **For scheduled cloud runs (optional):** a Claude plan with Claude Code routines, and Tally.
 
 ## Quick start
@@ -58,7 +59,7 @@ Optional paths add a screen only when you choose them: "Show details" on the dat
 
 When you state a lasting preference, such as a rep range or an exercise you dislike, the coach writes it in your athlete brief and follows it in later plans.
 
-Setup also checks that your repository is private before the first push, and installs a git hook that refuses a push of your athlete files to a public repository.
+Setup also checks that your repository is private before the first push, and installs a git hook that refuses a push of your athlete files to a repository that is not private.
 
 After setup, talk to the coach in plain words: "how should I train today?", "check in", "plan next week", "I did my workout", "my knee hurts". You can add recovery data, daily and weekly automation, injury history or assessments later. Just ask.
 
@@ -93,7 +94,7 @@ The engine makes every number. The coach recommends: it gives its pick and the r
 Code enforces two rules:
 
 1. **The urgent stop.** When you mention an urgent warning sign, such as chest pain, fainting, or new numbness or weakness, a hook writes `athlete/.urgent-stop` and commits it, and the coach pushes it next (a cloud run sees the stop after that push). While the stop exists, code blocks: every plan tool on any MCP server whose name ends in `plan_workout_day`, `plan_workout_range`, `update_planned_workout`, `move_planned_workout`, `skip_planned_workout`, `delete_planned_workout`, `update_user_profile` or `update_training_limits`; Edit, Write and MultiEdit under `plans/`; and `plans write` and `plans done`. Code also refuses `urgent clear` in a scheduled run and without a reason.
-2. **Privacy.** Your athlete data never goes to a public repository. The push command and a git pre-push hook refuse a public destination.
+2. **Privacy.** Your athlete data goes only to a private repository. The push command and a git pre-push hook refuse a public destination. They also refuse an internal one (GitHub Enterprise), because every member of the enterprise can read it.
 
 The rest of the stop is the coach's instruction, not code: it gives the urgent-care text, writes nothing to another tool you connected, makes no plan change through the shell, and asks you before it runs `urgent clear`. Only your answer in a live session should clear the stop: "A clinician has seen me about it" or "It was a false alarm".
 

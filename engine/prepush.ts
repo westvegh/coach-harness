@@ -66,7 +66,9 @@ export function prePush(input: { cwd: string; remote: string; url: string; refLi
   } catch (e) {
     return { ok: false, reason: `cannot look up the visibility of ${repo} with gh (${(e as Error).message.split("\n")[0]}); push denied` };
   }
-  if (visibility !== "public") return { ok: true, reason: `${repo} is ${visibility}`, visibility };
+  // Only a private repository may hold athlete data. An internal repository (GitHub Enterprise)
+  // is readable by every member of the enterprise, so it is checked like a public one.
+  if (visibility === "private") return { ok: true, reason: `${repo} is private`, visibility };
   let commits: string[];
   try {
     commits = pushedCommits(input.cwd, input.refLines);
@@ -75,9 +77,9 @@ export function prePush(input: { cwd: string; remote: string; url: string; refLi
   }
   const bad = commits.filter((c) => athleteFiles(input.cwd, c).length > 0);
   if (bad.length > 0) {
-    return { ok: false, reason: `${repo} is PUBLIC and ${bad.length} pushed commit(s) touch athlete data: athlete/, plans/ or coach.yaml (${bad.map((c) => c.slice(0, 8)).join(", ")}); push denied`, visibility, commits: bad };
+    return { ok: false, reason: `${repo} is ${visibility.toUpperCase()} and ${bad.length} pushed commit(s) touch athlete data: athlete/, plans/ or coach.yaml (${bad.map((c) => c.slice(0, 8)).join(", ")}); push denied`, visibility, commits: bad };
   }
-  return { ok: true, reason: `${repo} is public; no pushed commit touches athlete data`, visibility };
+  return { ok: true, reason: `${repo} is ${visibility}; no pushed commit touches athlete data`, visibility };
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {

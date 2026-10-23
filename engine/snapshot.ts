@@ -5,7 +5,9 @@ import { dirname, join } from "node:path";
 import { decodeTallyVersion, encodeTallyVersion } from "../adapters/loggers/tally/version.ts";
 import { isCalendarDate, parseInstant } from "./dates.ts";
 import { CoachError } from "./errors.ts";
-import { isSavedFileNotice, markHistoryFailed, mergeHistoryPage, type PageInput } from "./history-windows.ts";
+import { chainOf, isSavedFileNotice, markHistoryFailed, mergeHistoryPage, windowKey, type PageInput } from "./history-windows.ts";
+import { loggedSetProblems, sessionExerciseName } from "./input-values.ts";
+import { responsePayload } from "./tool-response.ts";
 import { isPlainObject } from "./yaml-file.ts";
 import type { CalendarDate, HistoryExercise, Instant, LoggerExercise, PlannedListing, Snapshot, SnapshotDay, SnapshotSession, Units } from "./types.ts";
 
@@ -113,30 +115,9 @@ export function snapshotProblems(snap: Snapshot | null, session_id: string, now:
 
 // ---------- merging tool responses ----------
 
-/**
- * The JSON payload of a hook's `tool_response`: an array of {type: "text", text} blocks
- * (spike #8), or an object with `content` holding them. Null when no block parses as
- * JSON (an error message, for example).
- */
-export function responsePayload(toolResponse: unknown): unknown {
-  let blocks: unknown = toolResponse;
-  if (isPlainObject(toolResponse) && Array.isArray(toolResponse.content)) {
-    if (toolResponse.isError === true) return null;
-    blocks = toolResponse.content;
-  }
-  if (typeof blocks === "string") blocks = [{ type: "text", text: blocks }];
-  if (!Array.isArray(blocks)) return isPlainObject(toolResponse) && !("content" in toolResponse) ? toolResponse : null;
-  for (const b of blocks) {
-    if (isPlainObject(b) && b.type === "text" && typeof b.text === "string") {
-      try {
-        return JSON.parse(b.text);
-      } catch {
-        /* not JSON: try the next block */
-      }
-    }
-  }
-  return null;
-}
+// The JSON payload of a hook's `tool_response` lives in engine/tool-response.ts (the Tally day
+// conversion reads it without loading this module); it is exported from here too.
+export { responsePayload };
 
 // ---------- Tally T3 refusals (Tally server-limits spec §6.3) ----------
 
@@ -227,26 +208,42 @@ export function dayFromPlannedWorkout(r: Record<string, unknown>, now: Instant):
 }
 
 const text = (v: unknown) => (typeof v === "string" && v.trim() !== "" ? v : undefined);
+/**
+ * W1: notes as the note scan must see them. Tally gives an exercise's notes as a list of strings
+ * (its note sheet: at most 5, each at most 300 characters, `notesTruncated: true` when it cut
+ * them) and a session's note as one string. A blank string is dropped; any other value is kept
+ * as it came, so the scan reads every string and reports what it cannot read (coverage incomplete).
+ */
+const keptNotes = (v: unknown): { notes?: unknown } => (v === undefined || v === null || (typeof v === "string" && v.trim() === "") ? {} : { notes: v });
 /** The first start-time field a history session carries. */
 const startOf = (s: Record<string, unknown>) => text(s.startedAt) ?? text(s.startTime) ?? text(s.started_at) ?? text(s.start);
 
-/** A history session as the snapshot keeps it: sets, and the session and exercise notes (V4: the note scan reads them). */
+/** A history session as the snapshot keeps it: sets, and the session and exercise notes (V4: the note scan reads them; W1: a list of notes too). */
 function historySession(s: Record<string, unknown>, server?: string): SnapshotSession | null {
   if (!isCalendarDate(s.date)) return null;
   const unit = s.weightUnit === "kg" || s.weightUnit === "lbs" ? (s.weightUnit as Units) : undefined;
-  const exercises: HistoryExercise[] = (Array.isArray(s.exercises) ? s.exercises : []).filter(isPlainObject).map((e) => ({
-    exerciseId: typeof e.exerciseId === "string" ? e.exerciseId : "",
-    name: typeof e.name === "string" ? e.name : "",
-    muscle: typeof e.muscle === "string" ? e.muscle : "",
-    sets: (Array.isArray(e.sets) ? e.sets : []).filter(isPlainObject).map((x) => ({
-      weight: typeof x.weight === "number" ? x.weight : null,
-      reps: typeof x.reps === "number" ? x.reps : null,
-      rpe: typeof x.rpe === "number" ? x.rpe : null,
-      // 0.2.4: a warm-up marker is kept where the source has one (Tally history has none).
-      ...(x.warmup === true ? { warmup: true } : {}),
-    })),
-    ...(text(e.notes) ? { notes: e.notes as string } : {}),
-  }));
+  const date = s.date;
+  // W1b: a logged value it cannot read is kept as null (a set that is not an object is left out),
+  // and the session records the problem: the consumers then say unknown, never a number.
+  const problems: string[] = [];
+  const exercises: HistoryExercise[] = (Array.isArray(s.exercises) ? s.exercises : []).filter(isPlainObject).map((e, j) => {
+    const sets = Array.isArray(e.sets) ? e.sets : [];
+    for (const p of loggedSetProblems(sets)) problems.push(`${date} ${sessionExerciseName(e, j)}: ${p}`);
+    return {
+      exerciseId: typeof e.exerciseId === "string" ? e.exerciseId : "",
+      name: typeof e.name === "string" ? e.name : "",
+      muscle: typeof e.muscle === "string" ? e.muscle : "",
+      sets: sets.filter(isPlainObject).map((x) => ({
+        weight: typeof x.weight === "number" ? x.weight : null,
+        reps: typeof x.reps === "number" ? x.reps : null,
+        rpe: typeof x.rpe === "number" ? x.rpe : null,
+        // 0.2.4: a warm-up marker is kept where the source has one (Tally history has none).
+        ...(x.warmup === true ? { warmup: true } : {}),
+      })),
+      ...(keptNotes(e.notes) as Pick<HistoryExercise, "notes">),
+      ...(e.notesTruncated === true ? { notesTruncated: true as const } : {}),
+    };
+  });
   const id = text(s.id) ?? text(s.sessionId) ?? text(s.workoutId);
   const start = startOf(s);
   return {
@@ -254,11 +251,46 @@ function historySession(s: Record<string, unknown>, server?: string): SnapshotSe
     ...(typeof s.name === "string" ? { name: s.name } : {}),
     ...(unit ? { weightUnit: unit } : {}),
     exercises,
-    ...(text(s.notes) ? { notes: s.notes as string } : {}),
+    ...(keptNotes(s.notes) as Pick<SnapshotSession, "notes">),
     ...(id ? { id } : {}),
     ...(start ? { startedAt: start } : {}),
     ...(server ? { server } : {}),
+    ...(problems.length > 0 ? { problems } : {}),
   };
+}
+
+/**
+ * W1b: the notes of a history page that failed validation (one malformed entry fails the whole
+ * page), kept by window key for the note scan only: each session that has a valid date keeps its
+ * session note and its exercise notes (the `readNotes` forms), never its sets. The window stays
+ * failed, so loads, readiness and the other history consumers still treat the history as unknown,
+ * and the scan's coverage stays incomplete (urgent_unknown when nothing matched).
+ */
+function keepUnreadNotes(snap: Snapshot, r: Record<string, unknown>, input: Record<string, unknown>, m: MergeInput): void {
+  const since = isCalendarDate(input.since) ? input.since : undefined;
+  const until = isCalendarDate(input.until) ? input.until : undefined;
+  const key = typeof input.cursor === "string" ? (chainOf(snap.history_windows ?? {}, since, until, input.cursor) ?? windowKey(since, until)) : windowKey(since, until);
+  const kept = (Array.isArray(r.sessions) ? r.sessions : [])
+    .filter(isPlainObject)
+    .map((x) => historySession(x, m.server))
+    .filter((x): x is SnapshotSession => x !== null)
+    .map(({ problems: _p, ...x }) => ({ ...x, exercises: x.exercises.map((e) => ({ ...e, sets: [] })) }))
+    .filter((x) => x.notes !== undefined || x.exercises.some((e) => e.notes !== undefined || e.notesTruncated));
+  if (kept.length === 0) return;
+  (snap.unread_notes ??= {})[key] = [...(typeof input.cursor === "string" ? (snap.unread_notes[key] ?? []) : []), ...kept];
+}
+
+function dropUnreadNotes(snap: Snapshot, key: string): void {
+  if (!snap.unread_notes) return;
+  delete snap.unread_notes[key];
+  if (Object.keys(snap.unread_notes).length === 0) delete snap.unread_notes;
+}
+
+/** Every session the note scan reads: the history, and the notes kept from failed pages (W1b). */
+export function notesSessions(snap: { history?: unknown; unread_notes?: unknown } | null | undefined): unknown[] {
+  const history = Array.isArray(snap?.history) ? snap.history : [];
+  const unread = isPlainObject(snap?.unread_notes) ? Object.values(snap.unread_notes).flatMap((v) => (Array.isArray(v) ? v : [])) : [];
+  return [...history, ...unread];
 }
 
 /**
@@ -351,6 +383,8 @@ export function mergeResponse(prev: Snapshot | null, m: MergeInput): Snapshot {
   // `failed` (not just `missing`) and name the read to make again.
   const invalidRead = () => {
     const reason = isSavedFileNotice(m.response) ? "the result was too large for the hook (saved to a file)" : "the read returned an error or a malformed result";
+    // W1b: a page that fails validation still has readable notes; they are kept for the note scan only.
+    if (m.tool === "get_workout_history" && isPlainObject(payload)) keepUnreadNotes(snap, payload, input, m);
     if (m.tool === "get_planned_workout") {
       forget(input.date);
       if (isCalendarDate(input.date)) (snap.failed_days ??= {})[input.date] = { at: m.now, reason };
@@ -411,6 +445,8 @@ export function mergeResponse(prev: Snapshot | null, m: MergeInput): Snapshot {
       break;
     }
     case "get_workout_history": {
+      // W1b: a new first page of a window replaces the notes kept from its failed pages.
+      if (typeof input.cursor !== "string") dropUnreadNotes(snap, windowKey(isCalendarDate(input.since) ? input.since : undefined, isCalendarDate(input.until) ? input.until : undefined));
       const sessions = (Array.isArray(r.sessions) ? r.sessions : [])
         .filter(isPlainObject)
         .map((x) => historySession(x, m.server))

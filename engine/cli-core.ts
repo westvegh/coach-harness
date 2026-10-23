@@ -6,7 +6,6 @@ import { isAbsolute, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { CoachError } from "./errors.ts";
 import type { LoggerTool } from "./logger.ts";
-import type { NotesHistoryEntry } from "./safety.ts";
 import type { Block, DayPlan, ReadinessInput, Rules, WeekLog, WeekPlan } from "./types.ts";
 
 export const SNAPSHOT_RELATIVE = "athlete/.cache/snapshot.json";
@@ -71,8 +70,17 @@ export async function cmdVolume(argv: string[]): Promise<number> {
     import("./session-max.ts"),
   ]);
   const root = resolve(values.root ?? ".");
-  const input = readJson(requireInput(values.input, "volume")) as VolumeInput;
+  const file = requireInput(values.input, "volume");
+  const input = readJson(file) as VolumeInput;
   if (!isPlainObject(input)) throw new CoachError("INPUT_ERROR", "volume input must be a JSON object");
+  // W1: `week` is plan days (the engine's shape or Tally's, per day); `logs` are logged sets only.
+  const { inputError, planDays, weekLogs } = await import("./input-shapes.ts");
+  const where = { cmd: "volume", file };
+  if (input.week !== undefined) {
+    if (!isPlainObject(input.week)) throw inputError(where, "week", "must be {week_start, days}");
+    input.week = { ...input.week, days: planDays(input.week.days, where, "week.days", await unitsOf(root)) } as WeekPlan;
+  }
+  if (input.logs !== undefined) input.logs = weekLogs(input.logs, where, "logs");
   const tax = loadTaxonomy({ root });
   const clusters = loadClusters(root, input);
   const result: Record<string, unknown> = {};
@@ -101,6 +109,14 @@ export async function cmdVolume(argv: string[]): Promise<number> {
   if (Object.keys(result).length === 0) throw new CoachError("USAGE", "volume input needs `week`, or `block` + `logs` + `today`");
   out(result);
   return 0;
+}
+
+/** The athlete's units (coach.yaml), the fallback unit of a Tally day; lbs before setup. */
+async function unitsOf(root: string): Promise<"lbs" | "kg"> {
+  const p = join(root, "coach.yaml");
+  if (!existsSync(p)) return "lbs";
+  const { readYamlFile } = await import("./yaml-file.ts");
+  return (readYamlFile(p, "CONFIG_INVALID") as { athlete?: { units?: unknown } } | null)?.athlete?.units === "kg" ? "kg" : "lbs";
 }
 
 async function packRules(root: string): Promise<Rules> {
@@ -233,15 +249,23 @@ export async function scanNotesResult(values: ScanNotesOptions): Promise<Record<
         coverage = { status: "missing", reason: "logger other: the engine cannot read that tool; pass its history with --input" };
       } else {
         let snap: import("./types.ts").Snapshot | null = null;
+        const { loadSnapshot, notesSessions } = await import("./snapshot.ts");
         try {
-          snap = (await import("./snapshot.ts")).loadSnapshot(root);
-          history = snap?.history ?? [];
+          snap = loadSnapshot(root);
+          // W1b: with the notes kept from history pages that failed validation (their window stays failed).
+          history = notesSessions(snap);
           const c = cov.loggerHistoryCoverage(root, cfg, values.since, until, now, session, snap);
           coverage = { status: c.status, ...(c.reason ? { reason: c.reason } : {}), need: c.need };
         } catch (e) {
           // A snapshot that does not validate: scan what it holds (a match still sets the stop); coverage failed.
           const path = join(root, SNAPSHOT_RELATIVE);
-          history = existsSync(path) ? ((readJson(path) as { history?: unknown }).history ?? []) : [];
+          let held: unknown[] = [];
+          try {
+            held = existsSync(path) ? notesSessions(readJson(path) as { history?: unknown; unread_notes?: unknown } | null) : [];
+          } catch {
+            /* unreadable: nothing to scan; coverage failed says so */
+          }
+          history = held;
           coverage = { status: "failed", reason: (e as Error).message };
         }
       }
@@ -252,11 +276,19 @@ export async function scanNotesResult(values: ScanNotesOptions): Promise<Record<
       }
     }
     if (!Array.isArray(history)) throw new CoachError("INPUT_ERROR", "safety scan-notes needs a list of history entries");
+    // W1: every readable note is scanned (a string, or each string of a list); an entry or note it
+    // cannot read, or notes Tally cut, make coverage incomplete with a reason (never a failure).
+    const { readNotes } = await import("./input-shapes.ts");
+    const notes = readNotes(history, values.since);
+    if (notes.problems.length > 0) {
+      const why = `some notes could not be read: ${notes.problems.join("; ")}`;
+      coverage = { ...coverage, status: coverage.status === "complete" ? "unreadable" : coverage.status, reason: coverage.reason ? `${coverage.reason}; ${why}` : why };
+    }
     // Urgent terms in notes on or before the latest clearance of the same term were cleared.
-    const matches = scanSessionNotes(history as NotesHistoryEntry[], { since: values.since, cleared: urgent.clearedThrough(urgent.readClearances(root)) });
+    const matches = scanSessionNotes(notes.entries, { since: values.since, cleared: urgent.clearedThrough(urgent.readClearances(root)) });
     const terms = urgentTermsOf(matches);
     const stop = terms.length > 0 && !values["dry-run"] ? await urgent.recordStop(root, { terms, source: "note", now: values.now }, { push: true }) : null;
-    const scanned = (history as NotesHistoryEntry[]).filter((h) => isPlainObject(h) && (!values.since || String(h.date) >= values.since)).length;
+    const scanned = history.filter((h) => isPlainObject(h) && (!values.since || String(h.date) >= values.since)).length;
     const complete = coverage.status === "complete";
     return {
       server,
@@ -297,8 +329,11 @@ export async function cmdClassify(argv: string[]): Promise<number> {
     const now = values.now ?? new Date().toISOString();
     const snap = cfg.logger === "files" ? (await import("./coach-snapshot.ts")).coachSnapshot(root, { now, cfg }) : loadSnapshot(root);
     const sd = snapshotBefore(snap, at, values.session ?? (process.env.CLAUDE_CODE_SESSION_ID || null), now, cfg.logger);
+    // W1: `after` as a raw Tally read, a hook-style response or {day}, or a plain day in either shape, checked.
+    const { planDay } = await import("./input-shapes.ts");
+    const where = { cmd: "classify", file: values.input };
     const td = asTallyDay(input.after);
-    const after = td ? tallyDayToPlan({ ...td, found: true }, { units: cfg.athlete.units }) : input.after;
+    const after = td ? tallyDayToPlan({ ...td, found: true }, { units: cfg.athlete.units, where, path: "after", zeroSets: cfg.logger === "files" }) : planDay(input.after, where, "after", cfg.athlete.units).day;
     out(await classifyResult(root, { ...input, before: snapshotDayToPlan(at, sd, cfg.athlete.units), after, snapshotDay: sd }));
     return 0;
   }
@@ -307,7 +342,14 @@ export async function cmdClassify(argv: string[]): Promise<number> {
     return 0;
   }
   if (!values.input) throw new CoachError("USAGE", "classify needs --exercise <name> or --input <file.json>");
-  out(await classifyResult(root, readJson(values.input) as Record<string, any>));
+  const input = readJson(values.input);
+  if (!isPlainObject(input)) throw new CoachError("INPUT_ERROR", `${values.input}: classify input must be {before, after, tool}; see node engine/cli.ts help classify`);
+  // W1: `before` and `after` are plan days (the engine's shape or Tally's, per day), or null for an empty date.
+  const [{ planDay }, { loadConfig }] = await Promise.all([import("./input-shapes.ts"), import("./config.ts")]);
+  const units = loadConfig(join(root, "coach.yaml")).athlete.units;
+  const where = { cmd: "classify", file: values.input };
+  for (const k of ["before", "after"] as const) if (input[k] !== undefined && input[k] !== null) input[k] = planDay(input[k], where, k, units).day;
+  out(await classifyResult(root, input as Record<string, any>));
   return 0;
 }
 

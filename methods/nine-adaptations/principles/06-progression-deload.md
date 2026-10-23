@@ -24,7 +24,7 @@ Known gap: for very light loads, the smallest available step (for example a 20 l
 - **Cycle:** deload every 6th week: 5 build weeks, then 1 deload week [NA-PROG-005]. The source also accepts 4 to 8 weeks between deloads; 6 is this pack's default.
 - **Depth:** a deload week drops both volume and load to about 70% of the last build week [NA-PROG-006]. For example, 3 sets of 15 might become 2 sets of 8 with a slightly lighter load.
 - **Plan them in advance.** Put deloads in the calendar when the block is written, not when the athlete already feels run down. A deload taken only on demand always comes late. End each quarter with a deload or a full week off [NA-PROG-007].
-- **Coming back:** the first build week after a deload may return to the best pre-deload week, plus at most one regular step [NA-PROG-008]. The engine enforces this (contracts §8).
+- **Coming back:** the first build week after a deload may return to the best pre-deload week, plus at most one regular step [NA-PROG-008]. The engine's weekly targets keep this cap (contracts §8).
 
 ## Why these numbers
 

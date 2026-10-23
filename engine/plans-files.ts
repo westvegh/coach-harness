@@ -318,6 +318,14 @@ function unitOf(s: string, fallback: Units): Units {
   return t === "kg" ? "kg" : t === "lb" || t === "lbs" ? "lbs" : fallback;
 }
 
+/** True when a load cell has text that is not a load: not empty, not "bw", not a number of 0 or more. */
+function unreadableLoad(cell: string): boolean {
+  const t = cell.trim();
+  if (t === "" || /^bw$/i.test(t)) return false;
+  const n = num(t);
+  return n === null || n < 0;
+}
+
 /** A load cell in `from`, as a number in `to` (Tally's rounding); null for empty, "bw" or not a number. */
 function loadIn(cell: string, from: Units, to: Units): number | null {
   const n = num(cell);
@@ -459,7 +467,9 @@ function planned(rows: PlanRow[], units: Units, warnings: string[]): DayPlan[] {
     if (r.notes) day.notes = day.notes ? `${day.notes} | ${r.notes}` : r.notes;
     const n = count(r.sets, MAX_SETS, "sets", warn);
     const { reps, duration_s } = parseReps(r.reps, warn);
-    const load = num(r.load);
+    const load = num(r.load) !== null && num(r.load)! >= 0 ? num(r.load) : null;
+    // W1b: a load cell that is not a load is unknown, with a warning (never a clean "no load").
+    if (load === null && unreadableLoad(r.load)) warn(`load ${JSON.stringify(r.load.trim())} is not a load; read as unknown`);
     // An empty sets cell is one set (a cardio row); an unknown count gives no sets.
     const sets = n === undefined ? 1 : (n ?? 0);
     day.exercises.push({
@@ -666,14 +676,18 @@ export function filesSnapshot(root: string, opts: { units: Units; timezone: stri
           const { reps, repsMax, duration_s } = parseReps(r.reps, quiet);
           const sets = count(r.sets, MAX_SETS, "sets", quiet);
           const load = loadIn(r.load, unitOf(r.unit, opts.units), opts.units);
+          // W1b: a sets or load cell it cannot read stays as its text, so the conversion
+          // (snapshotDayToPlan) refuses it with the date, exercise and column, never a guessed
+          // number (a bad sets cell was 1 set, a bad load no load). A 0 in the sets cell is the
+          // zero-work row (no sets, as plans read gives it).
           return {
             exerciseId: "",
             name: r.exercise,
-            ...(typeof sets === "number" ? { suggestedSets: sets } : {}),
+            ...(typeof sets === "number" ? { suggestedSets: sets } : sets === null ? { suggestedSets: r.sets.trim() } : {}),
             ...(reps !== null ? { suggestedReps: reps } : {}),
             ...(repsMax !== null ? { repsMax } : {}),
             ...(duration_s !== null ? { suggestedDuration: duration_s } : {}),
-            ...(load !== null ? { suggestedWeight: load } : {}),
+            ...(load !== null ? { suggestedWeight: load } : unreadableLoad(r.load) ? { suggestedWeight: r.load.trim() } : {}),
           };
         }),
       weightUnit: opts.units,

@@ -78,6 +78,11 @@ test("public destination: a pushed commit that touches athlete/ is denied; templ
   assert.equal(runHook(dir, bin, "public", URL_, `refs/heads/main ${head} refs/heads/x ${ZERO}\n`).code, 1);
   // The same push to a private destination is fine.
   assert.equal(runHook(dir, bin, "private", URL_, `refs/heads/main ${head} refs/heads/main ${base}\n`).code, 0);
+  // An internal (enterprise) destination is checked like a public one.
+  const internal = runHook(dir, bin, "internal", URL_, `refs/heads/main ${head} refs/heads/main ${base}\n`);
+  assert.equal(internal.code, 1);
+  assert.match(internal.stderr, /alex\/coach is INTERNAL and 1 pushed commit\(s\) touch athlete data/);
+  assert.equal(runHook(dir, bin, "internal", URL_, `refs/heads/main ${clean} refs/heads/main ${base}\n`).code, 0);
   assert.match(readFileSync(join(bin, "calls.log"), "utf8"), /api repos\/alex\/coach --jq \.visibility/);
 });
 
@@ -184,6 +189,9 @@ test("launch review finding 4: a fresh clone has no pre-push hook, and prepush-c
   const pub = prepushCheck(dir, bin, "public");
   assert.equal(pub.code, 1);
   assert.match(pub.json.reason, /PUBLIC/);
+  const internal = prepushCheck(dir, bin, "internal");
+  assert.equal(internal.code, 1);
+  assert.match(internal.json.reason, /INTERNAL; athlete data goes only to a private repository/);
   assert.equal(prepushCheck(dir, bin, null).code, 1);
   git(dir, "remote", "set-url", "origin", "/tmp/elsewhere.git");
   assert.equal(prepushCheck(dir, bin, "private").code, 1);

@@ -12,6 +12,7 @@ import { convertWeight } from "../adapters/loggers/tally/day.ts";
 import { exerciseClusterNote, stripClusterNotes, type ClusterEntry } from "./clusters.ts";
 import { isCalendarDate } from "./dates.ts";
 import { CoachError } from "./errors.ts";
+import { checkEngineExercise, checkHistoryExercise } from "./input-shapes.ts";
 import { PLATE_STEP, suggestLoads, type SessionHistory } from "./loads.ts";
 import { planToTallyDay, type TallyDayWrite } from "./tally-shape.ts";
 import type { DayPlan, ExerciseEntry, Rules, Taxonomy, Units } from "./types.ts";
@@ -19,8 +20,8 @@ import { isPlainObject } from "./yaml-file.ts";
 
 export type WeekFile = { week: { week_start?: string; kind?: string; load_factor?: number; days: DayPlan[]; [k: string]: unknown }; [k: string]: unknown };
 
-/** Reads a week file. {days} alone is accepted too (load_factor 1). */
-export function readWeekFile(path: string): WeekFile {
+/** Reads a week file. {days} alone is accepted too (load_factor 1). `cmd` names the help in an error. */
+export function readWeekFile(path: string, cmd = "tally-days"): WeekFile {
   let raw: unknown;
   try {
     raw = JSON.parse(readFileSync(path, "utf8"));
@@ -39,6 +40,8 @@ export function readWeekFile(path: string): WeekFile {
     if (!isPlainObject(d) || !isCalendarDate(d.date) || !Array.isArray(d.exercises)) throw new CoachError("INPUT_ERROR", `${path}: days[${i}] needs a date (YYYY-MM-DD) and exercises`);
     d.exercises.forEach((e: unknown, j: number) => {
       if (!isPlainObject(e) || typeof e.name !== "string" || !Array.isArray(e.sets)) throw new CoachError("INPUT_ERROR", `${path}: days[${i}].exercises[${j}] needs a name and sets (the engine's day shape)`);
+      // W1: the values too (a string weight, a count of sets that is not a list, a warm-up that is not true or false).
+      checkEngineExercise(e, { cmd, file: path }, `days[${i}].exercises[${j}]`);
     });
   });
   const lf = raw.week.load_factor;
@@ -70,7 +73,9 @@ export function parseHistoryFile(raw: unknown, where = "--history"): SessionHist
       date: s.date,
       weightUnit: units,
       exercises: s.exercises.map((e: unknown, j: number) => {
-        if (!isPlainObject(e) || typeof e.name !== "string" || e.name === "" || !Array.isArray(e.sets)) throw new CoachError("INPUT_ERROR", `${where}: sessions[${i}].exercises[${j}] needs a name and sets`);
+        // W1: logged sets only, with their values checked (a prescription is never a logged set).
+        checkHistoryExercise(e, { cmd: "loads", file: where }, `sessions[${i}].exercises[${j}]`);
+        if (!isPlainObject(e) || typeof e.name !== "string" || !Array.isArray(e.sets)) throw new CoachError("INPUT_ERROR", `${where}: sessions[${i}].exercises[${j}] needs a name and sets`);
         return {
           exerciseId: typeof e.exerciseId === "string" ? e.exerciseId : "",
           name: e.name,

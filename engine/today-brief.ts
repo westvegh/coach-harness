@@ -416,6 +416,8 @@ export async function briefPost(o: BriefOptions & { evidence?: OtherEvidence }):
       : { status: "missing", ...range, reason: "logger other: pass that tool's notes history and today's day with --input", gaps: [range], need: [] };
   } else if (logger === "files") history = (await import("./coverage.ts")).loggerHistoryCoverage(root, cfg, range.since, range.until, now, session_id);
   else history = atomicCoverage(snap, range.since, range.until, nowMs, { session_id, windowDays: ATOMIC_WINDOW_DAYS });
+  // W1b: a logged value the engine cannot read makes the history failed for loads (the note scan keeps its own coverage).
+  if (logger !== "other" && !snapError) history = (await import("./coverage.ts")).withHistoryValues(history, snap, range.since, range.until);
 
   // ---- the note scan (its side effect unchanged: an urgent term writes, commits and pushes the stop) ----
   const { scanNotesResult } = await import("./cli-core.ts");
