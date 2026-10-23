@@ -2,6 +2,12 @@
 
 All notable changes to this project are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [semantic versioning](https://semver.org/).
 
+## [0.3.1]
+
+### Fixed
+
+- **The tests of the limits migration failed on CI runners with no git name.** The migration commits, and those runners have no git identity. The tests now set one, as the other git tests do. The coach itself is unchanged.
+
 ## [0.3.0]
 
 Your limits are in your own words now.

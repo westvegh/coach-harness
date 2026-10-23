@@ -20,6 +20,9 @@ import { validateConfig } from "../engine/config.ts";
 import { cli, instance, writeJson } from "./e3/helpers.ts";
 import { GIT_ENV, git, REPO } from "./v7-helpers.ts";
 
+// CI runners have no git identity; the migration commits in-process, so its git calls need one (as GIT_ENV gives the other git tests).
+Object.assign(process.env, GIT_ENV);
+
 const TAX = loadTaxonomy({ localPath: null });
 const TEMPLATE = readFileSync(join(REPO, "templates/athlete/limits.md"), "utf8");
 const NOW = "2026-10-14T15:00:00.000Z"; // 08:00 in Los Angeles, inside the daily window

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "repo": "https://github.com/westvegh/coach-harness",
-  "release": "0.3.0",
+  "release": "0.3.1",
   "files": {
     ".claude/agents/analyst.md": {
       "mode": "100644",
@@ -157,7 +157,7 @@
     },
     "CHANGELOG.md": {
       "mode": "100644",
-      "blob": "de23d698bdf833a73a053b62e3815754f6b46097"
+      "blob": "98f98353a9979c1729285448c0c366b23324730c"
     },
     "CLAUDE.md": {
       "mode": "100644",
@@ -1101,11 +1101,11 @@
     },
     "package-lock.json": {
       "mode": "100644",
-      "blob": "c7805b5866cfda0088dd8943fa36345266888551"
+      "blob": "527aab86a9ab2d99c16a638804c2dca55349bc23"
     },
     "package.json": {
       "mode": "100644",
-      "blob": "325d249662921194282ba408287c2e2c779b44e0"
+      "blob": "b3642a07a2abea86e98c5c9ef7eb514654bff892"
     },
     "scripts/bench-cli.ts": {
       "mode": "100644",
@@ -1381,7 +1381,7 @@
     },
     "tests/w3-plain-limits.test.ts": {
       "mode": "100644",
-      "blob": "d6f113dc4115e2bbf1bda044b84d6a08985858dc"
+      "blob": "dd4d9f2679b29bcba896a7d5d0df0396d4776863"
     },
     "tsconfig.json": {
       "mode": "100644",
