@@ -212,7 +212,7 @@ test("init-athlete: copies the starting files once and never overwrites", () => 
   execFileSync("cp", ["-R", join(REPO, "templates"), join(dir, "templates")]);
   const r = cli(["init-athlete", "--root", dir]);
   assert.equal(r.code, 0, r.stderr);
-  assert.deepEqual(r.json.created.sort(), ["athlete/baselines.json", "athlete/block.yaml", "athlete/brief.md", "athlete/limits.yaml"]);
+  assert.deepEqual(r.json.created.sort(), ["athlete/baselines.json", "athlete/block.yaml", "athlete/brief.md", "athlete/limits.md"]);
   assert.ok(existsSync(join(dir, "athlete/log")));
   writeFileSync(join(dir, "athlete/brief.md"), "mine\n");
   const again = cli(["init-athlete", "--root", dir]);

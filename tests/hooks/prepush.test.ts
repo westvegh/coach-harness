@@ -29,7 +29,7 @@ function repo(): string {
   const dir = mkdtempSync(join(tmpdir(), "coach-push-"));
   git(dir, "init", "-q", "-b", "main");
   mkdirSync(join(dir, "templates/athlete"), { recursive: true });
-  writeFileSync(join(dir, "templates/athlete/limits.yaml"), "x\n");
+  writeFileSync(join(dir, "templates/athlete/limits.md"), "x\n");
   writeFileSync(join(dir, "README.md"), "x\n");
   git(dir, "add", ".");
   git(dir, "commit", "-q", "-m", "init");
@@ -60,7 +60,7 @@ test("public destination: a pushed commit that touches athlete/ is denied; templ
   const dir = repo();
   const bin = fakeGh();
   const base = git(dir, "rev-parse", "HEAD");
-  writeFileSync(join(dir, "templates/athlete/limits.yaml"), "y\n");
+  writeFileSync(join(dir, "templates/athlete/limits.md"), "y\n");
   git(dir, "commit", "-q", "-am", "template");
   const clean = git(dir, "rev-parse", "HEAD");
   assert.equal(runHook(dir, bin, "public", URL_, `refs/heads/main ${clean} refs/heads/main ${base}\n`).code, 0);
@@ -128,7 +128,7 @@ test("cached origin refs do not hide commits from a public destination", () => {
   const dir = repo();
   const bin = fakeGh();
   mkdirSync(join(dir, "athlete"), { recursive: true });
-  writeFileSync(join(dir, "athlete/limits.yaml"), "x\n");
+  writeFileSync(join(dir, "athlete/limits.md"), "x\n");
   git(dir, "add", ".");
   git(dir, "commit", "-q", "-m", "athlete data");
   const head = git(dir, "rev-parse", "HEAD");

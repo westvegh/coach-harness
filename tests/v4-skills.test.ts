@@ -130,14 +130,13 @@ test("A7: setup and block use the fixed folder .tmp/coach/b1/ and the exact comm
       "node engine/cli.ts ids next --kind block",
       "--input .tmp/coach/b1/draft.json --out .tmp/coach/b1",
       "node engine/cli.ts loads --input .tmp/coach/b1/week-1.json --fill",
-      "node engine/cli.ts limits check --input .tmp/coach/b1/week-1.json",
       "node engine/cli.ts volume --input .tmp/coach/b1/week-1.json",
       "node engine/cli.ts block write --input .tmp/coach/b1/block.json",
       "node engine/cli.ts plans write --input .tmp/coach/b1/week-1.json",
     ];
     const idx = order.map(at);
     assert.deepEqual([...idx].sort((a, b) => a - b), idx, `${name}: commands in order`);
-    assert.ok(at("node engine/cli.ts tally-days --input .tmp/coach/b1/week-1.json") > idx[5], `${name}: tally-days after block write`);
+    assert.ok(at("node engine/cli.ts tally-days --input .tmp/coach/b1/week-1.json") > idx[4], `${name}: tally-days after block write`);
     for (const gone of ["loads.json", "week1.json", "Move the old `athlete/block.yaml`"]) assert.ok(!s.includes(gone), `${name}: ${gone}`);
   }
   assert.match(skill("block"), /write it as it is|printed input as it is/);
@@ -167,7 +166,7 @@ test("E: preferences persist: CLAUDE.md rule, the brief template, and week, bloc
   assert.match(claudeMd, /say so once when it is set, record "athlete chose", and then follow it without repeating the caution/);
   assert.match(read("templates/athlete/brief.md"), /## Preferences\n\n- Exercises the athlete likes:\n- Exercises the athlete dislikes:\n- Rep ranges and other choices:/);
   for (const name of ["week", "block", "today", "audit"]) assert.match(skill(name), /"Preferences" lines/, name);
-  assert.match(skill("week"), /apply each "Preferences" line[^\n]*before the loads and the limits check/);
+  assert.match(skill("week"), /apply each "Preferences" line[^\n]*before the loads and the limits/);
   assert.match(skill("block"), /\*\*Preferences\.\*\* Apply each "Preferences" line[^\n]*week-1\.json/);
   assert.match(skill("audit"), /listed as "athlete chose"[^\n]*not a finding to fix/);
 });
@@ -207,10 +206,10 @@ test("V4b fix 2: week, block and setup write the week file (tally-days or plans 
   const w8 = steps(skill("week")).get(8)!;
   const at = (t: string) => w8.indexOf(t);
   assert.ok(at("loads --input <the week file> --fill") > at("volume --input <the week file>"), "loads after volume");
-  assert.ok(at("limits check --input <the week file>") > at("--fill"), "limits check after loads");
-  assert.ok(at("tally-days --input <the week file>") > at("limits check --input <the week file>"), "tally-days after the limits check");
+  assert.ok(at("**Follow every line of `athlete/limits.md`**") > at("--fill"), "the limits after loads");
+  assert.ok(at("tally-days --input <the week file>") > at("**Follow every line of `athlete/limits.md`**"), "tally-days after the limits");
   const b = skill("block");
-  assert.ok(b.indexOf("tally-days --input .tmp/coach/b1/week-1.json") > b.indexOf("limits check --input .tmp/coach/b1/week-1.json"));
+  assert.ok(b.indexOf("tally-days --input .tmp/coach/b1/week-1.json") > b.indexOf("each line of `athlete/limits.md` against every day"));
 });
 
 test("V4b fix 7: --history only for an export chosen in this session; block and week refresh the logged history before loads --fill", () => {

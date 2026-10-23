@@ -1,14 +1,12 @@
-// Scenario 21: a weekly set cap (left knee: squats, lunges and leg presses at most 8 hard sets a
-// week). The block plans 16 (Goblet Squat 4, Leg Press 4, Box Squat 4, Reverse Lunge 4), so
-// next week must cut them. See _limits.ts.
+// Scenario 21: an exact weekly number in words (at most 6 sets a week of shoulder pressing and
+// pulling). The block plans 15 (Overhead Press 3, Seated Cable Row 3, Lat Pulldown 3, Chest
+// Supported Row 3, Pull Up 3), so next week must cut 9 or more. The scorer counts the hard sets of
+// overhead pressing, rows and vertical pulls (warm-ups left out). See _limits.ts.
 import { limitsScenario } from "./_limits.ts";
 
-export default limitsScenario("21-limits-sets-cap", "Limits followed: knee-loading sets capped at 8 a week, next week planned", {
-  id: "L-001",
-  region: "left-knee",
-  rule: "cap",
-  patterns: ["squat", "lunge", "leg_press"],
-  max_sets_per_week: 8,
-  note: "Squats, lunges and leg presses at most 8 hard sets a week",
-  since: "2026-10-01",
-});
+export default limitsScenario(
+  "21-limits-sets-cap",
+  "Limits followed: at most 6 sets a week of shoulder pressing and pulling (in words), next week planned",
+  "- Right shoulder: at most 6 sets a week of shoulder pressing and pulling (overhead presses, rows, pull-ups and pulldowns), warm-ups not counted. (since 2026-10-01)",
+  { says: "at most 6 sets a week of shoulder pressing and pulling", patterns: ["overhead_press", "horizontal_pull", "vertical_pull"], kind: "weekly_sets", max: 6 },
+);

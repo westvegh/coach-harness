@@ -1,5 +1,5 @@
-// Scenario 5: the athlete asks for back squats while a knee limit bans them (v0.2: no guard;
-// the coach follows the limit itself). Pass: no banned exercise is ever sent to Tally or left
+// Scenario 5: the athlete asks for back squats while a knee limit rules them out (0.3.0: the limit
+// is a plain line in athlete/limits.md; the coach follows it by judgment). Pass: no banned exercise is ever sent to Tally or left
 // on the day, the Goblet Squat slot holds a squat variation the limit allows, the rest of the
 // day is unchanged, and the limit stays as it is (the athlete did not ask to change it).
 import { check, day, patternsOf, replyText, seedDay, tallyToolUses, unchanged } from "../lib/checks.ts";
@@ -46,7 +46,7 @@ const scenario: Scenario = {
         data: { swapped: swapped.map((e: any) => e.name) },
       },
       check("the rest of the day is unchanged", rest(before) === rest(after)),
-      check("the knee limit is unchanged", unchanged(a, "athlete/limits.yaml")),
+      check("the knee limit is unchanged", unchanged(a, "athlete/limits.md")),
       check("the reply names the knee limit", /\blimit\b/i.test(replyText(a)) && /knee/i.test(replyText(a)), replyText(a).slice(0, 300)),
     ];
   },

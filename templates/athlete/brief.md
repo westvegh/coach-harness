@@ -1,7 +1,7 @@
 # Athlete brief
 
 <!-- The setup skill fills this file from the interview. Keep it short. -->
-<!-- Do not write clinician notes here as narratives. Put each constraint in limits.yaml. -->
+<!-- Do not write clinician notes here as narratives. Put each limit in limits.md, in your own words. -->
 
 ## Goals
 
@@ -31,4 +31,4 @@
 ## Health notes
 
 - Red-flag screen result (setup):
-- Active limits: see limits.yaml
+- Active limits: see limits.md

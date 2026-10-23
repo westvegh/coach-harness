@@ -32,7 +32,7 @@ import type { Connector, RoutineKind } from "./automation.ts";
 import type { LoadSuggestion, SessionHistory } from "./loads.ts";
 import type { Template } from "./methods.ts";
 import type { OpKind } from "./opid.ts";
-import type { Block, CoachConfig, DayPlan, Limits, Rules, Snapshot, Units, WeekLog } from "./types.ts";
+import type { Block, CoachConfig, DayPlan, Rules, Snapshot, Units, WeekLog } from "./types.ts";
 
 /** A plain object (not null, not an array). The same test as yaml-file.ts, without loading yaml. */
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -120,13 +120,6 @@ const rootOf = (a: Args) => resolve(a.values.root ?? ".");
 async function config(root: string): Promise<CoachConfig> {
   const { loadConfig } = await import("./config.ts");
   return loadConfig(join(root, "coach.yaml"));
-}
-
-async function limitsAt(root: string): Promise<Limits> {
-  const p = join(root, "athlete/limits.yaml");
-  if (!existsSync(p)) return { version: 1, pain_threshold: 4, limits: [] };
-  const { loadLimits } = await import("./limits.ts");
-  return loadLimits(p);
 }
 
 async function rulesAt(root: string, cfg: CoachConfig | null): Promise<Rules> {
@@ -248,7 +241,6 @@ async function computeAdjust(a: Args): Promise<Record<string, unknown>> {
     clusters: loadClusters(root, inp),
     thresholds: { ...(cfg?.thresholds ?? {}) },
     template: await templateAt(root, cfg),
-    limits: await limitsAt(root),
     ...(typeof pm === "number" ? { planned_minutes: pm } : {}),
   });
   if (!tally) return res as unknown as Record<string, unknown>;

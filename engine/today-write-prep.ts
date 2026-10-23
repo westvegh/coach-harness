@@ -2,21 +2,20 @@
 // for a today write. It reads the day from the snapshot once (the same read for `before` and
 // `snapshotDay`, as classify needs them) and returns:
 // - the classify result;
-// - the limits check on the final day, and when a weekly set cap applies, on the whole week with
-//   today replaced (a day it cannot see makes the week `unknown`, never a pass);
 // - the write arguments for the chosen tool with `version` as expectedVersion: `plain`, and on a
 //   protected day also `approved` (overrideUserModified: true), each with its own opId when the
 //   adapter has opId. A revised list or a new version means running it again.
-// The model still decides the change and its loads; this computes and reports.
+// The model still decides the change and its loads; this computes and reports. 0.3.0: no limits
+// check here: the coach checks the final day against the athlete's limits (athlete/limits.md).
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { canonicalJson } from "./canonical.ts";
 import { loadConfig } from "./config.ts";
-import { addDays, isCalendarDate, localDate, parseInstant, weekStart } from "./dates.ts";
+import { isCalendarDate, localDate } from "./dates.ts";
 import { CoachError } from "./errors.ts";
 import { OP_KINDS, opId, type OpKind } from "./opid.ts";
-import { SNAPSHOT_MAX_AGE_MIN, snapshotProblems } from "./snapshot.ts";
-import type { CoachConfig, DayPlan, Instant, LoggerExercise, Snapshot, SnapshotDay, Units } from "./types.ts";
+import { snapshotProblems } from "./snapshot.ts";
+import type { CoachConfig, Instant, LoggerExercise, Snapshot, SnapshotDay, Units } from "./types.ts";
 
 export const WRITE_TOOLS = ["update_planned_workout", "plan_workout_day"] as const;
 export type WriteTool = (typeof WRITE_TOOLS)[number];
@@ -242,14 +241,7 @@ export async function writePrep(o: WritePrepOptions): Promise<Record<string, unk
   if (logger !== "files" && inp.after && (inp.after.exercises as LoggerExercise[]).some((e) => e.exerciseId === "")) {
     throw new CoachError("INPUT_ERROR", "today-write-prep: a Tally exercise needs its exerciseId (resolve a new one with search_exercises)");
   }
-  const [{ tallyDayToPlan, snapshotDayToPlan, tallyDayUnit }, { classifyResult }, { checkLimits }, { loadLimits }, { loadTaxonomy }, { loadClusters }] = await Promise.all([
-    import("./tally-shape.ts"),
-    import("./cli-core.ts"),
-    import("./limits-check.ts"),
-    import("./limits.ts"),
-    import("./taxonomy.ts"),
-    import("./clusters.ts"),
-  ]);
+  const [{ tallyDayToPlan, snapshotDayToPlan, tallyDayUnit }, { classifyResult }] = await Promise.all([import("./tally-shape.ts"), import("./cli-core.ts")]);
   const units: Units = cfg.athlete.units;
 
   // ---- the day before the change: one read ----
@@ -267,8 +259,7 @@ export async function writePrep(o: WritePrepOptions): Promise<Record<string, unk
   }
   // W1: every value is checked in the conversion (logger other: the coach's `before`).
   const before = logger === "other" ? tallyDayToPlan({ ...sd, date } as unknown as Record<string, unknown>, { date, units, where: { cmd: "today-write-prep", file: "before" } }) : snapshotDayToPlan(date, sd, units);
-  // The unit of the stored day, and the unit the write sends (V7b finding 1): the limits check
-  // reads the final day in that same unit.
+  // The unit of the stored day, and the unit the write sends (V7b finding 1).
   const storedUnit: Units = tallyDayUnit(sd, units);
   const after = finalDay(inp, sd, date, storedUnit);
   // W1b: a supplied unit is checked before any fallback ("kilograms" is refused, never replaced);
@@ -287,58 +278,8 @@ export async function writePrep(o: WritePrepOptions): Promise<Record<string, unk
   // ---- classify ----
   const classify = await classifyResult(root, { before, after: afterPlan, tool: inp.tool, today, snapshotDay: sd });
 
-  // ---- limits: the final day, and the whole week when a weekly set cap applies ----
-  const tax = loadTaxonomy({ root });
-  const lp = join(root, "athlete/limits.yaml");
-  const limits = existsSync(lp) ? loadLimits(lp, tax) : { version: 1 as const, pain_threshold: 4, limits: [] };
-  const clusters = loadClusters(root);
-  const finalFindings = checkLimits([afterPlan], limits, tax, clusters);
-  const capped = limits.limits.some((l) => typeof l.max_sets_per_week === "number");
-  let week: Record<string, unknown> = { status: "not_needed", reason: "no limit has a weekly set cap" };
-  if (capped) {
-    const start = weekStart(date);
-    const days: DayPlan[] = [afterPlan];
-    const missing: string[] = [];
-    // W1b: a day of the week it cannot read (a plans/ cell, a stored value) makes the week unknown, never ok.
-    const unreadable: string[] = [];
-    const nowMs = parseInstant(now, "now");
-    for (let k = 0; k < 7; k++) {
-      const d = addDays(start, k);
-      if (d === date) continue;
-      const day = snap?.days[d];
-      const fresh = day && (logger !== "tally" || (nowMs - parseInstant(day.captured_at, "captured_at")) / 60_000 <= SNAPSHOT_MAX_AGE_MIN);
-      if (day && fresh) {
-        if (day.found) {
-          try {
-            days.push(snapshotDayToPlan(d, day, units));
-          } catch (e) {
-            if (!(e instanceof CoachError) || e.code !== "INPUT_ERROR") throw e;
-            unreadable.push(e.message);
-          }
-        }
-        continue;
-      }
-      if (logger === "files") continue; // the files are the record: no day is no plan
-      // The training context lists every planned day from its `from` date: a date it covers and does not list has no plan.
-      const listing = snap?.planned;
-      const listingFresh = listing && (nowMs - parseInstant(listing.captured_at, "captured_at")) / 60_000 <= SNAPSHOT_MAX_AGE_MIN;
-      if (logger === "tally" && listingFresh && d >= listing!.from && !(d in listing!.dates)) continue;
-      missing.push(d);
-    }
-    const findings = checkLimits(days, limits, tax, clusters);
-    const over = findings.some((f) => f.kind !== "unclassified");
-    week = missing.length > 0
-      ? { status: "unknown", reason: `the week's other days are not all known: ${missing.join(", ")}`, missing, need_reads: missing.map((d) => ({ tool: "get_planned_workout", args: { date: d } })), findings }
-      : over
-        ? { status: "over", findings, ...(unreadable.length > 0 ? { reason: `also, a day of the week cannot be read: ${unreadable.join("; ")}` } : {}) }
-        : unreadable.length > 0
-          ? { status: "unknown", reason: `a day of the week cannot be read: ${unreadable.join("; ")}`, findings }
-          : { status: "ok", findings };
-  }
-  const limitsResult = { ok: finalFindings.every((f) => f.kind === "unclassified") && (week.status === "ok" || week.status === "not_needed"), final_day: { ok: finalFindings.every((f) => f.kind === "unclassified"), findings: finalFindings }, week };
-
   const isProtected = logger !== "files" && (sd.source !== "mcp" || sd.userModified);
-  const base = { date, kind: inp.kind, logger, protected: isProtected, version: sd.version, classify, limits: limitsResult };
+  const base = { date, kind: inp.kind, logger, protected: isProtected, version: sd.version, classify };
   if (logger === "other") return { ...base, write: null, note: "logger other: write through that tool by its own instructions" };
   if (logger === "files") return { ...base, write: { plain: { command: "plans write", input: { tally_day: { ...after, weightUnit: writeUnit } } } } };
 

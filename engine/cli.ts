@@ -2,7 +2,9 @@
 //
 //   node engine/cli.ts readiness --input <file.json>
 //   node engine/cli.ts volume --input <file.json>
-//   node engine/cli.ts limits-hash [--file <limits.yaml>]
+//   node engine/cli.ts regions                      (the regions each movement pattern loads)
+//   node engine/cli.ts load-under --weight <n> --unit lbs|kg --to lbs|kg
+//   node engine/cli.ts migrate-limits               (0.3.0: an old athlete/limits.yaml → athlete/limits.md)
 //   node engine/cli.ts snapshot show | snapshot reset
 //   node engine/cli.ts safety detect --text <text>
 //   node engine/cli.ts safety scan-notes --since <YYYY-MM-DD> [--input <history.json>] [--dry-run] [--now <instant>]
@@ -22,17 +24,16 @@
 //   node engine/cli.ts prepush-check [--remote origin]          (exit 1: do not push)
 //   node engine/cli.ts push [--branch <name>]                   (hooks, check, git push origin; exit 1: nothing pushed)
 //   --- end privacy ---
-//   --- limits (handlers in engine/cli-limits.ts) ---
-//   node engine/cli.ts limits schema | limits regions | limits check --input <file.json>   (report only)
+//   --- write log (handlers in engine/cli-oplog.ts) ---
 //   node engine/cli.ts oplog done --date <YYYY-MM-DD> --kind <kind>
-//   --- end limits ---
+//   --- end write log ---
 //
 //   --- engine helpers (handlers in engine/cli-helpers2.ts; contracts §22) ---
 //   node engine/cli.ts readiness --date <date> [--now <instant>]
 //   node engine/cli.ts weeks --from <date> --to <date>
 //   node engine/cli.ts block draft [--template <id>] --weeks <n> [--input <file.json>] [--out <dir>]
 //   node engine/cli.ts block write --input <dir>/block.json
-//   node engine/cli.ts ids next --kind block|limit|proposal [--change <kind>]
+//   node engine/cli.ts ids next --kind block
 //   node engine/cli.ts signals refresh
 //   node engine/cli.ts lint-methods [--pack <name>] [--volume]
 //   node engine/cli.ts <command> --help        (one usage line for each E3 command)
@@ -68,10 +69,10 @@ import { CoachError } from "./errors.ts";
 // light themselves; their commands import lazily too.
 // The help text and the command lists of the E1 and E3 dispatchers (engine/cli-help.ts).
 import { HELP, HELPER_COMMANDS, helpCommand, helpFor, isHelpers2Command } from "./cli-help.ts";
-// The bodies of readiness --input, volume, limits-hash, snapshot, safety and classify (engine/cli-core.ts).
+// The bodies of readiness --input, volume, regions, load-under, migrate-limits, snapshot, safety and classify (engine/cli-core.ts).
 const core = () => import("./cli-core.ts");
 
-const USAGE = "usage: cli.ts <readiness|volume|limits-hash|limits|oplog|urgent|snapshot|safety|classify|signals|checkin|weeks|block|ids|lint-methods|plans|setup-check|worktree|commit|tally-mention|…> [options] [--root <dir>]";
+const USAGE = "usage: cli.ts <readiness|volume|regions|load-under|migrate-limits|oplog|urgent|snapshot|safety|classify|signals|checkin|weeks|block|ids|lint-methods|plans|setup-check|worktree|commit|tally-mention|…> [options] [--root <dir>]";
 
 function out(value: unknown): void {
   process.stdout.write(JSON.stringify(value, null, 2) + "\n");
@@ -108,8 +109,12 @@ export async function main(argv: string[]): Promise<number> {
         return await (await core()).cmdReadiness(rest);
       case "volume":
         return await (await core()).cmdVolume(rest);
-      case "limits-hash":
-        return await (await core()).cmdLimitsHash(rest);
+      case "regions":
+        return await (await core()).cmdRegions(rest);
+      case "load-under":
+        return await (await core()).cmdLoadUnder(rest);
+      case "migrate-limits":
+        return await (await core()).cmdMigrateLimits(rest);
       case "snapshot":
         return await (await core()).cmdSnapshot(rest);
       case "classify":
@@ -127,12 +132,10 @@ export async function main(argv: string[]): Promise<number> {
         throw new CoachError("USAGE", USAGE);
       }
       // --- end privacy ---
-      // --- limits ---
-      case "limits":
-        return (await import("./cli-limits.ts")).limitsCommand(cmd, rest) as number;
+      // --- write log ---
       case "oplog":
         return (await import("./cli-oplog.ts")).oplogCommand(rest);
-      // --- end limits ---
+      // --- end write log ---
       // --- safety ---
       case "safety":
         return await (await core()).cmdSafety(rest);

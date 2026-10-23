@@ -1,7 +1,6 @@
 // Pure helpers for scenario checks: they read RunArtifacts and never the wording of the
 // model's answer, only the state it left behind.
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse } from "yaml";
@@ -102,7 +101,7 @@ export function changedUnder(a: RunArtifacts, prefix: string): string[] {
 }
 
 // ---------------------------------------------------------------------------
-// v0.2 friction and limits helpers.
+// v0.2 friction helpers (0.3.0: the limit scorer is evals/lib/limit-rules.ts).
 // ---------------------------------------------------------------------------
 
 /** The AskUserQuestion screens of a run (or of tool uses from `fromTool` on). */
@@ -147,24 +146,6 @@ export function mockDayPlan(date: string, row: any): any {
     sets: Array.from({ length: Number(e.suggestedSets ?? 0) }, () => ({ reps: e.suggestedReps ?? null, ...(typeof e.suggestedWeight === "number" ? { weight: e.suggestedWeight } : {}) })),
   }));
   return { date, dayName: row?.day_name, status: row?.status === "skipped" ? "skipped" : "planned", source: row?.source ?? "mcp", userModified: !!row?.user_modified, exercises: ex };
-}
-
-export type LimitFinding = { limit: string; region: string; rule: string; kind: string; date?: string; exercise?: string; detail: string };
-
-/**
- * Runs `node engine/cli.ts limits check` (the repo's engine) on the given days against the
- * given limits.yaml text. Returns its findings.
- */
-export function limitsCheck(days: unknown[], limitsYaml: string): { ok: boolean; findings: LimitFinding[] } {
-  const dir = mkdtempSync(join(tmpdir(), "coach-limits-check-"));
-  try {
-    writeFileSync(join(dir, "days.json"), JSON.stringify({ days }));
-    writeFileSync(join(dir, "limits.yaml"), limitsYaml);
-    const out = execFileSync(process.execPath, [join(REPO, "engine/cli.ts"), "limits", "check", "--input", join(dir, "days.json"), "--file", join(dir, "limits.yaml"), "--root", REPO], { encoding: "utf8" });
-    return JSON.parse(out);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
 }
 
 /** The rows of a plans/ week file (header names as keys). */

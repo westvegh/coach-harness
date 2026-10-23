@@ -5,7 +5,7 @@ description: Brings the latest coach-harness fixes from the template into this c
 
 # Update
 
-This repo was made with GitHub's "Use this template", so it has no link to the template. `update` compares three things for each template file: the last release this copy has (`template-manifest.json`), the new release, and the file in this repo now. It never writes `coach.yaml` or anything under `athlete/`.
+This repo was made with GitHub's "Use this template", so it has no link to the template. `update` compares three things for each template file: the last release this copy has (`template-manifest.json`), the new release, and the file in this repo now. It never writes `coach.yaml` or anything under `athlete/`. The one athlete-data change is the 0.3.0 limits migration in step 6, which the new version runs after the restart.
 
 ## Steps
 
@@ -22,6 +22,12 @@ This repo was made with GitHub's "Use this template", so it has no link to the t
    - Run `npm ci`. (After a restart the `npm_ci_needed` flag is gone, so run it every time.)
    - Run `node engine/cli.ts install-git-hooks`.
    - Run `node engine/cli.ts config-check`. With `ok: false`, show each problem and stop before any coaching. A problem about the urgent-gate hook means the urgent stop cannot block plan writes: fix `.claude/settings.json` first.
+   - **The limits, in plain words (0.3.0).** Run `node engine/cli.ts migrate-limits`. It converts an old `athlete/limits.yaml` to `athlete/limits.md`, line by line, with every rule, number and exception kept, moves the pain threshold to `coach.yaml`, and makes one commit. It is safe to run again.
+     - `status: nothing_to_do`: go on.
+     - `status: migrated`: show the new file's lines (its `text`) as they are. Say "Your limits are in your own words now. I converted the old file line by line and kept every rule and number." When a line holds a term the athlete would not say ("sets a week of … counted together", "exercise id", "These exact exercises do not count", a movement list), offer a plainer wording of those lines in one question: "Apply these? A) Yes, B) Change something, C) Keep as is". Only a yes changes the file (commit it with `node engine/cli.ts commit --message "limits: plainer words"`; a nonzero exit: stop, and say in one line that the commit failed and why). A rewording never drops or weakens a limit: keep every exercise, number and unit.
+     - `MIGRATE_REFUSED` (uncommitted changes): say which files, ask "Commit them now? A) Yes, B) Not now". A: `node engine/cli.ts commit --message "coach: before the limits migration"` (a nonzero exit: stop, and say in one line that the commit failed and why), then run `migrate-limits` again. B: stop before any coaching.
+     - `LIMITS_INVALID` (the old file cannot be converted): show its problems in plain words and stop before any coaching. The old file stays as it is, and the coach follows it as written until it is fixed.
+     - `MIGRATE_FAILED`: say the reason in one line. The old file is back as it was; stop before any coaching.
    - Run `npm test`. A failure: show the failing test names and tell the user; do not coach until it is fixed.
    - Push: `git pull --rebase`, then `node engine/cli.ts push` (in a worktree: `node engine/cli.ts push --branch main`).
    - When the session context reports old hold or safety-check files, ask its one question about them.
@@ -31,6 +37,7 @@ This repo was made with GitHub's "Use this template", so it has no link to the t
 - Template files only, through `node engine/cli.ts update --yes --to <to>`, and one commit on `main` with the trailer `Coach-Template-Commit: <sha>`.
 - In a worktree: `main` and this branch move by fast-forward only (`node engine/cli.ts worktree ff-main` and `worktree ff-branch`).
 - `.tmp/coach/update-backup/<path>` for each `--take-template`.
+- Step 6, once: `athlete/limits.md`, `coach.yaml` `thresholds.pain_threshold` and the removal of `athlete/limits.yaml`, only through `node engine/cli.ts migrate-limits` (one commit; a copy of the old file stays in `.tmp/coach/migrate-limits/`).
 
 ## Unattended
 

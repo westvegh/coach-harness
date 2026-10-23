@@ -19,7 +19,7 @@ test("the role: a strength and conditioning coach, not a medical professional", 
 test("the read order is coach.yaml, brief, limits, the last 10 log entries, the hook context; no hold file", () => {
   const order = section("Read order");
   assert.doesNotMatch(order, /hold\.yaml|safety-pending/);
-  const items = ["`coach.yaml`", "`athlete/brief.md`", "`athlete/limits.yaml`", "last 10 log entries", "proposal for the next live session", "session-start context"];
+  const items = ["`coach.yaml`", "`athlete/brief.md`", "`athlete/limits.md`", "last 10 log entries", "proposal for the next live session", "session-start context"];
   let at = -1;
   for (const item of items) {
     const i = order.indexOf(item);
@@ -49,8 +49,10 @@ test("the hard rules are present; the removed rules are gone", () => {
     "node engine/cli.ts",
     "never from mental math",
     "Follow the limits",
-    "athlete/limits.yaml",
-    "node engine/cli.ts limits check",
+    "athlete/limits.md",
+    "plan around every line by judgment",
+    "node engine/cli.ts load-under",
+    "thresholds.pain_threshold",
     "Read before every write",
     "expectedVersion",
     "opId",

@@ -20,7 +20,7 @@ const root = mkdtempSync(join(tmpdir(), "coach-bench-"));
 mkdirSync(join(root, "athlete/.cache"), { recursive: true });
 writeFileSync(join(root, "coach.yaml"), readFileSync(join(HERE, "coach.example.yaml")));
 symlinkSync(join(HERE, "methods"), join(root, "methods"));
-writeFileSync(join(root, "athlete/limits.yaml"), readFileSync(join(HERE, "templates/athlete/limits.yaml")));
+writeFileSync(join(root, "athlete/limits.md"), readFileSync(join(HERE, "templates/athlete/limits.md")));
 // 50 mornings of Oura records, so `readiness --date` scores a full baseline and the morning pattern.
 mkdirSync(join(root, "athlete/.cache/signals"), { recursive: true });
 const oura = Array.from({ length: 50 }, (_, i) => {
@@ -33,7 +33,7 @@ const CASES: [string, string[]][] = [
   ["--help", ["--help"]],
   ["mode", ["mode"]],
   ["urgent status", ["urgent", "status", "--root", root]],
-  ["limits-hash", ["limits-hash", "--root", root]],
+  ["regions", ["regions", "--root", root]],
   ["ids next", ["ids", "next", "--kind", "block", "--root", root]],
   ["weeks", ["weeks", "--from", "2026-10-05", "--to", "2026-10-18", "--root", root]],
   ["signals refresh", ["signals", "refresh", "--root", root]],
@@ -41,7 +41,7 @@ const CASES: [string, string[]][] = [
   ["block draft", ["block", "draft", "--weeks", "6", "--root", root]],
   ["lint-methods", ["lint-methods", "--root", root]],
   ["oplog done", ["oplog", "done", "--date", "2026-10-15", "--kind", "trim_session", "--root", root]],
-  ["limits schema", ["limits", "schema"]],
+  ["load-under", ["load-under", "--weight", "50", "--unit", "lbs", "--to", "kg"]],
 ];
 
 const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];

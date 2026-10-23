@@ -1,5 +1,5 @@
 // Shared scenario pieces: the persona setup, today's signals and the dispatch prompts.
-import { addDays, hrvAtZ, KNEE_LIMIT, offMornings, signalFile, tallyState, writeAthlete, type Checkin, type Limit } from "../lib/instance.ts";
+import { addDays, hrvAtZ, KNEE_LIMIT, offMornings, signalFile, tallyState, writeAthlete, type Checkin } from "../lib/instance.ts";
 import type { AnswerRule, SetupContext } from "../lib/types.ts";
 import type { MockState } from "../mock-tally/client.ts";
 
@@ -20,8 +20,8 @@ export const LOW_CHECKIN: Checkin = { sleep_quality: 2, energy: 2, soreness: 4, 
 export const RED_CHECKIN: Checkin = { sleep_quality: 1, energy: 1, soreness: 5, stress: 5 };
 
 /** The standard instance: Alex's files, 45 baseline days, today's signal file and the Tally state. */
-export function persona(ctx: SetupContext, o: { limits?: Limit[]; today?: TodaySignal; weekly?: { day: string; time: string }; block?: string; tally?: (m: MockState) => void } = {}): void {
-  writeAthlete(ctx.write, ctx.today, { limits: o.limits, weekly: o.weekly, block: o.block });
+export function persona(ctx: SetupContext, o: { limits?: string[]; oldLimitsYaml?: string; today?: TodaySignal; weekly?: { day: string; time: string }; block?: string; logger?: "tally" | "files"; tally?: (m: MockState) => void } = {}): void {
+  writeAthlete(ctx.write, ctx.today, { limits: o.limits, oldLimitsYaml: o.oldLimitsYaml, weekly: o.weekly, block: o.block, logger: o.logger });
   const t = o.today ?? {};
   if (t.offMornings) offMornings(ctx.write, ctx.today, t.offMornings);
   ctx.write(

@@ -6,7 +6,7 @@
 //   weeks --from <YYYY-MM-DD> --to <YYYY-MM-DD> [--input <{clusters}.json>]
 //   block draft [--template <id>] --weeks <n> [--input <file.json>] [--out <dir>] [--now <instant>]
 //   block write --input <dir>/block.json
-//   ids next --kind block|limit [--now <instant>]
+//   ids next --kind block [--now <instant>]
 //   signals refresh
 //   lint-methods [--pack <name>] [--volume]                         (exit 1: the pack has errors)
 //
@@ -223,10 +223,10 @@ async function cmdBlockWrite(a: Args): Promise<number> {
 }
 
 async function cmdIds(a: Args): Promise<number> {
-  if (a.positionals[0] !== "next") throw new CoachError("USAGE", "usage: ids next --kind block|limit");
+  if (a.positionals[0] !== "next") throw new CoachError("USAGE", "usage: ids next --kind block");
   const root = rootOf(a);
   const kind = a.values.kind as IdKind;
-  if (!["block", "limit"].includes(kind)) throw new CoachError("USAGE", "ids next --kind must be block | limit");
+  if (kind !== "block") throw new CoachError("USAGE", "ids next --kind must be block (0.3.0: limits have no ids)");
   const { nextId } = await import("./ids.ts");
   out(nextId(root, kind));
   return 0;

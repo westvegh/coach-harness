@@ -32,7 +32,7 @@ function instance(coach) {
   mkdirSync(join(dir, "athlete"), { recursive: true });
   if (coach) {
     cpSync(join(HERE, "coach.example.yaml"), join(dir, "coach.yaml"));
-    cpSync(join(HERE, "templates/athlete/limits.yaml"), join(dir, "athlete/limits.yaml"));
+    cpSync(join(HERE, "templates/athlete/limits.md"), join(dir, "athlete/limits.md"));
     cpSync(join(HERE, "methods"), join(dir, "methods"), { recursive: true });
   }
   writeFileSync(join(dir, ".gitignore"), "athlete/.cache/\n");

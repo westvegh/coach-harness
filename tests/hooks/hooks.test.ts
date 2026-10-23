@@ -24,7 +24,7 @@ function instance(opts: { coach?: boolean } = {}): string {
   if (opts.coach !== false) cpSync(join(REPO, "coach.example.yaml"), join(dir, "coach.yaml"));
   cpSync(join(REPO, "coach.example.yaml"), join(dir, "coach.example.yaml"));
   mkdirSync(join(dir, "athlete"), { recursive: true });
-  cpSync(join(REPO, "templates/athlete/limits.yaml"), join(dir, "athlete/limits.yaml"));
+  cpSync(join(REPO, "templates/athlete/limits.md"), join(dir, "athlete/limits.md"));
   cpSync(join(REPO, "methods"), join(dir, "methods"), { recursive: true });
   writeFileSync(join(dir, ".gitignore"), "athlete/.cache/\n");
   git(dir, "init", "-q", "-b", "main");
@@ -121,8 +121,8 @@ const sessionContext = (root: string, env: Record<string, string> = {}) => {
 };
 const writeLimits = (root: string) =>
   writeFileSync(
-    join(root, "athlete/limits.yaml"),
-    "version: 1\npain_threshold: 4\nlimits:\n  - { id: L-001, region: left-knee, rule: ban, patterns: [loaded_deep_knee_flexion], source: athlete, since: '2026-10-01' }\n  - { id: L-002, region: left-shoulder, rule: cap, patterns: [overhead_press], max_sets_per_week: 6, build_back: true, source: athlete, since: '2026-10-01' }\n",
+    join(root, "athlete/limits.md"),
+    "# Injuries and limits\n\nThe coach plans around each line below in every plan. Say \"change my limits\" to change one.\n\n- Left knee: no deep knee bends under load for now. (since 2026-10-01)\n- Left shoulder: at most 6 sets a week of overhead pressing, building back slowly. (since 2026-10-01)\n",
   );
 
 test("V2: session-context reads the v0.2 setup state lines (setup: <part> done|stopped)", () => {
@@ -141,18 +141,22 @@ test("session-context: today, the limits summary, setup progress, due items; no 
   writeFileSync(join(root, "athlete/log/setup.md"), "setup: step 3 done 2026-10-12 08:00\nsetup: step 4 done 2026-10-12 08:10\n");
   const ctx = sessionContext(root);
   assert.match(ctx, /today is 2026-10-14 \(wed\)/);
-  assert.match(ctx, /Limits \(follow them in every plan\): L-001 left-knee: ban \(loaded_deep_knee_flexion\); L-002 left-shoulder: cap 6 sets\/week, build back \(overhead_press\)\./);
+  assert.ok(ctx.includes("Limits (athlete/limits.md; follow every line in every plan):\n- Left knee: no deep knee bends under load for now. (since 2026-10-01)\n- Left shoulder: at most 6 sets a week of overhead pressing, building back slowly. (since 2026-10-01)\n"), ctx);
+  assert.match(ctx, /Pain threshold: 4 \(from coach\.yaml\)/);
   assert.match(ctx, /Setup progress: setup: step 4 done 2026-10-12 08:10\./);
   // V6 D: a check-in is never due.
   assert.match(ctx, /Due: the daily run/);
   assert.doesNotMatch(ctx, /check-in/);
-  assert.doesNotMatch(ctx, /HOLD|SAFETY FIRST|URGENT|proposal/i);
+  assert.doesNotMatch(ctx, /\bHOLD\b|SAFETY FIRST|URGENT|proposal/i);
 
   const fresh = instance({ coach: false });
   assert.match(sessionContext(fresh), /no coach.yaml yet/);
 
+  // An old limits file it cannot convert: never "None yet"; its raw text, and the fix.
   writeFileSync(join(root, "athlete/limits.yaml"), "limits: [\n");
-  assert.match(sessionContext(root), /WARNING: athlete\/limits\.yaml does not load/);
+  const bad = sessionContext(root);
+  assert.match(bad, /Your old limits file \(athlete\/limits\.yaml\) cannot be converted/);
+  assert.ok(bad.includes("Your old limits file (athlete/limits.yaml) as written:\nlimits: ["), bad);
 });
 
 test("session-context: the urgent stop comes first, with the urgent-care text and the clear question", () => {

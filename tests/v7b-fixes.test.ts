@@ -33,27 +33,19 @@ const SPLIT = { exerciseId: "Dumbbell_Split_Squat", name: "Split Squat", suggest
 const ROW = { exerciseId: "Cable_Row", name: "Cable Row", suggestedSets: 3, suggestedReps: 10 };
 const day = (over: Record<string, unknown> = {}) => ({ date: TODAY, found: true, version: "v-1", updatedAt: "t0", source: "mcp", userModified: false, skipped: false, dayType: "lower", dayName: "Lower A", notes: "keep", exercises: [SQUAT, SPLIT, ROW], weightUnit: "lbs", weightUnitSource: "settings", ...over });
 const prep = (dir: string, input: unknown) => cli(["today-write-prep", "--input", writeJson(dir, ".tmp/coach/wp.json", input), "--now", NOW, "--root", dir], ENV);
-const limitsWith = (yaml: string) => `version: 1\npain_threshold: 4\nlimits:\n${yaml}`;
 
 // ---------- 1: units ----------
 
-test("finding 1: the limits check reads the final day in the unit the write sends (both directions)", () => {
-  const cap = (value: number, unit: string) => limitsWith(`  - id: L-001\n    region: knee\n    rule: cap\n    patterns: [squat]\n    exercises: []\n    allow: []\n    max_load: { value: ${value}, unit: ${unit} }\n    source: athlete\n    since: 2026-10-01\n`);
-  // coach.yaml lbs, the write in kg: 80 kg is about 176 lb, over a 100 lb cap.
+test("finding 1: the write keeps the unit it sends, both directions (0.3.0: the coach checks a load in the limits with load-under)", () => {
   const a = instance();
-  writeFileSync(join(a, "athlete/limits.yaml"), cap(100, "lbs"));
   saveSnapshot(a, merge(null, { date: TODAY }, text(day()), undefined, "get_planned_workout"));
   const kg = prep(a, { after: { date: TODAY, dayType: "lower", dayName: "Lower A", exercises: [{ ...SQUAT, suggestedWeight: 80 }, SPLIT, ROW], weightUnit: "kg" }, tool: "update_planned_workout", kind: "load_progression" }).json;
   assert.equal(kg.write.plain.args.weightUnit, "kg");
-  assert.equal(kg.limits.ok, false, "80 kg is over a 100 lb cap");
-  // coach.yaml kg, the write in lbs: 250 lb is over a 100 kg (about 220 lb) cap; 200 lb is under it.
+  assert.equal(kg.limits, undefined);
   const b = instance((y) => y.replace(/units: lbs/, "units: kg"));
-  writeFileSync(join(b, "athlete/limits.yaml"), cap(100, "kg"));
   saveSnapshot(b, merge(null, { date: TODAY }, text(day({ weightUnit: "kg" })), undefined, "get_planned_workout"));
-  const over = prep(b, { after: { date: TODAY, dayType: "lower", dayName: "Lower A", exercises: [{ ...SQUAT, suggestedWeight: 250 }, SPLIT, ROW], weightUnit: "lbs" }, tool: "update_planned_workout", kind: "load_progression" }).json;
-  assert.equal(over.limits.ok, false, "250 lb is over a 100 kg cap");
-  const under = prep(b, { after: { date: TODAY, dayType: "lower", dayName: "Lower A", exercises: [{ ...SQUAT, suggestedWeight: 200 }, SPLIT, ROW], weightUnit: "lbs" }, tool: "update_planned_workout", kind: "load_progression" }).json;
-  assert.equal(under.limits.ok, true, "200 lb is under a 100 kg cap");
+  const lb = prep(b, { after: { date: TODAY, dayType: "lower", dayName: "Lower A", exercises: [{ ...SQUAT, suggestedWeight: 200 }, SPLIT, ROW], weightUnit: "lbs" }, tool: "update_planned_workout", kind: "load_progression" }).json;
+  assert.equal(lb.write.plain.args.weightUnit, "lbs");
 });
 
 // ---------- 2 and 12: generations and the page limit ----------

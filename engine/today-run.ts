@@ -8,6 +8,7 @@ import { randomBytes } from "node:crypto";
 import { dirname, join } from "node:path";
 import { localDate, parseInstant } from "./dates.ts";
 import { CoachError } from "./errors.ts";
+import { limitsFingerprint } from "./limits-text.ts";
 import type { CalendarDate, Instant } from "./types.ts";
 
 export const RUN_RELATIVE = ".tmp/coach/today-run.json";
@@ -82,10 +83,10 @@ const mtime = (p: string): number | null => {
 
 /**
  * The files whose change after post means post must run again: today's signal file (a check-in),
- * the limits, the urgent stop and the clearances (a safety change).
+ * the limits text, coach.yaml (the pain threshold), the urgent stop and the clearances (a safety change).
  */
 export function changedSince(root: string, date: CalendarDate, computedMs: number): string[] {
-  const files = [`athlete/signals/${date}.json`, "athlete/limits.yaml", "athlete/.urgent-stop", "athlete/log/urgent-clearances.jsonl"];
+  const files = [`athlete/signals/${date}.json`, "athlete/limits.md", "coach.yaml", "athlete/.urgent-stop", "athlete/log/urgent-clearances.jsonl"];
   return files.filter((f) => {
     const m = mtime(join(root, f));
     return m !== null && m > computedMs + 1;
@@ -113,6 +114,9 @@ export function postForSave(root: string, run_id: string, o: { now: Instant; tim
   if (age > POST_MAX_AGE_MIN) throw new CoachError("POST_STALE", `the post result is ${Math.round(age)} minutes old (limit ${POST_MAX_AGE_MIN}): ${fix}`);
   const changed = changedSince(root, post.local_date, computed);
   if (changed.length > 0) throw new CoachError("POST_STALE", `${changed.join(", ")} changed after the post result (a check-in or a safety change): ${fix}`);
+  // W3b: the limits by content, not only by time: the sources must be what post saw.
+  const seen = (post as { limits_freshness?: { fingerprint?: unknown } }).limits_freshness?.fingerprint;
+  if (typeof seen === "string" && seen !== limitsFingerprint(root)) throw new CoachError("POST_STALE", `the limits changed after the post result: ${fix}, and Read the limits in full before planning or writing`);
   if (existsSync(join(root, "athlete/.urgent-stop")) && post.urgent?.stopped !== true) throw new CoachError("POST_STALE", `the urgent stop is set and the post result does not know it: ${fix}`);
   return post;
 }

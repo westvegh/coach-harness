@@ -26,7 +26,7 @@ function root(mode = "cloud"): string {
   const dir = mkdtempSync(join(tmpdir(), "coach-e1-"));
   mkdirSync(join(dir, "athlete"), { recursive: true });
   writeFileSync(join(dir, "coach.yaml"), readFileSync(join(REPO, "coach.example.yaml"), "utf8").replace("mode: manual", `mode: ${mode}`));
-  writeFileSync(join(dir, "athlete/limits.yaml"), readFileSync(join(REPO, "templates/athlete/limits.yaml")));
+  writeFileSync(join(dir, "athlete/limits.md"), readFileSync(join(REPO, "templates/athlete/limits.md")));
   return dir;
 }
 

@@ -38,19 +38,21 @@ When you mention pain or an injury, the coach (the `safety` skill) asks one scre
 - which side, when the region has sides;
 - "Any of these now?": new numbness or weakness, swelling with heat or redness, cannot bear weight, or none. A warning sign starts the urgent stop.
 
-Then it writes the limit you chose: no limit (a log line), a cap on weekly sets that builds back each week when the region feels fine, or a ban on the movements that load the region. When you say the region is better, it asks one question: remove the limit, loosen it, or keep it.
+Then it writes the limit you chose as one plain line in `athlete/limits.md`: no line (a log line only), "light only, building back slowly" (the weekly run asks how it felt and builds back a little when it felt fine), or "avoid for now" for the movements that load the region. When you say the region is better, it asks one question: train normally again, go light and build back, or keep it as it is.
 
 The coach never diagnoses, never names a likely cause, and says once per conversation: "See a clinician for new pain, pain that gets worse, or pain that does not settle." In a scheduled run it asks nothing: it avoids loading the region that day, leaves a note, and asks at the next live session.
 
-When you report what a clinician told you, the coach records it as `clinician-reported`. It never claims to verify it.
+When you report what a clinician told you, the coach writes that in the line ("from my physio"). It never claims to verify it.
 
 ### Your limits
 
-Your limits live in `athlete/limits.yaml`. A limit can ban a movement pattern or an exercise, or cap the weekly sets or the load for a body region. The coach reads the file before every plan and checks each planned week with `node engine/cli.ts limits check`, which reports a banned exercise, a weekly set count over a cap, a set over a load cap, and any exercise the engine cannot classify. The coach fixes each finding before it writes. The `audit` skill runs the same check on request.
+Your limits live in `athlete/limits.md`, one line each, in your own words, for example "Low back: Romanian deadlifts at 60 kg or less, warm-ups included." The coach reads the file before every plan, plans around every line by judgment, and checks the final plan against each line before it writes. For a weight in a limit, `node engine/cli.ts load-under` gives the heaviest weight that is not above it, in your plan's unit. The `audit` skill checks a plan against your limits on request.
 
-This is guidance, not a gate. The coach can misread a limit, and no hook stops that write. Two things make a mistake visible: git records every plan change, and your logger shows the plan. The evals in `evals/` measure it: three limit shapes (a ban, a weekly set cap and a load cap), ten planned weeks each.
+`athlete/limits.md` is athlete data, like the rest of `athlete/`: it goes only to your private repository, and the pre-push check covers it. The pain threshold (pain at or above it in a check-in goes to the `safety` skill; default 4) is in `coach.yaml`, `thresholds.pain_threshold`. Say "ask me about pain from 3 up" to change it.
 
-The coach changes a limit only when you ask (the `limits` skill, or the `safety` skill for a new or better region), and commits the change. A scheduled run never changes a limit.
+This is guidance, not a gate. The coach can misread a limit, and no hook stops that write. Two things make a mistake visible: git records every plan change, and your logger shows the plan. The evals in `evals/` measure it: three limits in plain words (an exercise to avoid, a weekly number of sets and a weight), ten planned weeks each, plus the other limit flows.
+
+The coach changes a limit only when you ask (the `limits` skill; the `safety` skill for a new or better region; the weekly run's build-back question), and commits the change. A scheduled run never changes a limit.
 
 ## Where your data lives
 

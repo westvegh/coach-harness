@@ -1,8 +1,8 @@
-// The engine CLI's own commands (contracts §13): readiness --input, volume, limits-hash,
-// snapshot show, safety and classify. engine/cli.ts dispatches here; each command imports its
+// The engine CLI's own commands (contracts §13): readiness --input, volume, regions, load-under,
+// migrate-limits, snapshot show, safety and classify. engine/cli.ts dispatches here; each command imports its
 // modules when it runs. The usage lines stay in this file.
 import { existsSync, readFileSync } from "node:fs";
-import { isAbsolute, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { CoachError } from "./errors.ts";
 import type { LoggerTool } from "./logger.ts";
@@ -129,12 +129,29 @@ async function packRules(root: string): Promise<Rules> {
   return readYamlFile(p, "RULES_INVALID") as Rules;
 }
 
-export async function cmdLimitsHash(argv: string[]): Promise<number> {
+/** `regions`: the region ids, and for each movement pattern the regions it loads (the safety skill reads it). */
+export async function cmdRegions(argv: string[]): Promise<number> {
   const { values } = opts(argv);
-  const { limitsHash } = await import("./limits.ts");
-  const root = resolve(values.root ?? ".");
-  const file = values.file ? (isAbsolute(values.file) ? values.file : resolve(values.file)) : join(root, "athlete/limits.yaml");
-  out({ file, hash: limitsHash(file) });
+  const { loadTaxonomy, regionsReport } = await import("./taxonomy.ts");
+  out(regionsReport(loadTaxonomy({ root: resolve(values.root ?? ".") })));
+  return 0;
+}
+
+/**
+ * `load-under --weight <n> --unit lbs|kg --to lbs|kg`: the heaviest weight in the `to` unit that is
+ * not above `weight` (a load in a limit, in the athlete's words): converted without rounding, then
+ * rounded down to a multiple of the unit's plate step (PLATE_STEP, as `loads` uses).
+ */
+export async function cmdLoadUnder(argv: string[]): Promise<number> {
+  const { values } = parseArgs({ args: argv, strict: true, options: { root: { type: "string" }, weight: { type: "string" }, unit: { type: "string" }, to: { type: "string" } } });
+  out((await import("./loads.ts")).loadUnder(values.weight, values.unit, values.to));
+  return 0;
+}
+
+/** `migrate-limits`: the 0.3.0 migration of an old athlete/limits.yaml (engine/migrate-limits.ts). */
+export async function cmdMigrateLimits(argv: string[]): Promise<number> {
+  const { values } = opts(argv);
+  out((await import("./migrate-limits.ts")).migrateLimits({ root: resolve(values.root ?? ".") }));
   return 0;
 }
 

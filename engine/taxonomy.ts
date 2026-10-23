@@ -161,6 +161,17 @@ export function regionMatches(region: string, loaded: string[], tax: Taxonomy): 
   return loaded.some((r) => r === region || r === parent || parentRegion(r, tax) === region);
 }
 
+/** Region ids, and for each pattern the regions it loads (recovery patterns load none): `node engine/cli.ts regions`. */
+export function regionsReport(tax: Taxonomy): Record<string, unknown> {
+  const patterns: Record<string, { loads: string[]; recovery?: true }> = {};
+  for (const [name, p] of Object.entries(tax.patterns)) patterns[name] = { loads: [...p.loads], ...(p.recovery ? { recovery: true as const } : {}) };
+  return {
+    regions: [...tax.regions],
+    side_rule: "a side region (left-knee) also matches its parent (knee), in both directions",
+    patterns,
+  };
+}
+
 type Span = { keyword: string; start: number; end: number };
 
 /** Every place where `keyword` matches whole words of `name` (a plural "s" or "es" is allowed). */

@@ -51,15 +51,15 @@ const scenario: Scenario = {
       const low = Number(e.suggestedReps ?? e.repsMax);
       return !(top >= 8 && top <= 12 && low >= 8);
     });
-    // V4b: the audit's evidence: a limits check or volume call on a week in turn 2, and an "athlete chose" line.
+    // V4b: the audit's evidence: a volume call on a week in turn 2 (0.3.0: the limits check is gone), and an "athlete chose" line.
     const from = a.turns?.[1]?.firstTool ?? a.tools.length;
-    const auditCalls = a.tools.slice(from).filter((t) => t.name === "Bash" && /node engine\/cli\.ts (limits check|volume) --input /.test(String(t.input?.command ?? "")) && t.result?.isError !== true);
+    const auditCalls = a.tools.slice(from).filter((t) => t.name === "Bash" && /node engine\/cli\.ts volume --input /.test(String(t.input?.command ?? "")) && t.result?.isError !== true);
     const t2 = turnText(a, 1);
     return [
       check("turn 1: the brief records the rep range under Preferences", RANGE.test(prefs), prefs.slice(0, 200)),
       check("turn 1: the preference is committed in turn 1", t1Commits.some((c) => c.files.includes("athlete/brief.md")), t1 ? `${t1.length} commits in turn 1` : "no turn-1 commit record"),
       { ...check("turn 2: every main lift next week uses 8 to 12 reps", lifts.length >= 3 && off.length === 0, `${lifts.length} lifts; off: ${off.map(({ d, e }) => `${d} ${e.name} ${e.suggestedReps ?? "no reps"}-${e.repsMax ?? ""}`).join(", ")}`), data: { lifts: lifts.map(({ d, e }) => `${d} ${e.name} ${e.suggestedReps}${e.repsMax ? `-${e.repsMax}` : ""}`) } },
-      check("turn 2: the audit ran (limits check or volume on the week)", auditCalls.length > 0),
+      check("turn 2: the audit ran (volume on the week)", auditCalls.length > 0),
       check("turn 2: the audit lists the range with an \"athlete chose\" line", /athlete chose/i.test(t2), t2.slice(-300)),
     ];
   },

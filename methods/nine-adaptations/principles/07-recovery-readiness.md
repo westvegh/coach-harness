@@ -43,8 +43,8 @@ Compare HRV only with the athlete's own baseline, never with other people. Devic
 
 Soreness is expected after new or hard work. Pain is different. A painful region is loaded only as the athlete chose [NA-REC-007]:
 
-- **Avoid it for now:** no exercise that loads the region (a ban in the limits file).
-- **Go light and build back slowly:** a cap on sets or load that rises a step at a time while the region feels fine (a cap with `build_back`).
+- **Avoid it for now:** no exercise that loads the region (one line in `athlete/limits.md`, in the athlete's words).
+- **Go light and build back slowly:** fewer sets and lighter loads for the region, a little more each week while it feels fine (one line in `athlete/limits.md` that says it is building back).
 - **It's fine now:** train normally; the coach notes it.
 
 The coach offers the choice kindly, puts the caution in the option text, and does not refuse to plan. It says once: see a clinician for new pain, pain that gets worse, or pain that does not settle. Urgent warning signs (chest pain, fainting, new numbness or weakness) are different: they stop all training changes until a clinician has seen the athlete or it was a false alarm.

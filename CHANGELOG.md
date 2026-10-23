@@ -2,6 +2,28 @@
 
 All notable changes to this project are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [semantic versioning](https://semver.org/).
 
+## [0.3.0]
+
+Your limits are in your own words now.
+
+### Changed for the athlete
+
+- **Your limits are in your own words now.** They live in `athlete/limits.md`, one line each, for example "Left shoulder: no bench press or dips for now. Light pressing is fine." Say "change my limits" to change one. The coach writes the line as you say it and shows it to you. It asks you nothing about numbers.
+- **The coach plans around each line by judgment.** It reads your limits before every plan and checks the final plan against each line before it writes. No code counts or checks a limit any more. Code still enforces two things: the urgent stop, and pushes only to a private repository. To make a rule hard in code, you can add your own hook (see "Build your own enforcement" in the docs).
+- **Your daily run checks today against your limits every time.** It checks before it leaves today as it is, and before any change. A day that goes against a limit is a change: on a day you built yourself it asks you first, and a scheduled run saves it for the next time you talk to the coach.
+- **A weight in a limit, in any unit.** When your limit says "60 kg or less" and your plan is in pounds, the coach uses the heaviest weight that is not above it (130 lb), from the engine. It never does the conversion in its head.
+- **Building back.** When a limit says you are building back, the weekly run asks once how it felt. "Fine" builds back a little more, "the same" keeps it, and "worse" changes the line to "avoid it for now".
+- **Your pain threshold is in `coach.yaml`** (`thresholds.pain_threshold`, default 4). Say "ask me about pain from 3 up" to change it.
+
+### Updating from 0.2.x
+
+- **The update converts your old limits file.** After the restart, "finish the update" converts `athlete/limits.yaml` to `athlete/limits.md` line by line. It keeps every rule, number, exception and date, and moves your pain threshold to `coach.yaml`, in one commit of its own. It keeps a copy of the old file in `.tmp/coach/migrate-limits/`. Then it shows you the new file and offers plainer words, which you can take or leave.
+- **Until you finish the update,** a scheduled run still follows your old file and its pain threshold. An old file the coach cannot read is never treated as "no limits": the coach follows it as written and asks you to fix it.
+
+### Removed
+
+- The structured limits: `athlete/limits.yaml`, the `limits schema`, `limits regions` and `limits check` commands, `limits-hash`, limit ids (`L-001`), and the limits results of the daily run's engine passes. `node engine/cli.ts regions` gives the regions each movement loads.
+
 ## [0.2.8]
 
 The last fixes before the public launch. From the coach's daily use since 2026-10-12.

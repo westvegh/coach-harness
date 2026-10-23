@@ -13,6 +13,17 @@ import { speedChecks } from "./_speed.ts";
 import { feelQuestions, firstLine, fixtureNumbers, hasLetteredOptions } from "./31-calm-check-in.ts";
 
 export const PROMPT = "heading to the gym";
+
+/**
+ * W3 (0.3.0): a representative non-empty athlete/limits.md (4 lines, about 1,200 characters) that
+ * does not touch today's Lower A, so the run's work is the same and its cost can be compared.
+ */
+export const SPEED_LIMITS = [
+  "- Left shoulder (AC joint): no bench press, no dips and no overhead pressing for now. Light cable flyes and push-ups on the knees are fine, and so is pressing with a band. If a press day comes up, swap it for flyes or band work. Side raises are fine with light dumbbells, up to 3 sets in a session, and no raise above shoulder height. (since 2026-10-02)",
+  "- Right elbow: no narrow-grip chin-ups and no skull crushers. Rows and pulldowns are fine at the usual weight.\n  Pulldown and chest press only when the elbow is at 2/10 or less that morning; on a worse morning, swap them for band work and keep the sets the same. (since 2026-10-10)",
+  "- Neck: no heavy shrugs and no neck bridges; light shrugs with dumbbells are fine. Stop a set when the neck tightens, and do not add weight to shrugs until it has felt fine for two weeks in a row. (since 2026-09-28, from my physio)",
+  "- Right wrist: use straps for heavy pulls when the wrist is sore, and no front rack holds with a full grip. Hammer curls are fine. Wrist curls only with a light dumbbell, at most 2 sets in a session, and stop when it aches. (since 2026-09-20)",
+];
 export const SPEED_WATCH = ["athlete/.cache/snapshot.json"];
 
 /** The latest session named `name` misses one rep on its last set of each exercise (a miss: the load repeats). */
@@ -34,7 +45,7 @@ const scenario: Scenario = {
   watch: SPEED_WATCH,
   prompt: PROMPT,
   setup(ctx) {
-    persona(ctx, { today: { hrvZ: 0, sleepMin: 450, checkin: null }, tally: (m) => missLast(m.sessions as any[], "Lower A", ctx.today) });
+    persona(ctx, { limits: SPEED_LIMITS, today: { hrvZ: 0, sleepMin: 450, checkin: null }, tally: (m) => missLast(m.sessions as any[], "Lower A", ctx.today) });
   },
   check(a: RunArtifacts) {
     const reply = replyText(a);

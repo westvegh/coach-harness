@@ -2,7 +2,9 @@
 //   - the urgent stop, first;
 //   - v0.1 safety files: an urgent hold or urgent pending terms become the urgent stop, then
 //     the coach asks whether to remove the old files;
-//   - the limits summary, setup progress, what is due and the block week;
+//   - the athlete's limits as written in athlete/limits.md (cut at 2,000 characters), the pain
+//     threshold, and until the 0.3.0 migration runs the old limits.yaml's limits as text;
+//   - setup progress, what is due and the block week;
 //   - privacy: the pre-push hook is installed when it is missing; tracked-file findings.
 // Files only: a hook has no MCP access.
 import { execFileSync } from "node:child_process";
@@ -12,12 +14,11 @@ import { readBlock } from "../../engine/block.ts";
 import { loadConfig } from "../../engine/config.ts";
 import { localDate, weekdayOf, weekStart } from "../../engine/dates.ts";
 import { classifyLegacy } from "../../engine/legacy.ts";
-import { loadLimits } from "../../engine/limits.ts";
+import { limitsCarry, LIMITS_TEXT_MAX, painThreshold } from "../../engine/limits-text.ts";
 import { scanRepo } from "../../engine/privacy.ts";
 import { blockWeekAt } from "../../engine/progression.ts";
 import { URGENT_CARE_TEXT } from "../../engine/safety-text.ts";
 import { commitPaths, readStop, URGENT_RELATIVE, writeStop } from "../../engine/urgent.ts";
-import type { Limit } from "../../engine/types.ts";
 import { context, hookNow, projectRoot } from "./lib.ts";
 
 /** An error as one line, with its code when it has one. */
@@ -33,15 +34,6 @@ function setupProgress(root: string): string | null {
   if (!existsSync(p)) return null;
   const lines = readFileSync(p, "utf8").split("\n").filter((l) => /^setup: (step \S+|[a-z0-9]+) (done|stopped)\b/.test(l.trim()));
   return lines.length ? lines[lines.length - 1].trim() : null;
-}
-
-function describeLimit(l: Limit): string {
-  const caps = [
-    typeof l.max_sets_per_week === "number" ? `${l.max_sets_per_week} sets/week` : "",
-    l.max_load ? `${l.max_load.value} ${l.max_load.unit}` : "",
-  ].filter(Boolean);
-  const what = [...l.patterns, ...l.exercises].join(", ");
-  return `${l.id} ${l.region}: ${l.rule}${caps.length ? ` ${caps.join(", ")}` : ""}${l.build_back ? ", build back" : ""} (${what})`;
 }
 
 /**
@@ -110,13 +102,25 @@ async function main(): Promise<void> {
     );
   }
 
-  // Limits.
+  // Limits: the athlete's words, carried as written. Code never reads their meaning.
   try {
-    const limits = loadLimits(join(root, "athlete/limits.yaml"));
-    lines.push(limits.limits.length ? `Limits (follow them in every plan): ${limits.limits.map(describeLimit).join("; ")}.` : "Limits: none.");
+    const l = await limitsCarry(root);
+    if (l.legacy) {
+      lines.push(
+        l.legacy.ok
+          ? "This copy still has the old limits file (athlete/limits.yaml). In a live session, run `node engine/cli.ts migrate-limits` before any plan (the update skill's last step). A scheduled run does not convert it: it follows the limits below and logs one line."
+          : `Your old limits file (athlete/limits.yaml) cannot be converted (${l.legacy.error}). Follow it as written below, and ask the athlete to fix it. Run \`node engine/cli.ts migrate-limits\` after the fix.`,
+      );
+    }
+    if (!l.exists && !l.legacy) lines.push("Limits: athlete/limits.md is missing. Read it before any plan; when it does not exist, no limits are written yet (the setup and limits skills create it).");
+    else lines.push(`Limits (athlete/limits.md; follow every line in every plan):\n${l.text || "(empty)"}`);
+    // W3b: name every file the text came from, the old athlete/limits.yaml too before the migration.
+    if (l.truncated) lines.push(`Limits cut at ${LIMITS_TEXT_MAX.toLocaleString("en-US")} characters: Read ${l.sources.join(" and ")} in full before any plan.`);
   } catch (e) {
-    lines.push(`WARNING: athlete/limits.yaml does not load (${oneLine(e)}). Read it before any plan.`);
+    lines.push(`WARNING: the limits cannot be read here (${oneLine(e)}). Read athlete/limits.md in full before any plan.`);
   }
+  const pain = painThreshold(root, cfg);
+  lines.push(`Pain threshold: ${pain.value} (${pain.source === "default" ? "the default" : `from ${pain.source}`}): pain the athlete reports at or above it goes to the safety skill.`);
 
   const progress = setupProgress(root);
   if (progress) lines.push(`Setup progress: ${progress}.`);

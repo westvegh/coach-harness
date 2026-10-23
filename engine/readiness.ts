@@ -19,6 +19,8 @@ export const DEFAULT_THRESHOLDS: Thresholds = {
   rpe_drift_amber: 1.5,
   perf_expiry_days: 4,
   trim_fraction: 0.2,
+  // 0.3.0: check-in pain at or above it goes to the safety skill (it moved here from the old athlete/limits.yaml).
+  pain_threshold: 4,
 };
 
 /** Defaults for the pack's readiness checks (contracts §4), used when the pack has none. */
@@ -42,6 +44,7 @@ const RANGES: Record<keyof Thresholds, Range> = {
   rpe_drift_amber: { min: 0, max: 10, minOpen: true },
   perf_expiry_days: { min: 1, max: 14, integer: true },
   trim_fraction: { min: 0, max: 1, minOpen: true, maxOpen: true },
+  pain_threshold: { min: 0, max: 10 },
 };
 
 /**

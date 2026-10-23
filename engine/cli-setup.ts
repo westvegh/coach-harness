@@ -30,7 +30,7 @@ export const MIN_CLAUDE = "2.1.295";
 export const MIN_NODE = "22.18.0";
 
 /** The athlete files setup starts from (templates/athlete/). */
-export const ATHLETE_TEMPLATES = ["brief.md", "limits.yaml", "baselines.json", "block.yaml"] as const;
+export const ATHLETE_TEMPLATES = ["brief.md", "limits.md", "baselines.json", "block.yaml"] as const;
 
 /** The only paths `commit` (and the Stop hook) ever commits. */
 export const COACH_PATHS = ["athlete", "plans", "coach.yaml"] as const;

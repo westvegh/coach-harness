@@ -370,12 +370,19 @@ export const BRIEF = `# Athlete brief
 ## Health notes
 
 - Red-flag screen result (setup): all clear.
-- Active limits: see limits.yaml
+- Active limits: see limits.md
 `;
 
-export type Limit = { id: string; region: string; rule: "ban" | "cap"; patterns?: string[]; exercises?: string[]; allow?: string[]; note: string; source?: string; since: string; max_load?: { value: number; unit: string }; max_sets_per_week?: number };
+/** athlete/limits.md as the template writes it, with these lines (none: "None yet."). */
+export function limitsMd(lines: string[]): string {
+  return `# Injuries and limits\n\nThe coach plans around each line below in every plan. Say "change my limits" to change one.\n\n${lines.length ? lines.join("\n") : "None yet."}\n`;
+}
 
-export function limitsYaml(limits: Limit[], painThreshold = 4): string {
+/** An old (0.2.x) athlete/limits.yaml entry: only the not-yet-migrated scenario writes one (0.3.0). */
+export type OldLimit = { id: string; region: string; rule: "ban" | "cap"; patterns?: string[]; exercises?: string[]; allow?: string[]; note: string; source?: string; since: string; max_load?: { value: number; unit: string }; max_sets_per_week?: number };
+
+/** An old (0.2.x) athlete/limits.yaml, for a copy that updated to 0.3.0 and has not migrated yet. */
+export function oldLimitsYaml(limits: OldLimit[], painThreshold = 4): string {
   if (limits.length === 0) return `version: 1\npain_threshold: ${painThreshold}\nlimits: []\n`;
   const body = limits
     .map((l) => {
@@ -392,16 +399,8 @@ export function limitsYaml(limits: Limit[], painThreshold = 4): string {
   return `version: 1\npain_threshold: ${painThreshold}\nlimits:\n${body}\n`;
 }
 
-export const KNEE_LIMIT = (since: string): Limit => ({
-  id: "L-001",
-  region: "left-knee",
-  rule: "ban",
-  patterns: ["loaded_deep_knee_flexion"],
-  exercises: ["Barbell Back Squat"],
-  allow: ["Box Squat"],
-  note: "No deep loaded knee bends; box squat to parallel is fine",
-  since,
-});
+/** The knee limit in plain words (0.3.0): what the 0.2.x ban said, as the athlete would say it. */
+export const KNEE_LIMIT = (since: string): string => `- Left knee: no deep knee bends under load, so no barbell back squats. Box squats to parallel are fine. (since ${since})`;
 
 // ---------------------------------------------------------------------------
 // Signals: 45 days of Shortcut files before today, plus today's file per scenario. The
@@ -544,11 +543,13 @@ export function tallyState(today: string, opts: { weekDays?: boolean } = {}): Mo
 export function writeAthlete(
   write: (rel: string, text: string) => void,
   today: string,
-  opts: { limits?: Limit[]; checkin?: "shortcut" | "chat"; weekly?: { day: string; time: string }; block?: string; logger?: "tally" | "files" } = {},
+  opts: { limits?: string[]; oldLimitsYaml?: string; checkin?: "shortcut" | "chat"; weekly?: { day: string; time: string }; block?: string; logger?: "tally" | "files" } = {},
 ): void {
   write("coach.yaml", coachYaml({ checkin: opts.checkin, weekly: opts.weekly, logger: opts.logger }));
   write("athlete/brief.md", BRIEF);
-  write("athlete/limits.yaml", limitsYaml(opts.limits ?? []));
+  // 0.3.0: the limits in plain words; a copy that has not migrated yet has only the old file.
+  if (opts.oldLimitsYaml !== undefined) write("athlete/limits.yaml", opts.oldLimitsYaml);
+  else write("athlete/limits.md", limitsMd(opts.limits ?? []));
   write("athlete/baselines.json", readFileSync(join(REPO, "templates/athlete/baselines.json"), "utf8"));
   write("athlete/block.yaml", opts.block ?? blockYaml(today));
   write("athlete/log/.gitkeep", "");

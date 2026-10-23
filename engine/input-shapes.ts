@@ -1,7 +1,7 @@
 // The engine's input checks (W1, 0.2.8; contracts §13a): no command reports a result from input it
 // could not read. One module, one mode per kind of input:
 //
-// - plan days (limits check, volume, loads, adjust, classify): the engine's shape (every exercise
+// - plan days (volume, loads, adjust, classify): the engine's shape (every exercise
 //   has a `sets` list) or Tally's shape (no exercise has `sets`; converted by engine/tally-shape.ts),
 //   decided per day. A day that mixes them is refused. `sets: []` and `exercises: []` are valid.
 // - history (loads --history, volume and targets `logs`): logged sets only. A Tally prescription is
@@ -62,14 +62,6 @@ export function planDay(raw: unknown, w: Where, path: string, units: Units, opts
 export function planDays(list: unknown, w: Where, path: string, units: Units): DayPlan[] {
   if (!Array.isArray(list)) throw inputError(w, path, `must be a list of days, got ${describe(list)}`);
   return list.map((d, i) => planDay(d, w, join(path, i), units).day);
-}
-
-/** The days of {week: {days}}, {days} or a bare list (limits check), checked; null when none of these. */
-export function planDaysFrom(raw: unknown, w: Where, units: Units): DayPlan[] | null {
-  if (isObj(raw) && isObj(raw.week) && Array.isArray(raw.week.days)) return planDays(raw.week.days, w, "week.days", units);
-  if (isObj(raw) && Array.isArray(raw.days)) return planDays(raw.days, w, "days", units);
-  if (Array.isArray(raw)) return planDays(raw, w, "", units);
-  return null;
 }
 
 /** A list of plan exercises with no day around it (loads {exercises}): one shape, checked, as engine exercises. */

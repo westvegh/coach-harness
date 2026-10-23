@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { adjustDay } from "../../engine/adjust.ts";
 import { planToTallyDay, snapshotDayToPlan, tallyDayToPlan } from "../../engine/tally-shape.ts";
 import { toDayPlan } from "../../adapters/loggers/tally/day.ts";
-import { bench, curl, limits, plannedDay, row3, snapDay, snapshot, squat, tax, NOW, SESSION } from "../guard/fixtures.ts";
+import { bench, curl, plannedDay, row3, snapDay, snapshot, squat, tax, NOW, SESSION } from "../guard/fixtures.ts";
 import { cli, instance, writeJson } from "./helpers.ts";
 
 const RANGE = { exerciseId: "Dumbbell_Lunge", name: "Dumbbell Lunge", suggestedSets: 3, suggestedReps: 8, repsMax: 12, suggestedWeight: 40, rpe: 8, perSide: true };
@@ -36,7 +36,7 @@ test("the forward sets match the guard's toDayPlan (one conversion, two callers)
 
 test("a trim comes back as fewer suggestedSets with every other field kept", () => {
   const plan = tallyDayToPlan(plannedDay("2026-10-15", { exercises: [squat, RANGE] }), { units: "lbs" });
-  const trimmed = adjustDay(plan, "trim", { tax: tax(), thresholds: {}, limits: limits() });
+  const trimmed = adjustDay(plan, "trim", { tax: tax(), thresholds: {} });
   const back = planToTallyDay(trimmed.day);
   assert.deepEqual(back.day.exercises, [
     { ...squat, suggestedSets: 3 },
@@ -56,7 +56,7 @@ test("a changed rep target drops repsMax; a changed weight rewrites suggestedWei
 
 test("a recovery day comes back with custom exercise ids, durations and dayType recovery", () => {
   const plan = tallyDayToPlan(plannedDay("2026-10-15", { exercises: [squat, bench] }), { units: "lbs" });
-  const rec = adjustDay(plan, "recovery", { tax: tax(), thresholds: {}, limits: limits(), planned_minutes: 45 });
+  const rec = adjustDay(plan, "recovery", { tax: tax(), thresholds: {}, planned_minutes: 45 });
   const back = planToTallyDay(rec.day);
   assert.equal(back.day.dayType, "recovery");
   assert.equal(back.day.dayName, "Recovery");
@@ -71,7 +71,7 @@ test("a recovery day comes back with custom exercise ids, durations and dayType 
 
 test("adjust before the fix: a raw Tally day crashed the engine; now it is converted", () => {
   const raw = plannedDay("2026-10-15", { exercises: [squat, bench] });
-  assert.throws(() => adjustDay({ ...raw, exercises: raw.exercises } as never, "trim", { tax: tax(), thresholds: {}, limits: limits() }), /Cannot read properties of undefined/);
+  assert.throws(() => adjustDay({ ...raw, exercises: raw.exercises } as never, "trim", { tax: tax(), thresholds: {} }), /Cannot read properties of undefined/);
   const dir = instance();
   const r = cli(["adjust", "--decision", "trim", "--root", dir], { input: JSON.stringify(raw) });
   assert.equal(r.code, 0, r.stderr);

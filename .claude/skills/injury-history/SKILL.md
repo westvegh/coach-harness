@@ -1,6 +1,6 @@
 ---
 name: injury-history
-description: Records past-year injuries or pain after setup, region by region, as a note or as a limit the athlete chooses through the safety skill. Use it when the user says "add my injury history", "I had a knee injury last year", "old injuries", "past injuries", "my back used to bother me" or "record my injuries". It asks one multi-select question for the regions, then for each region whether it still bothers the athlete, writes a note for a healed region and hands a region that still bothers them to the safety skill. It never diagnoses. Interactive only.
+description: Records past-year injuries or pain after setup, region by region, as a note or as a line in athlete/limits.md the athlete chooses through the safety skill. Use it when the user says "add my injury history", "I had a knee injury last year", "old injuries", "past injuries", "my back used to bother me" or "record my injuries". It asks one multi-select question for the regions, then for each region whether it still bothers the athlete, writes a note for a healed region and hands a region that still bothers them to the safety skill. It never diagnoses. Interactive only.
 ---
 
 # Injury history
@@ -23,7 +23,7 @@ Today is `TZ=<coach.yaml athlete.timezone> date +%F`.
 ## Writes
 
 - `athlete/brief.md` "Injury history" lines.
-- `athlete/limits.yaml`, only through the `safety` skill (the athlete's choice).
+- `athlete/limits.md`, only through the `safety` skill (the athlete's choice, in plain words).
 - Git: one commit.
 
 ## Unattended

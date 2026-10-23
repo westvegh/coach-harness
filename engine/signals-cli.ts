@@ -116,6 +116,14 @@ export async function cmdCheckin(argv: string[]): Promise<number> {
     const { pushNow, unpushed, URGENT_RELATIVE } = await import("./urgent.ts");
     push = r.urgent_stop.commit.committed || unpushed(root, [URGENT_RELATIVE]) ? await pushNow(root) : null;
   }
-  out({ path: r.path, action: r.action, replaced: r.replaced, file: r.file, ...(r.note ? { note: r.note } : {}), ...(r.urgent_stop ? { urgent_stop: { ...r.urgent_stop, push } } : {}) });
+  // 0.3.0: the pain threshold (coach.yaml, else the old limits.yaml until the migration runs, else 4)
+  // and today's pain entries at or above it: the check-in skill hands each to the safety skill.
+  const { painThreshold } = await import("./limits-text.ts");
+  const cfgPath = join(root, "coach.yaml");
+  const cfg = existsSync(cfgPath) ? (await import("./config.ts")).loadConfig(cfgPath) : null;
+  const threshold = painThreshold(root, cfg);
+  const todayPain = ((r.file as { checkin?: { pain?: { region: string; score: number }[] } } | null)?.checkin?.pain ?? []);
+  const pain_to_safety = todayPain.filter((p) => p.score >= threshold.value).map((p) => ({ region: p.region, score: p.score }));
+  out({ path: r.path, action: r.action, replaced: r.replaced, file: r.file, pain_threshold: threshold, pain_to_safety, ...(r.note ? { note: r.note } : {}), ...(r.urgent_stop ? { urgent_stop: { ...r.urgent_stop, push } } : {}) });
   return 0;
 }

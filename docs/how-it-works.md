@@ -15,7 +15,7 @@ recovery signals ─► readiness ─► method rules ─► change ─► limit
 1. **Signals.** Recovery data comes in each morning: sleep, HRV and resting heart rate from a wearable, and a short check-in from you.
 2. **Readiness.** The engine scores three categories: wearable, subjective and performance.
 3. **Method rules.** The method pack says what to do with that score: keep the session, add a note, trim it, or swap to a recovery day.
-4. **Limits.** The coach reads `athlete/limits.yaml` before every plan and checks the planned week with `node engine/cli.ts limits check`. It fixes every conflict before it writes.
+4. **Limits.** The coach reads `athlete/limits.md` before every plan: your limits, one line each, in your own words. It plans around every line by judgment, and checks the final plan against each line before it writes. No code reads the meaning of a limit.
 5. **Your plans.** The plan goes where your plans live (see "Where plans live"). You log your sets there, or tell the coach in chat. Your logged sessions become the performance signal for the next day.
 
 Your history stays in files in your own private git repository.
@@ -94,6 +94,10 @@ Code enforces two rules. Nothing else blocks the coach.
 
 Code does not check your plans. The coach follows your limits and the method's rules because `CLAUDE.md`, the skills and the method pack tell it to, and the `audit` skill reports any conflict. The coach can still misread a limit. The evals in `evals/` measure how often it follows them, and git and your logger show every change.
 
+### Build your own enforcement
+
+Code enforces the two rules above and nothing else. If you want a hard rule in code (for example "never write a day with a barbell back squat"), add a Claude Code hook in your own copy. Use `.claude/hooks/urgent-gate.ts` as the example: a `PreToolUse` hook on the plan write tools, registered in `.claude/settings.json` with `"onFailure": "block"`, that fails closed (it denies the call when it cannot decide). Keep the hook in your own copy: the template does not ship one, and `update` keeps a file you changed as yours.
+
 ### Where plans live
 
 `coach.yaml logger` says where your plans live:
@@ -109,7 +113,7 @@ You can switch at any time ("move my plans to Tally"). With files, the coach men
 Your athlete files live in `athlete/` in your private repo:
 
 - `brief.md`: your goals, history, schedule, equipment and preferences (a lasting choice you state, such as a rep range, goes here, and every later plan follows it);
-- `limits.yaml`: your limits (a ban, or a cap on sets or load, for a body region);
+- `limits.md`: your limits, one line each, in your own words (the coach reads it before every plan; say "change my limits" to change one);
 - `block.yaml`: the current training block;
 - `log/YYYY-MM.md`: one entry for each change, with the readiness, the rule IDs and the result, and any proposal for the next live session.
 
@@ -117,11 +121,11 @@ With `logger: files`, your weekly plans are in `plans/`. The coach commits after
 
 ## Updates
 
-Your repo is a copy of the template with no link back to it. Each release ships `template-manifest.json`: every template file with its git mode and blob id. `node engine/cli.ts update --check` fetches the template's new release and compares, per file, the old manifest, the new manifest and your file. A file you did not change is replaced; a file you changed that the template did not change stays yours; a file both changed is a conflict that you settle (keep yours, or take the template's with a backup). Your `coach.yaml` and `athlete/` files are never touched. `update --yes --to <sha>` writes the plan all or nothing and commits once. The `update` skill walks you through it and runs the checks after.
+Your repo is a copy of the template with no link back to it. Each release ships `template-manifest.json`: every template file with its git mode and blob id. `node engine/cli.ts update --check` fetches the template's new release and compares, per file, the old manifest, the new manifest and your file. A file you did not change is replaced; a file you changed that the template did not change stays yours; a file both changed is a conflict that you settle (keep yours, or take the template's with a backup). The update never touches your `coach.yaml` or `athlete/` files. `update --yes --to <sha>` writes the plan all or nothing and commits once. The `update` skill walks you through it and runs the checks after. From 0.2.x, its last step (in the new session) runs `node engine/cli.ts migrate-limits` once: it converts your old `athlete/limits.yaml` to `athlete/limits.md` line by line, keeps every rule and number, moves the pain threshold to `coach.yaml`, and makes one commit of its own.
 
 ## Safety
 
-When you mention pain or an injury, the coach asks one screen of clickable questions: how to handle the region (train normally, go light and build back, or avoid loading it for now), the side, and a short warning-sign check. It writes the limit you chose. When you say it is better, it asks one question and removes or loosens the limit.
+When you mention pain or an injury, the coach asks one screen of clickable questions: how to handle the region (train normally, go light and build back, or avoid loading it for now), the side, and a short warning-sign check. It writes the limit you chose as one plain line in `athlete/limits.md`. When you say it is better, it asks one question: train normally again (the line goes), go light and build back, or keep it as it is.
 
 A hook reads every message you send for urgent warning signs only. An urgent sign starts the urgent stop (see above). A scheduled run can never clear it.
 

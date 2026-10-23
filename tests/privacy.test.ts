@@ -79,7 +79,7 @@ describe("the scanner catches leaks in a fixture repo", () => {
   });
 
   test("untracked files and clean text pass", () => {
-    const dir = fixture({ "clean.md": "Bearer tokens go in .env, never here.\nsha: 3fa1c2d9e0b4\n" }, { "athlete/limits.yaml": "x", "secret.txt": tokens.ghp });
+    const dir = fixture({ "clean.md": "Bearer tokens go in .env, never here.\nsha: 3fa1c2d9e0b4\n" }, { "athlete/limits.md": "x", "secret.txt": tokens.ghp });
     assert.deepEqual(scanRepo(dir), []);
   });
 });

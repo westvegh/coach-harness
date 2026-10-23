@@ -22,7 +22,7 @@ test("the example config loads", () => {
   const cfg = loadConfig(EXAMPLE);
   assert.equal(cfg.athlete.timezone, "America/Los_Angeles");
   assert.equal(cfg.template.days, 4);
-  assert.deepEqual(cfg.thresholds, {});
+  assert.deepEqual(cfg.thresholds, { pain_threshold: 4 }, "0.3.0: the pain threshold is in coach.yaml");
   assert.ok(cfg.approval.auto.includes("annotate"));
 });
 

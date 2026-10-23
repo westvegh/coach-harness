@@ -11,14 +11,14 @@ import { parse } from "yaml";
 import { validateBlock } from "../../engine/block.ts";
 import { loadConfig } from "../../engine/config.ts";
 import { addDays } from "../../engine/dates.ts";
-import { validateLimits } from "../../engine/limits.ts";
 import { readiness } from "../../engine/readiness.ts";
 import { opDone } from "../../engine/oplog.ts";
 import { loadSignals } from "../../engine/signals.ts";
 import { adapterDeclaresT2, createInstance, EXCLUDED, MOCK_SERVER, publicExport, sessionWeekdays, tallyState, todayLocal, weekdayOf, weekStart } from "../lib/instance.ts";
 import { readState } from "../mock-tally/client.ts";
 import { snapshotFiles } from "../lib/collect.ts";
-import { limitsCheck, replyText, taxonomy } from "../lib/checks.ts";
+import { replyText, taxonomy } from "../lib/checks.ts";
+import { judge } from "../lib/limit-rules.ts";
 import type { RunArtifacts } from "../lib/types.ts";
 import { loadScenarios, prepare } from "../run.ts";
 import painWord from "./10-pain-word.ts";
@@ -66,9 +66,9 @@ test("the offline fixture date override pins today; without it, today uses the t
   }
 });
 
-test("30 scenarios (07, 08a, 08b, 13, 14 and 15 tested guard denials and went in v0.2; V4 added 26 to 29; V5 added 30; V6 added 31 to 33; V7 added 34 and 35), unique names", () => {
-  assert.equal(scenarios.length, 30);
-  assert.equal(new Set(scenarios.map((s) => s.name)).size, 30);
+test("40 scenarios (07, 08a, 08b, 13, 14 and 15 tested guard denials and went in v0.2; V4 added 26 to 29; V5 added 30; V6 added 31 to 33; V7 added 34 and 35; W3 added 21b and 36 to 42), unique names", () => {
+  assert.equal(scenarios.length, 40);
+  assert.equal(new Set(scenarios.map((s) => s.name)).size, 40);
 });
 
 /** Every file under root, relative (node_modules and .git not entered). */
@@ -135,23 +135,33 @@ test("scenario 16: only the exit statement counts as \"already adjusted\"", () =
   assert.equal(saidAlreadyAdjusted("I checked if today is already adjusted: it is not."), false);
 });
 
-test("scenario 10 check: one screen before the limit, the chosen ban, no agent, no typed command", () => {
+test("scenario 10 check: one screen before the line, the chosen line in plain words, the days follow it, the protected day asked first, no agent, no typed command", () => {
   const ask = { id: "q", name: "AskUserQuestion", input: { questions: [{ question: "Left knee: how should the coach handle it?", options: [{ label: "Avoid loading it for now" }] }] }, result: { isError: false, text: "" } };
-  const write = { id: "w", name: "Edit", input: { file_path: "/x/athlete/limits.yaml" }, result: { isError: false, text: "" } };
+  const own = { id: "o", name: "AskUserQuestion", input: { questions: [{ question: "Wednesday is your own day in Tally, and it has Walking Lunge. Change it to follow the new line?", options: [{ label: "Yes" }, { label: "Leave it" }] }] }, result: { isError: false, text: "" } };
+  const write = { id: "w", name: "Edit", input: { file_path: "/x/athlete/limits.md" }, result: { isError: false, text: "" } };
+  const owrite = { id: "t", name: "mcp__tallymock__plan_workout_day", input: { date: "2026-10-14" }, result: { isError: false, text: "" } };
   const agent = { id: "s", name: "Agent", input: { subagent_type: "general-purpose" }, result: { isError: false, text: "" } };
-  const ban = "version: 1\npain_threshold: 4\nlimits:\n  - { id: L-001, region: left-knee, rule: ban, patterns: [squat], note: x, source: athlete, since: 2026-10-12 }\n";
-  const day = (name: string) => ({ exercises: [{ exerciseId: name.replace(/ /g, "_"), name, suggestedSets: 3, suggestedReps: 8, suggestedWeight: 100 }], source: "mcp", status: "planned" });
-  const run = (tools: unknown[], limitsAfter = "limits: []\n", text = "Left knee: no loaded knee bends for now.", days: Record<string, unknown> = { "2026-10-12": day("Leg Curl") }) =>
-    ({ today: "2026-10-12", tools, messages: [{ afterTool: tools.length, text }], result: { text }, before: { "athlete/limits.yaml": "limits: []\n" }, after: { "athlete/limits.yaml": limitsAfter }, mock: { calls: [], days } }) as unknown as RunArtifacts;
+  const LINE = "# Injuries and limits\n\n- Left knee: avoid for now: squats, lunges, leg presses and leg curls. (since 2026-10-12)\n";
+  const day = (name: string, own = false) => ({ exercises: [{ exerciseId: name.replace(/ /g, "_"), name, suggestedSets: 3, suggestedReps: 8, suggestedWeight: 100 }], source: own ? "user" : "mcp", user_modified: own, status: "planned" });
+  const ownCall = (override: boolean) => ({ tool: "plan_workout_day", args: { date: "2026-10-14", ...(override ? { overrideUserModified: true } : {}) }, result: { results: [{ status: "written", date: "2026-10-14" }] } });
+  const run = (tools: unknown[], after = LINE, text = "Left knee: no loaded knee bends for now.", days: Record<string, unknown> = { "2026-10-12": day("Hip Thrust"), "2026-10-14": day("Calf Raise", true) }, calls: unknown[] = []) =>
+    ({ today: "2026-10-12", tools, messages: [{ afterTool: tools.length, text }], result: { text }, before: { "athlete/limits.md": "# Injuries and limits\n\nNone yet.\n" }, after: { "athlete/limits.md": after }, mock: { calls, days } }) as unknown as RunArtifacts;
   const ok = (a: RunArtifacts) => painWord.check(a).every((c) => c.ok);
-  assert.equal(ok(run([ask, write], ban)), true, "one screen, then the ban, and the days follow it");
-  assert.equal(ok(run([ask, ask, write], ban)), false, "two screens before the limit");
-  assert.equal(ok(run([ask, write, ask], ban)), false, "V3b: a second screen after the limit counts too");
-  assert.equal(ok(run([ask, write], ban, undefined, { "2026-10-14": day("Goblet Squat") })), false, "a planned day still breaks the new limit");
-  assert.equal(ok(run([agent, ask, write], ban)), false, "an Agent call fails");
-  assert.equal(ok(run([ask, write], ban, "Run this in your terminal: `! node engine/cli.ts limits check`")), false, "a typed command fails");
-  assert.equal(ok(run([ask, write], ban.replace("rule: ban", "rule: cap, max_sets_per_week: 4"))), false, "a cap is not the scripted choice");
-  assert.equal(ok(run([])), false, "no question and no limit fails");
+  const good = run([ask, write, own, owrite], LINE, undefined, undefined, [ownCall(true)]);
+  assert.deepEqual(painWord.check(good).filter((c) => !c.ok).map((c) => `${c.name}: ${c.detail}`), [], "one screen, the line, the days follow it, the protected day asked first");
+  assert.equal(ok(run([ask, ask, write, own, owrite], LINE, undefined, undefined, [ownCall(true)])), false, "two safety screens before the line");
+  const sev = (q: string) => ({ id: "v", name: "AskUserQuestion", input: { questions: [{ question: q, options: [{ label: "4-5" }] }] }, result: { isError: false, text: "" } });
+  assert.equal(ok(run([sev("How bad is the left knee ache, from 0 (none) to 10 (worst)?"), sev("Which exact number?"), ask, write, own, owrite], LINE, undefined, undefined, [ownCall(true)])), true, "the check-in's severity questions are counted apart");
+  assert.equal(ok(run([sev("How bad is the left knee ache, from 0 (none) to 10 (worst)?"), ask, ask, write, own, owrite], LINE, undefined, undefined, [ownCall(true)])), false, "a severity question plus two safety screens still fails");
+  assert.equal(ok(run([ask, write, own, owrite], LINE, undefined, { "2026-10-12": day("Goblet Squat"), "2026-10-14": day("Calf Raise", true) }, [ownCall(true)])), false, "a planned day still loads the knee");
+  assert.equal(ok(run([ask, write, own, owrite], LINE, undefined, { "2026-10-12": day("Leg Curl"), "2026-10-14": day("Calf Raise", true) }, [ownCall(true)])), false, "a leg curl loads the knee too");
+  assert.equal(ok(run([ask, write, owrite, own], LINE, undefined, undefined, [ownCall(true)])), false, "the protected day written before its question");
+  assert.equal(ok(run([ask, write, own, owrite], LINE, undefined, undefined, [ownCall(false)])), false, "the protected day written without the override");
+  assert.equal(ok(run([ask, write], LINE)), false, "the protected day never asked about");
+  assert.equal(ok(run([agent, ask, write, own, owrite], LINE, undefined, undefined, [ownCall(true)])), false, "an Agent call fails");
+  assert.equal(ok(run([ask, write, own, owrite], LINE, "Run this in your terminal: `! node engine/cli.ts regions`", undefined, [ownCall(true)])), false, "a typed command fails");
+  assert.equal(ok(run([ask, write, own, owrite], "# Injuries and limits\n\nNone yet.\n", undefined, undefined, [ownCall(true)])), false, "no knee line");
+  assert.equal(ok(run([])), false, "no question and no line fails");
 });
 
 test("the scripted athlete: answers by question pattern, counts clicks and typed answers, leaves the rest unanswered", async () => {
@@ -167,11 +177,26 @@ test("the scripted athlete: answers by question pattern, counts clicks and typed
   assert.deepEqual(answer({ questions: [q("Units?", ["lbs"])] }, [{ question: "units", answer: "stone" }]).unanswered, ["Units?"]);
 });
 
-test("the limits check helper runs the engine's limits check on written days", () => {
-  const day = (name: string, sets: number, weight: number) => ({ date: "2026-10-19", status: "planned", exercises: [{ exerciseId: null, name, unit: "lbs", sets: Array.from({ length: sets }, () => ({ reps: 8, weight })) }] });
-  const cap = "version: 1\npain_threshold: 4\nlimits:\n  - { id: L-001, region: low-back, rule: cap, patterns: [hinge], max_load: { value: 135, unit: lbs }, note: x, source: athlete, since: 2026-10-01 }\n";
-  assert.equal(limitsCheck([day("Romanian Deadlift", 3, 155)], cap).findings.filter((f) => f.kind === "over_load").length, 1);
-  assert.equal(limitsCheck([day("Romanian Deadlift", 3, 135)], cap).findings.length, 0);
+test("the limit scorer (0.3.0): avoid, weekly sets (warm-ups left out), load in either unit, allowed names, regions and unclassified exercises", () => {
+  const day = (date: string, ...ex: { name: string; sets: number; weight?: number; unit?: string; warm?: number }[]) => ({ date, status: "planned", exercises: ex.map((e) => ({ exerciseId: null, name: e.name, unit: e.unit ?? "lbs", sets: [...Array.from({ length: e.warm ?? 0 }, () => ({ weight: 45, warmup: true })), ...Array.from({ length: e.sets }, () => ({ reps: 8, ...(e.weight !== undefined ? { weight: e.weight } : {}) }))] })) });
+  const kinds = (f: { kind: string }[]) => f.map((x) => x.kind);
+  const ban = { says: "no overhead pressing and no dips", patterns: ["overhead_press", "vertical_push"], kind: "avoid" as const };
+  assert.deepEqual(kinds(judge([day("2026-10-19", { name: "Bench Press", sets: 3 }), day("2026-10-20", { name: "Lateral Raise", sets: 3 })], ban)), []);
+  assert.deepEqual(kinds(judge([day("2026-10-19", { name: "Overhead Press", sets: 3 })], ban)), ["covered"]);
+  assert.deepEqual(kinds(judge([day("2026-10-19", { name: "Chest Dip", sets: 3 })], ban)), ["covered"]);
+  assert.deepEqual(kinds(judge([{ ...day("2026-10-19", { name: "Overhead Press", sets: 3 }), status: "skipped" }], ban)), [], "a skipped day does not count");
+  assert.deepEqual(kinds(judge([day("2026-10-19", { name: "Zorblax Hold", sets: 3 })], ban)), ["unclassified"]);
+  const sets = { says: "at most 6 sets a week of shoulder pressing and pulling", patterns: ["overhead_press", "horizontal_pull", "vertical_pull"], kind: "weekly_sets" as const, max: 6 };
+  assert.deepEqual(kinds(judge([day("2026-10-19", { name: "Overhead Press", sets: 3, warm: 2 }), day("2026-10-22", { name: "Seated Cable Row", sets: 3 })], sets)), [], "6 hard sets, warm-ups left out");
+  assert.deepEqual(kinds(judge([day("2026-10-19", { name: "Overhead Press", sets: 3 }), day("2026-10-22", { name: "Lat Pulldown", sets: 4 })], sets)), ["over_sets"]);
+  const load = { says: "overhead pressing at 50 lb or less", patterns: ["overhead_press"], kind: "load" as const, max: 50, unit: "lbs" as const };
+  assert.deepEqual(kinds(judge([day("2026-10-19", { name: "Overhead Press", sets: 3, weight: 50 })], load)), []);
+  assert.deepEqual(kinds(judge([day("2026-10-19", { name: "Overhead Press", sets: 3, weight: 55 })], load)), ["over_load"]);
+  assert.deepEqual(kinds(judge([day("2026-10-19", { name: "Overhead Press", sets: 3, weight: 22.5, unit: "kg" })], load)), [], "22.5 kg is 49.6 lb");
+  assert.deepEqual(kinds(judge([day("2026-10-19", { name: "Overhead Press", sets: 3, weight: 25, unit: "kg" })], load)), ["over_load"], "25 kg is 55.1 lb");
+  const knee = { says: "left knee: avoid", region: "left-knee", kind: "avoid" as const, allowed: /^box squat$/i };
+  assert.deepEqual(kinds(judge([day("2026-10-19", { name: "Leg Curl", sets: 3 })], knee)), ["covered"], "a pattern that loads the parent region");
+  assert.deepEqual(kinds(judge([day("2026-10-19", { name: "Box Squat", sets: 3 }), day("2026-10-20", { name: "Hip Thrust", sets: 3 })], knee)), []);
 });
 
 const EXPECTED_DECISION: Record<string, string> = {
@@ -185,6 +210,8 @@ const EXPECTED_DECISION: Record<string, string> = {
   "32-pattern-check-in": "trim",
   // V7: the short pattern with a low rating recorded: trim, with no question.
   "35-fast-today-write": "trim",
+  // W3: a recovery day under a limit.
+  "36-recovery-under-limit": "recovery",
 };
 
 /** Scenarios where a run that does nothing is already correct. */
@@ -199,7 +226,9 @@ for (const s of scenarios) {
       if (!s.fresh) {
         const cfg = loadConfig(join(root, "coach.yaml"));
         validateBlock(parse(ctx.read("athlete/block.yaml")));
-        validateLimits(parse(ctx.read("athlete/limits.yaml")), taxonomy());
+        // 0.3.0: the limits in plain words (a not-yet-migrated copy has only the old file).
+        if (s.name === "40-unmigrated-unattended") assert.ok(ctx.read("athlete/limits.yaml").includes("pain_threshold: 3") && !existsSync(join(root, "athlete/limits.md")));
+        else assert.match(ctx.read("athlete/limits.md"), /^# Injuries and limits\n/);
         // The baseline window (42 days) plus the long pattern (7) before today.
         // Signal validation and readiness share the fixture's date, even when it is pinned ahead of the clock.
         const now = `${ctx.today}T20:00:00Z`;
@@ -260,13 +289,47 @@ test("V3b fix 4: the setup scenarios' final-message check rejects paths and ids,
   assert.equal(finalMessage(a), "Done. No limits yet.");
 });
 
-test("V3c fix 10: the limits check replays every write: an intermediate break, a missing day or an unclassified exercise fails", async () => {
+test("W3: the speed scenarios carry a non-empty limits.md of about 1,200 characters that does not touch today's Lower A", async () => {
+  const { SPEED_LIMITS } = await import("./34-fast-today.ts");
+  const { limitsMd, SESSIONS } = await import("../lib/instance.ts");
+  const body = SPEED_LIMITS.join("\n");
+  assert.equal(SPEED_LIMITS.length, 4);
+  assert.ok(body.length > 1000 && body.length < 1400, `${body.length} characters`);
+  assert.ok(limitsMd(SPEED_LIMITS).length < 2000, "under the cut: the carriers hold it whole");
+  for (const e of SESSIONS[0].exercises) assert.ok(!body.toLowerCase().includes(e.name.toLowerCase()), e.name);
+});
+
+test("21b: about half is at most 55% of the block's 19 knee sets: 10 passes, 11 fails (leg curls count)", async () => {
+  const { BUILD_BACK_MAX } = await import("./21b-limits-build-back.ts");
+  assert.equal(BUILD_BACK_MAX, 10);
+  const rule = { says: "about half", region: "left-knee", kind: "weekly_sets" as const, max: BUILD_BACK_MAX };
+  const d = (date: string, ...ex: [string, number][]) => ({ date, exercises: ex.map(([name, n]) => ({ name, sets: Array.from({ length: n }, () => ({ warmup: false })) })) });
+  const ten = [d("2026-10-26", ["Box Squat", 2], ["Reverse Lunge", 2], ["Leg Curl", 2], ["Hip Thrust", 3]), d("2026-10-30", ["Goblet Squat", 2], ["Leg Press", 2], ["Calf Raise", 2])];
+  assert.deepEqual(judge(ten, rule), []);
+  const eleven = [d("2026-10-26", ["Box Squat", 2], ["Reverse Lunge", 2], ["Leg Curl", 3]), d("2026-10-30", ["Goblet Squat", 2], ["Leg Press", 2])];
+  assert.deepEqual(judge(eleven, rule).map((f) => f.kind), ["over_sets"]);
+});
+
+test("39c: the knee line's current rule is avoid for now (history in brackets allowed); the write question is answered yes before keep-the-plan", async () => {
+  const { kneeAvoidsNow, WRITE_RULE } = await import("./_build-back.ts");
+  assert.equal(kneeAvoidsNow("- Left knee: avoid for now. It felt worse this week. (since 2026-10-23; earlier: light only, building back slowly, since 2026-10-15)"), true);
+  assert.equal(kneeAvoidsNow("- Left knee: avoid for now. (since 2026-10-23)"), true);
+  assert.equal(kneeAvoidsNow("- Left knee: light only, building back slowly: avoid heavy work. (since 2026-10-15)"), false);
+  assert.equal(kneeAvoidsNow("- Left knee: light only, building back slowly. (since 2026-10-15)"), false);
+  const { answer } = await import("../lib/answerer.mjs");
+  const q = { question: "Your knee felt worse, so I cut the leg work. Upper days keep the plan with small load rises. Write this?", header: "h", multiSelect: false, options: [{ label: "A) Yes, write it" }, { label: "B) Change something" }, { label: "C) Not now" }] };
+  const s = scenarios.find((x) => x.name === "39c-build-back-worse")!;
+  assert.deepEqual(answer({ questions: [q] }, s.answers!).answers, { [q.question]: "A) Yes, write it" });
+  assert.ok(s.answers!.indexOf(WRITE_RULE as never) >= 0);
+});
+
+test("V3c fix 10: the limit scorer replays every write: an intermediate break, a missing day or an unclassified exercise fails", async () => {
   const { call: mockCall, readState: readMock, writeState: writeMock, versionOf } = await import("../mock-tally/client.ts");
   const ban = (await import("./20-limits-ban.ts")).default;
-  const { limitsYaml } = await import("../lib/instance.ts");
+  const { limitsMd } = await import("../lib/instance.ts");
   const today = "2026-10-12";
   const ex = (name: string, sets = 3, w = 100) => ({ exerciseId: name.replace(/ /g, "_"), name, suggestedSets: sets, suggestedReps: 8, suggestedWeight: w });
-  const limits = limitsYaml([{ id: "L-001", region: "right-shoulder", rule: "ban", patterns: ["overhead_press", "vertical_push"], note: "x", since: "2026-10-01" }]);
+  const limits = limitsMd(["- Right shoulder: no overhead pressing and no dips for now. (since 2026-10-01)"]);
   /** Runs the writes on a real mock and returns artifacts as a run would leave them. */
   function runWith(writes: { date: string; exercises: unknown[]; replace?: boolean }[]): RunArtifacts {
     const dir = mkdtempSync(join(tmpdir(), "coach-v3c-"));
@@ -280,7 +343,7 @@ test("V3c fix 10: the limits check replays every write: an intermediate break, a
     }
     const mock = readMock(state);
     rmSync(dir, { recursive: true, force: true });
-    return { today, seed, mock, before: { "athlete/limits.yaml": limits }, after: { "athlete/limits.yaml": limits }, tools: [], messages: [], screens: [], result: { text: "" } } as unknown as RunArtifacts;
+    return { today, seed, mock, before: { "athlete/limits.md": limits }, after: { "athlete/limits.md": limits }, tools: [], messages: [], screens: [], result: { text: "" } } as unknown as RunArtifacts;
   }
   const good = [
     { date: "2026-10-19", exercises: [ex("Goblet Squat")] },
@@ -420,7 +483,7 @@ test("V4 G2-G4: the new scenarios fail on bad transcripts", async () => {
   const loose = art({ turns: [{ firstTool: 0, firstMessage: 0, firstScreen: 0, mockCalls: 0, after: { "athlete/brief.md": brief }, costUsd: 0, commits: [] }, { firstTool: 0, firstMessage: 1, firstScreen: 0, mockCalls: 0, after: {}, costUsd: 0 }], messages: [{ afterTool: 0, text: "Saved." }, { afterTool: 0, text: "Your preference is saved. No audit was run." }], commits: [{ sha: "a", subject: "x", files: ["athlete/brief.md"] }], mock: { calls: [], days: { [next]: { exercises: [good("Bench Press", "Barbell_Bench_Press"), good("Romanian Deadlift", "Romanian_Deadlift"), good("Seated Cable Row", "Seated_Cable_Row"), { exerciseId: "Barbell_Squat", name: "Barbell Back Squat", suggestedSets: 3 }] } } } as unknown as RunArtifacts["mock"] });
   for (const name of [/main lift next week/, /the audit ran/, /athlete chose/, /committed in turn 1/]) assert.ok(failed("29-preference-persists", loose, name), String(name));
   // The good transcript: every lift in range, the audit call and line, the turn-1 commit.
-  const okArt = art({ ...loose, turns: [{ ...loose.turns![0], commits: ["a"] }, loose.turns![1]], tools: [tool("Bash", { command: "node engine/cli.ts limits check --input .tmp/coach/wk/week-2.json" })] as RunArtifacts["tools"], messages: [{ afterTool: 0, text: "Saved." }, { afterTool: 0, text: "| athlete chose | 8-12 reps |" }], mock: { calls: [], days: { [next]: { exercises: [good("Bench Press", "Barbell_Bench_Press"), good("Romanian Deadlift", "Romanian_Deadlift"), good("Seated Cable Row", "Seated_Cable_Row")] } } } as unknown as RunArtifacts["mock"] });
+  const okArt = art({ ...loose, turns: [{ ...loose.turns![0], commits: ["a"] }, loose.turns![1]], tools: [tool("Bash", { command: "node engine/cli.ts volume --input .tmp/coach/wk/week-2.json" })] as RunArtifacts["tools"], messages: [{ afterTool: 0, text: "Saved." }, { afterTool: 0, text: "| athlete chose | 8-12 reps |" }], mock: { calls: [], days: { [next]: { exercises: [good("Bench Press", "Barbell_Bench_Press"), good("Romanian Deadlift", "Romanian_Deadlift"), good("Seated Cable Row", "Seated_Cable_Row")] } } } as unknown as RunArtifacts["mock"] });
   assert.deepEqual(get("29-preference-persists").check(okArt).filter((c) => !c.ok).map((c) => c.name), []);
 });
 

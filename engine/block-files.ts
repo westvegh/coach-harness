@@ -3,7 +3,7 @@
 // `block draft --out <dir>` writes the draft as files and prints a short summary, so the coach
 // never reads a 160 KB draft: <dir>/block.json (the block) and one <dir>/week-<n>.json per block
 // week, {week: {week_start, kind, load_factor, days}}. That one week shape goes to every command:
-// loads --fill, limits check, volume, plans write and tally-days.
+// loads --fill, volume, plans write and tally-days.
 //
 // `block write --input <dir>/block.json` owns the whole step: it refuses under the urgent stop,
 // validates the block, archives a block with another id to athlete/blocks/<safe id>.yaml, and
@@ -99,7 +99,7 @@ export function writeDraftFiles(dir: string, draft: BlockDraft & { template: str
   const weeks = draft.weeks.map((w) => {
     const file = join(dir, `week-${w.week}.json`);
     // 0.2.4: the input's cluster list travels with the week file, so every command that reads it
-    // (volume, limits check, loads --fill, plans write, tally-days) uses it, before coach.yaml exists
+    // (volume, loads --fill, plans write, tally-days) uses it, before coach.yaml exists
     // too. An empty list is kept: it overrides coach.yaml, as it did in the draft. null: no key.
     const body = { week: { week_start: w.week_start, kind: w.kind, load_factor: w.load_factor, days: w.days }, ...(clusters !== null ? { clusters } : {}) };
     writeFileSync(file, JSON.stringify(body, null, 2) + "\n");

@@ -23,6 +23,7 @@ automation:
 approval:                            # Policy input to engine/classify (big or small).
   auto: [trim_session, swap_to_recovery, load_progression, reschedule_within_week, annotate, block_session]
   ask:  [new_exercise, volume_above_plan, override_user_day, skip_or_delete_user_day, limit_change, new_block, method_change]
-thresholds: {}                       # Optional overrides of the readiness defaults, same keys.
+thresholds:                          # Optional overrides of the readiness defaults, same keys.
+  pain_threshold: 4                  # 0-10: check-in pain at or above it goes to the safety skill ("ask me about pain from 3 up" changes it)
 # clusters:                          # optional: exercises you do as cluster sets (the coach writes this)
 #   - { name: "EZ Bar Curls (Cluster)", mini_sets: 6, reps: 6, rm: 12, rest_s: 10 }

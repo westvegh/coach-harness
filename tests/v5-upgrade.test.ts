@@ -35,7 +35,7 @@ test("V5 upgrade: a legacy athlete folder reads in every command; the 6-set exer
   mkdirSync(join(dir, "plans"), { recursive: true });
   symlinkSync(join(REPO, "methods"), join(dir, "methods"));
   writeFileSync(join(dir, "coach.yaml"), readFileSync(join(REPO, "coach.example.yaml"), "utf8").replace("logger: tally", "logger: files"));
-  writeFileSync(join(dir, "athlete/limits.yaml"), readFileSync(join(REPO, "templates/athlete/limits.yaml"), "utf8"));
+  writeFileSync(join(dir, "athlete/limits.md"), readFileSync(join(REPO, "templates/athlete/limits.md"), "utf8"));
   writeFileSync(join(dir, "athlete/block.yaml"), `# The current training block.\n${stringify(LEGACY_BLOCK)}`);
   writeFileSync(join(dir, "athlete/brief.md"), "# Brief\n\n## Preferences\n\n- Six sets of back squats on Monday (athlete chose).\n");
   writeFileSync(join(dir, "plans/2026-W42.csv"), CSV);
@@ -51,7 +51,7 @@ test("V5 upgrade: a legacy athlete folder reads in every command; the 6-set exer
   assert.equal(targets.code, 0, targets.stderr);
   assert.deepEqual([targets.json.targets.clusters, targets.json.targets.cluster_above_target], [[], []]);
 
-  // The 6-set week: the audit lists it as advisory; limits pass; it classifies as the block's session; it writes.
+  // The 6-set week: the audit lists it as advisory; it classifies as the block's session; it writes.
   const week = { week: { week_start: "2026-10-19", kind: "build", load_factor: 1, days: [{ date: "2026-10-19", dayName: "Legs", notes: "Belt on", exercises: [SQUAT6] }] } };
   const wf = writeJson(dir, ".tmp/coach/week.json", week);
   const vol = cli(["volume", "--input", wf, "--root", dir]);
@@ -59,8 +59,6 @@ test("V5 upgrade: a legacy athlete folder reads in every command; the 6-set exer
   assert.deepEqual(vol.json.sets_by_muscle, { glutes: 6, quads: 6 });
   assert.equal(vol.json.session_max.length, 1);
   assert.match(vol.json.session_max[0].text, /advisory: the athlete may choose more/);
-  const lim = cli(["limits", "check", "--input", wf, "--root", dir]);
-  assert.deepEqual([lim.code, lim.json.ok], [0, true]);
   const cls = cli(["classify", "--input", writeJson(dir, "c.json", { before: null, after: week.week.days[0], tool: "plan_workout_day", today: "2026-10-14" }), "--root", dir]);
   assert.equal(cls.code, 0, cls.stderr);
   assert.ok(cls.json.kinds.includes("block_session"), JSON.stringify(cls.json));

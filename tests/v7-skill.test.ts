@@ -21,7 +21,7 @@ const inOrder = (text: string, parts: string[]) => {
 
 test("the schedule: pre with the ToolSearch, the reads in one message, post, the write step, save, the report", () => {
   inOrder(steps, ["node engine/cli.ts today-brief --stage pre", "`ToolSearch`", "Interactive: send it in the same message as pre", "Unattended: after pre returns in the window", "in **one message** (parallel tool calls)", "node engine/cli.ts today-brief --stage post", "**More reads**", "node engine/cli.ts today-write-prep --input .tmp/coach/write.json", "Read today again with `get_planned_workout` (the read-back)", "node engine/cli.ts save --run <run_id>", "**The report**"]);
-  assert.match(steps, /Do not Read `coach\.yaml`, `athlete\/limits\.yaml`, `athlete\/brief\.md`, the adapter file or the log for this skill/);
+  assert.match(steps, /Do not Read `coach\.yaml`, `athlete\/brief\.md`, the adapter file or the log for this skill: pre carries what the skill needs from them\. Read in full every file in pre's `limits_sources`[^\n]*only when `limits_text_truncated` is true[^\n]*post's `limits_freshness\.changed_since_pre` is true/);
   assert.match(skill, /Never skip a read, a read-back, consent or safety work to save a call\. Incomplete safety data is unknown, and unknown safety means no training write\./);
   assert.match(steps, /When a read that safety needs \(the history, today's day\) is in `gave_up`, safety is unknown/);
   assert.match(skill, /\(never run `date`\)/);

@@ -9,7 +9,7 @@ import type { RunArtifacts, Scenario } from "../lib/types.ts";
 import { LOW_CHECKIN, persona } from "./_common.ts";
 import { speedChecks } from "./_speed.ts";
 import { trimmed } from "./03-two-categories-trim.ts";
-import { PROMPT, SPEED_WATCH } from "./34-fast-today.ts";
+import { PROMPT, SPEED_LIMITS, SPEED_WATCH } from "./34-fast-today.ts";
 
 const scenario: Scenario = {
   name: "35-fast-today-write",
@@ -21,7 +21,7 @@ const scenario: Scenario = {
   watch: SPEED_WATCH,
   prompt: PROMPT,
   setup(ctx) {
-    persona(ctx, { today: { hrvZ: -1.6, sleepMin: 440, checkin: LOW_CHECKIN, offMornings: 3 } });
+    persona(ctx, { limits: SPEED_LIMITS, today: { hrvZ: -1.6, sleepMin: 440, checkin: LOW_CHECKIN, offMornings: 3 } });
   },
   check(a: RunArtifacts) {
     const before = seedDay(a, a.today);

@@ -7,7 +7,6 @@ import { parse } from "yaml";
 import { validateBlock } from "../../engine/block.ts";
 import { validateConfig } from "../../engine/config.ts";
 import { addDays, weekStart } from "../../engine/dates.ts";
-import { validateLimits } from "../../engine/limits.ts";
 import { check, successfulWrites, tallyToolUses, taxonomy } from "../lib/checks.ts";
 import { tallyState } from "../lib/instance.ts";
 import type { Check, RunArtifacts, Scenario, ToolUse } from "../lib/types.ts";
@@ -115,12 +114,10 @@ const scenario: Scenario = {
       out.push(check("coach.yaml is valid", false, (e as Error).message.slice(0, 300)));
     }
     if (cfgOk) out.push(check("coach.yaml is valid", true));
-    try {
-      const lim = validateLimits(parseOr(a.after["athlete/limits.yaml"]), taxonomy());
-      out.push(check("limits.yaml is valid and holds the knee limit", lim.limits.some((l) => /knee/.test(l.region)), JSON.stringify(lim.limits.map((l) => l.region))));
-    } catch (e) {
-      out.push(check("limits.yaml is valid and holds the knee limit", false, (e as Error).message.slice(0, 300)));
-    }
+    // 0.3.0: the limits in plain words. The knee line is there, in the athlete's words, and no old file is written.
+    const limits = a.after["athlete/limits.md"] ?? "";
+    const knee = limits.split("\n").find((l) => /^\s*-\s.*knee/i.test(l)) ?? "";
+    out.push(check("limits.md holds the knee line in plain words (no limits.yaml)", /^# /.test(limits) && /knee/i.test(knee) && a.after["athlete/limits.yaml"] == null, knee || limits.slice(0, 300)));
     out.push(check("brief.md exists and names the squat", !!a.after["athlete/brief.md"] && /squat/i.test(a.after["athlete/brief.md"] ?? "")));
     let block: ReturnType<typeof validateBlock> | null = null;
     try {

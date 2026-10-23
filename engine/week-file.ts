@@ -1,6 +1,6 @@
 // The week file (contracts §22.6a): {week: {week_start, kind, load_factor, days}}, as
-// `block draft --out` writes it. One shape for every command: loads --fill, limits check,
-// volume, plans write and tally-days.
+// `block draft --out` writes it. One shape for every command: loads --fill, volume, plans
+// write and tally-days.
 //
 // loads --fill: each exercise occurrence (by day and position) gets the base suggestion from the
 // history, then the week's load_factor once, with block draft's rounding (the plate step, at

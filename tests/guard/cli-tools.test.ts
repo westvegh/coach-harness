@@ -26,7 +26,7 @@ function instance(): string {
   const dir = mkdtempSync(join(tmpdir(), "coach-clitools-"));
   cpSync(join(REPO, "coach.example.yaml"), join(dir, "coach.yaml"));
   mkdirSync(join(dir, "athlete"), { recursive: true });
-  cpSync(join(REPO, "templates/athlete/limits.yaml"), join(dir, "athlete/limits.yaml"));
+  cpSync(join(REPO, "templates/athlete/limits.md"), join(dir, "athlete/limits.md"));
   cpSync(join(REPO, "methods"), join(dir, "methods"), { recursive: true });
   execFileSync("git", ["init", "-q", "-b", "main"], { cwd: dir });
   return dir;

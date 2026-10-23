@@ -36,7 +36,7 @@ const eng = (name: string, n: number, weight = 100) => ({ name, sets: Array.from
 /** A temp instance (coach.yaml, methods) with no limits. */
 function instance(edit?: (yaml: string) => string): string {
   const dir = e3Instance(edit);
-  writeFileSync(join(dir, "athlete/limits.yaml"), "version: 1\npain_threshold: 4\nlimits: []\n");
+  writeFileSync(join(dir, "athlete/limits.md"), "# Injuries and limits\n\nNone yet.\n");
   return dir;
 }
 
@@ -58,7 +58,7 @@ function refused(r: ReturnType<typeof cli>, path: string, what: RegExp, cmd: str
 
 // ---------- the end-to-end regression (2026-10-16) ----------
 
-test("2026-10-16: limits check on Tally-shaped days counts their sets (a cap over 6 hard sets is reported, never 'ok')", () => {
+test("2026-10-16: volume on Tally-shaped days counts their sets (0.3.0: the limits check that found this is gone; the count stays)", () => {
   const CLI = join(process.env.W1_REPO ?? REPO, "engine/cli.ts");
   const run = (args: string[]) => {
     const r = spawnSync(process.execPath, [CLI, ...args], { cwd: REPO, encoding: "utf8" });
@@ -68,42 +68,37 @@ test("2026-10-16: limits check on Tally-shaped days counts their sets (a cap ove
   assert.ok(run(["classify", "--exercise", names.row]).json.patterns.includes("horizontal_pull"));
   assert.ok(run(["classify", "--exercise", names.pulldown]).json.patterns.includes("vertical_pull"));
   assert.ok(run(["classify", "--exercise", names.press]).json.patterns.includes("horizontal_push"));
-  const root = mkdtempSync(join(tmpdir(), "w1-limits-"));
+  const root = mkdtempSync(join(tmpdir(), "w1-volume-"));
   mkdirSync(join(root, "athlete"));
-  writeFileSync(join(root, "athlete/limits.yaml"), "version: 1\npain_threshold: 4\nlimits:\n  - id: L-001\n    region: right-shoulder\n    rule: cap\n    patterns: [horizontal_pull, vertical_pull, horizontal_push]\n    exercises: []\n    allow: []\n    max_sets_per_week: 6\n    source: athlete\n    since: 2026-10-20\n");
-  const days = {
+  const week = {
+    week_start: "2026-11-02",
     days: [
       { date: "2026-11-03", dayName: "Upper A", exercises: [{ exerciseId: "chest_supported_row", name: names.row, suggestedSets: 3, suggestedReps: 10, suggestedWeight: 40 }] },
       { date: "2026-11-07", dayName: "Upper B", exercises: [{ exerciseId: "lat_pulldown", name: names.pulldown, suggestedSets: 3, suggestedReps: 10, suggestedWeight: 100 }, { exerciseId: "chest_press", name: names.press, suggestedSets: 3, suggestedReps: 10, suggestedWeight: 90 }] },
     ],
   };
-  const r = run(["limits", "check", "--root", root, "--input", writeJson(root, "days.json", days)]);
+  const r = run(["volume", "--root", root, "--input", writeJson(root, "week.json", { week })]);
   assert.equal(r.code, 0, r.stderr);
-  assert.equal(r.json.ok, false);
-  assert.deepEqual(r.json.findings.map((f: any) => [f.limit, f.kind]), [["L-001", "over_sets"]]);
-  assert.match(r.json.findings[0].detail, /^9 hard sets match L-001/);
+  assert.equal(r.json.sets_by_muscle.chest, 3, JSON.stringify(r.json.sets_by_muscle));
+  assert.equal(r.json.sets_by_muscle.lats, 6, JSON.stringify(r.json.sets_by_muscle));
 });
 
 // ---------- plan mode: shapes ----------
 
 test("plan mode: a day in either shape; a mixed day is refused; sets: [] and exercises: [] are valid; a name with no prescription is one set", () => {
   const dir = instance();
-  const check = (days: unknown[]) => cli(["limits", "check", "--root", dir, "--input", writeJson(dir, "d.json", { days })]);
+  const check = (days: unknown[]) => cli(["volume", "--root", dir, "--input", writeJson(dir, "d.json", { week: { week_start: "2026-11-02", days } })]);
   const mixed = check([{ date: "2026-11-02", exercises: [eng("Bench Press", 3)] }, { date: "2026-11-03", exercises: [eng("Bench Press", 3), { name: "Cable Row", suggestedSets: 3 }] }]);
-  refused(mixed, "days[1]", /mixes the engine's sets with Tally's suggestedSets; use one shape per day/, "limits check");
+  refused(mixed, "week.days[1]", /mixes the engine's sets with Tally's suggestedSets; use one shape per day/, "volume");
   const ok = check([{ date: "2026-11-02", exercises: [{ name: "Bench Press", sets: [] }] }, { date: "2026-11-03", exercises: [] }]);
   assert.equal(ok.code, 0, ok.stderr);
-  assert.equal(ok.json.ok, true);
   // A Tally exercise with a name and nothing else counts one set (documented default).
-  writeFileSync(join(dir, "athlete/limits.yaml"), "version: 1\npain_threshold: 4\nlimits:\n  - id: L-001\n    region: low-back\n    rule: cap\n    patterns: [hinge]\n    exercises: []\n    allow: []\n    max_sets_per_week: 1\n    source: athlete\n    since: 2026-10-01\n");
   const one = check([{ date: "2026-11-02", exercises: [{ name: "Romanian Deadlift" }] }, { date: "2026-11-04", exercises: [{ name: "Romanian Deadlift" }] }]);
-  assert.equal(one.json.ok, false);
-  assert.match(one.json.findings[0].detail, /^2 hard sets/);
+  assert.equal(one.json.sets_by_muscle.hamstrings, 2, JSON.stringify(one.json.sets_by_muscle));
   // 0.2.7's two failures: exerciseName in place of name, and "sets": 3.
-  refused(check([{ date: "2026-11-02", exercises: [{ exerciseName: "Bench Press", suggestedSets: 3 }] }]), "days[0].exercises[0]", /has no name; the field is `name`/, "limits check");
-  refused(check([{ date: "2026-11-02", exercises: [{ name: "Bench Press", sets: 3 }] }]), "days[0].exercises[0].sets", /must be a list of sets, got 3/, "limits check");
-  refused(check([{ date: "11/02", exercises: [] }]), "days[0].date", /must be a date YYYY-MM-DD/, "limits check");
-  refused(cli(["limits", "check", "--root", dir, "--input", writeJson(dir, "w.json", { exercises: [] })]), "w.json", /must be \{week: \{days\}\}, \{days\} or a list of days/, "limits check");
+  refused(check([{ date: "2026-11-02", exercises: [{ exerciseName: "Bench Press", suggestedSets: 3 }] }]), "week.days[0].exercises[0]", /has no name; the field is `name`/, "volume");
+  refused(check([{ date: "2026-11-02", exercises: [{ name: "Bench Press", sets: 3 }] }]), "week.days[0].exercises[0].sets", /must be a list of sets, got 3/, "volume");
+  refused(check([{ date: "11/02", exercises: [] }]), "week.days[0].date", /must be a date YYYY-MM-DD/, "volume");
 });
 
 // ---------- the value checks, per site ----------
@@ -129,7 +124,6 @@ const tallyDay = (over: Record<string, unknown> = {}) => ({ date: TODAY, dayName
 /** `zeroSets`: a write input for the files logger, where a 0 sets count is the plans/ zero-work row (W1b). */
 type Site = { name: string; cmd: string; prefix: string; run: (dir: string, day: Record<string, unknown>) => ReturnType<typeof cli>; tally: boolean; engine: boolean; zeroSets?: boolean };
 const SITES: Site[] = [
-  { name: "limits check {days}", cmd: "limits check", prefix: "days[0].", tally: true, engine: true, run: (dir, d) => cli(["limits", "check", "--root", dir, "--input", writeJson(dir, "x.json", { days: [d] })]) },
   { name: "volume {week}", cmd: "volume", prefix: "week.days[0].", tally: true, engine: true, run: (dir, d) => cli(["volume", "--root", dir, "--input", writeJson(dir, "x.json", { week: { week_start: "2026-10-12", days: [d] } })]) },
   { name: "loads (a Tally day on stdin)", cmd: "loads", prefix: "", tally: true, engine: false, run: (dir, d) => cli(["loads", "--root", dir, "--now", NOW], { input: JSON.stringify(d) }) },
   { name: "loads {exercises}", cmd: "loads", prefix: "", tally: false, engine: true, run: (dir, d) => cli(["loads", "--root", dir, "--now", NOW, "--input", writeJson(dir, "x.json", { exercises: d.exercises, history: [], units: "lbs" })]) },
@@ -347,12 +341,12 @@ test("today-brief --stage post (logger other): the evidence's list notes reach t
 
 // ---------- the coach's rule (skill text) ----------
 
-test("CLAUDE.md and the today skill: the engine's result is the answer; limits check again only after a change", () => {
+test("CLAUDE.md and the today skill: the engine's result is the answer; today-write-prep again only after a change", () => {
   const md = readFileSync(join(REPO, "CLAUDE.md"), "utf8");
   const at = md.indexOf("- **No source reading.**");
   const rule = md.indexOf("- **The engine's result is the answer.** Report the number it prints in one line.");
   assert.ok(at >= 0 && rule > at && md.slice(at, rule).split("\n").length === 2, "the bullet follows No source reading");
   assert.match(md, /To ask the engine about a day you read from Tally, pass the day as Tally returned it\. When a command fails, its error names the field to fix\./);
   const skill = readFileSync(join(REPO, ".claude/skills/today/SKILL.md"), "utf8");
-  assert.match(skill, /A limit it reports: change the day and run it again\. Its `limits` result stands for these days: run `limits check` again only after a day, the limits or the week's reads change \(`unknown` days still need their reads\)\./);
+  assert.match(skill, /Its result stands for this day: run it again only after the day or its read changes\./);
 });

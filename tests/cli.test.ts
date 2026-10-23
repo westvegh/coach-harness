@@ -70,16 +70,18 @@ test("volume --input: sets per muscle and targets", () => {
   assert.deepEqual(r2.json.targets.sets, { quads: 70 });
 });
 
-test("limits-hash with --file and with the default path", () => {
-  const dir = tempRoot();
-  const tpl = join(REPO, "templates/athlete/limits.yaml");
-  const a = cli(["limits-hash", "--file", tpl]);
-  assert.equal(a.code, 0, a.stderr);
-  assert.match(a.json.hash, /^[0-9a-f]{64}$/);
-  writeFileSync(join(dir, "athlete/limits.yaml"), readFileSync(tpl));
-  const b = cli(["limits-hash", "--root", dir]);
-  assert.equal(b.json.hash, a.json.hash);
-  assert.equal(cli(["limits-hash", "--root", tempRoot()]).code, 1);
+test("0.3.0: limits-hash, limits schema, limits regions and limits check are gone; regions is the taxonomy command", () => {
+  for (const args of [["limits-hash"], ["limits", "schema"], ["limits", "regions"], ["limits", "check", "--input", "x.json"]]) {
+    const r = cli(args);
+    assert.equal(r.code, 2, args.join(" "));
+    assert.equal(r.json.error.code, "USAGE", args.join(" "));
+  }
+  const r = cli(["regions", "--root", tempRoot()]);
+  assert.equal(r.code, 0, r.stderr);
+  assert.ok(r.json.regions.includes("left-knee"));
+  assert.deepEqual(r.json.patterns.squat.loads, ["knee", "hip", "low-back"]);
+  assert.equal(r.json.patterns.zone2_cardio.recovery, true);
+  assert.match(r.json.side_rule, /parent/);
 });
 
 // V4 brings back `block write` as a new command (it owns the archive step); the others stay gone.

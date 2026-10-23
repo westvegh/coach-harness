@@ -66,11 +66,11 @@ test("ids next --kind block: B-001 first, then one past the highest in block.yam
   assert.deepEqual(r.json.taken, ["B-002", "B-007"]);
 });
 
-test("ids next --kind limit reads athlete/limits.yaml", () => {
+test("ids next --kind limit is gone (0.3.0: limits are plain words with no ids)", () => {
   const dir = instance();
-  assert.equal(cli(["ids", "next", "--kind", "limit", "--root", dir]).json.id, "L-001");
-  writeFileSync(join(dir, "athlete/limits.yaml"), "version: 1\npain_threshold: 4\nlimits:\n  - { id: L-001 }\n  - { id: L-012 }\n");
-  assert.equal(cli(["ids", "next", "--kind", "limit", "--root", dir]).json.id, "L-013");
+  const r = cli(["ids", "next", "--kind", "limit", "--root", dir]);
+  assert.equal(r.code, 2);
+  assert.match(r.json.error.message, /limits have no ids/);
 });
 
 test("ids next: the proposal kind is gone (v0.2); an unknown kind exits 2", () => {

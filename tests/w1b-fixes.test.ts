@@ -37,7 +37,7 @@ const squatSession = (date: string, id: string, set: Record<string, unknown> = {
 
 function instance(edit?: (yaml: string) => string): string {
   const dir = e3Instance(edit);
-  writeFileSync(join(dir, "athlete/limits.yaml"), "version: 1\npain_threshold: 4\nlimits: []\n");
+  writeFileSync(join(dir, "athlete/limits.md"), "# Injuries and limits\n\nNone yet.\n");
   return dir;
 }
 
@@ -208,60 +208,43 @@ test("fix 2: today-brief --stage post: the history is failed and loads gives no 
 // ---------- fixes 3 and 5: plans/ CSV cells ----------
 
 const HEADER = "date,day,exercise,sets,reps,load,unit,notes,done_sets,done_reps,done_load,felt\n";
-function filesRoot(rows: string, limits = "limits: []\n"): string {
+function filesRoot(rows: string): string {
   const dir = instance((y) => y.replace(/^logger: .*$/m, "logger: files"));
-  writeFileSync(join(dir, "athlete/limits.yaml"), `version: 1\npain_threshold: 4\n${limits}`);
+  writeFileSync(join(dir, "athlete/limits.md"), "# Injuries and limits\n\n- Right shoulder: pressing at most 50 lb. (since 2026-10-01)\n");
   mkdirSync(join(dir, "plans"), { recursive: true });
   writeFileSync(join(dir, "plans/2026-W42.csv"), HEADER + rows);
   return dir;
 }
-const LOAD_CAP = "limits:\n  - id: L-001\n    region: right-shoulder\n    rule: cap\n    patterns: [horizontal_push]\n    exercises: []\n    allow: []\n    max_load: { value: 50, unit: lbs }\n    source: athlete\n    since: 2026-10-01\n";
-
-test("fix 3: a bench press row with load \"heavy\" against a 50 lb load cap is unknown (never clean), naming the date, exercise and column", () => {
-  const dir = filesRoot("2026-10-14,Upper A,Bench Press,3,8,heavy,lbs,,,,,\n", LOAD_CAP);
+test("fix 3: a bench press row with load \"heavy\" is unknown (never clean), naming the date, exercise and column", () => {
+  const dir = filesRoot("2026-10-14,Upper A,Bench Press,3,8,heavy,lbs,,,,,\n");
   // plans read: the cell is unknown, with a warning.
   const r = cli(["plans", "read", "--week", TODAY, "--root", dir]);
   assert.equal(r.code, 0, r.stdout);
   assert.ok(r.json.warnings.some((w: string) => w === '2026-10-14 Bench Press: load "heavy" is not a load; read as unknown'), JSON.stringify(r.json.warnings));
-  // The daily run: the limits check and the loads cannot read the load: failed, never ok.
+  // The daily run: the loads cannot read the load: never a number (0.3.0: no limits check in post).
   assert.equal(cli(["today-brief", "--stage", "pre", "--now", NOW, "--root", dir]).code, 0);
   const p = cli(["today-brief", "--stage", "post", "--now", NOW, "--root", dir]);
   assert.equal(p.code, 0, p.stdout);
-  assert.equal(p.json.limits_check.status, "failed", JSON.stringify(p.json.limits_check));
-  assert.match(p.json.limits_check.reason, /the planned day 2026-10-14 \(as read\): Bench Press: the load cell "heavy" is not a load/);
+  assert.equal(p.json.limits_check, undefined);
   assert.notEqual(p.json.coverage.history.status, "complete", "the files have a cell the engine cannot read");
   // adjust and loads from the files: the same refusal, never a number.
   const a = cli(["loads", "--from-snapshot", TODAY, "--now", NOW, "--root", dir]);
   assert.equal(a.code, 1, a.stdout);
   assert.equal(a.json.error.code, "INPUT_ERROR");
   assert.match(a.json.error.message, /the planned day 2026-10-14 \(as read\): Bench Press: the load cell "heavy" is not a load/);
-  // today-write-prep: the week check names the day it cannot read (status unknown, not ok).
-  const capped = filesRoot("2026-10-13,Upper A,Bench Press,3,8,heavy,lbs,,,,,\n2026-10-14,Lower A,Back Squat,3,8,100,lbs,,,,,\n", "limits:\n  - id: L-002\n    region: right-shoulder\n    rule: cap\n    patterns: [horizontal_push]\n    exercises: []\n    allow: []\n    max_sets_per_week: 6\n    source: athlete\n    since: 2026-10-01\n");
-  const after = { date: TODAY, dayName: "Lower A", exercises: [{ exerciseId: "", name: "Back Squat", suggestedSets: 2, suggestedReps: 8, suggestedWeight: 100 }], weightUnit: "lbs" };
-  const wp = cli(["today-write-prep", "--input", writeJson(capped, ".tmp/coach/wp.json", { after, tool: "plan_workout_day", kind: "trim_session" }), "--now", NOW, "--root", capped]);
-  assert.equal(wp.code, 0, wp.stdout);
-  assert.equal(wp.json.limits.ok, false);
-  assert.equal(wp.json.limits.week.status, "unknown");
-  assert.match(wp.json.limits.week.reason, /the planned day 2026-10-13 \(as read\): Bench Press: the load cell "heavy" is not a load/);
-  // A week over its cap stays "over" when another day cannot be read; the reason names that day too.
-  const over = filesRoot("2026-10-12,Upper A,Dumbbell Bench Press,6,8,40,lbs,,,,,\n2026-10-13,Upper A,Bench Press,3,8,heavy,lbs,,,,,\n2026-10-14,Lower A,Back Squat,3,8,100,lbs,,,,,\n", "limits:\n  - id: L-002\n    region: right-shoulder\n    rule: cap\n    patterns: [horizontal_push]\n    exercises: []\n    allow: []\n    max_sets_per_week: 6\n    source: athlete\n    since: 2026-10-01\n");
-  const more = { ...after, exercises: [...after.exercises, { exerciseId: "", name: "Push-Up", suggestedSets: 2, suggestedReps: 10 }] };
-  const ow = cli(["today-write-prep", "--input", writeJson(over, ".tmp/coach/wp.json", { after: more, tool: "plan_workout_day", kind: "trim_session" }), "--now", NOW, "--root", over]);
-  assert.equal(ow.code, 0, ow.stdout);
-  assert.equal(ow.json.limits.week.status, "over", JSON.stringify(ow.json.limits.week));
-  assert.match(ow.json.limits.week.reason, /also, a day of the week cannot be read: the planned day 2026-10-13/);
 });
 
 test("fix 3: a bad sets cell is unknown in the snapshot too (0.2.7 counted it as 1 set); a 'bw' load stays no load", () => {
-  const dir = filesRoot("2026-10-14,Upper A,Bench Press,three,8,40,lbs,,,,,\n2026-10-14,Upper A,Push-Up,3,10,bw,,,,,,\n", LOAD_CAP);
+  const dir = filesRoot("2026-10-14,Upper A,Bench Press,three,8,40,lbs,,,,,\n2026-10-14,Upper A,Push-Up,3,10,bw,,,,,,\n");
   assert.equal(cli(["today-brief", "--stage", "pre", "--now", NOW, "--root", dir]).code, 0);
   const p = cli(["today-brief", "--stage", "post", "--now", NOW, "--root", dir]);
-  assert.equal(p.json.limits_check.status, "failed", JSON.stringify(p.json.limits_check));
-  assert.match(p.json.limits_check.reason, /the planned day 2026-10-14 \(as read\): Bench Press: the sets cell "three" is not a whole number/);
-  const bw = filesRoot("2026-10-14,Upper A,Push-Up,3,10,bw,,,,,,\n", LOAD_CAP);
+  assert.notEqual(p.json.coverage.history.status, "complete", JSON.stringify(p.json.coverage));
+  assert.ok(cli(["plans", "read", "--week", TODAY, "--root", dir]).json.warnings.some((w: string) => /Bench Press: sets "three"/.test(w)));
+  assert.notEqual(p.json.loads.status, "complete");
+  const bw = filesRoot("2026-10-14,Upper A,Push-Up,3,10,bw,,,,,,\n");
   assert.equal(cli(["today-brief", "--stage", "pre", "--now", NOW, "--root", bw]).code, 0);
   const q = cli(["today-brief", "--stage", "post", "--now", NOW, "--root", bw]);
-  assert.equal(q.json.limits_check.ok, true, JSON.stringify(q.json.limits_check));
+  assert.equal(q.json.coverage.history.status, "complete", JSON.stringify(q.json.coverage));
   assert.deepEqual(cli(["plans", "read", "--week", TODAY, "--root", bw]).json.warnings, []);
 });
 
@@ -271,7 +254,6 @@ test("fix 5: a 0 in a plans/ sets cell: today-brief --stage post gives the base'
   const p = cli(["today-brief", "--stage", "post", "--now", NOW, "--root", dir]);
   assert.equal(p.code, 0, p.stdout);
   // The fields the base (3ceb99b's parent release, 0.2.7) gave for this day: the run is not failed.
-  assert.equal(p.json.limits_check.ok, true, JSON.stringify(p.json.limits_check));
   assert.equal(p.json.today_day.status, "found");
   assert.deepEqual(p.json.today_day.exercises.map((e: any) => e.name), ["Back Squat", "Cable Row"]);
   assert.equal(p.json.coverage.history.status, "complete");
@@ -291,14 +273,14 @@ test("fix 5: a 0 in a plans/ sets cell: today-brief --stage post gives the base'
   assert.equal(pw.code, 0, pw.stdout);
   assert.match(readFileSync(join(dir, "plans/2026-W42.csv"), "utf8"), /2026-10-14,Lower A,Cable Row,0,10,60,lbs/);
   // A real Tally prescription keeps the strict count: 0 is refused there.
-  const t = cli(["limits", "check", "--root", dir, "--input", writeJson(dir, "d.json", { days: [{ date: TODAY, exercises: [{ name: "Cable Row", suggestedSets: 0 }] }] })]);
+  const t = cli(["volume", "--root", dir, "--input", writeJson(dir, "d.json", { week: { days: [{ date: TODAY, exercises: [{ name: "Cable Row", suggestedSets: 0 }] }] } })]);
   assert.equal(t.code, 1);
   assert.match(t.json.error.message, /suggestedSets must be a whole number from 1 to 50, got 0/);
 });
 
 // ---------- fix 4: today-write-prep checks the supplied unit first ----------
 
-test("fix 4: today-write-prep refuses after.weightUnit \"kilograms\" (never replaced by the stored unit, never limits.ok)", () => {
+test("fix 4: today-write-prep refuses after.weightUnit \"kilograms\" (never replaced by the stored unit)", () => {
   const dir = instance();
   saveSnapshot(dir, merge(null, "get_planned_workout", { date: TODAY }, text(tday())));
   const prep = (after: unknown) => cli(["today-write-prep", "--input", writeJson(dir, ".tmp/coach/wp.json", { after, tool: "plan_workout_day", kind: "trim_session" }), "--now", NOW, "--root", dir], ENV);
@@ -328,13 +310,12 @@ test("fix 6: an exercise done on a bench is not a bench press; the common bench 
   for (const name of ["Dumbbell Bench Press", "Bench Press (Dumbbell)", "DB Bench", "Barbell Bench"]) assert.deepEqual(patterns(name), ["horizontal_push"], name);
   assert.deepEqual(patterns("Incline Bench Press"), ["incline_push"]);
   assert.deepEqual(patterns("Close Grip Bench"), ["horizontal_push", "elbow_extension"]);
-  // The real-data case: 3 Copenhagen plank sets no longer count against a shoulder cap.
+  // The real-data case: Copenhagen plank sets count no chest sets in the week's volume.
   const dir = instance();
-  writeFileSync(join(dir, "athlete/limits.yaml"), "version: 1\npain_threshold: 4\nlimits:\n  - id: L-001\n    region: right-shoulder\n    rule: cap\n    patterns: [horizontal_push]\n    exercises: []\n    allow: []\n    max_sets_per_week: 3\n    source: athlete\n    since: 2026-10-01\n");
-  const days = { days: [{ date: TODAY, exercises: [{ name: "Dumbbell Bench Press", suggestedSets: 3, suggestedReps: 10 }, { name: "Copenhagen Plank (short lever, knee on bench)", suggestedSets: 3, suggestedDuration: 20 }] }] };
-  const r = cli(["limits", "check", "--root", dir, "--input", writeJson(dir, "d.json", days)]);
+  const days = { week: { week_start: "2026-10-12", days: [{ date: TODAY, exercises: [{ name: "Dumbbell Bench Press", suggestedSets: 3, suggestedReps: 10 }, { name: "Copenhagen Plank (short lever, knee on bench)", suggestedSets: 3, suggestedDuration: 20 }] }] } };
+  const r = cli(["volume", "--root", dir, "--input", writeJson(dir, "d.json", days)]);
   assert.equal(r.code, 0, r.stdout);
-  assert.equal(r.json.ok, true, JSON.stringify(r.json.findings));
+  assert.equal(r.json.sets_by_muscle.chest, 3, JSON.stringify(r.json.sets_by_muscle));
 });
 
 // ---------- W1b confirmation review: the value check covers every session a result uses ----------

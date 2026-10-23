@@ -26,7 +26,7 @@ const REQUIRED = [
   "docs/how-it-works.md", "docs/safety.md", "docs/safety-and-privacy.md", "docs/contracts.md",
   "docs/adding-a-method.md", "docs/adding-a-logger-or-signal.md", "docs/tally.md",
   ".github/workflows/test.yml", "engine/cli.ts", ".claude/settings.json", "git-hooks/pre-push",
-  "methods/nine-adaptations/rules.yaml", "templates/athlete/limits.yaml", "scripts/export-public.sh",
+  "methods/nine-adaptations/rules.yaml", "templates/athlete/limits.md", "scripts/export-public.sh",
 ];
 
 function walk(dir: string, root = dir): string[] {

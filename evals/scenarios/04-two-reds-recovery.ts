@@ -22,7 +22,7 @@ const scenario: Scenario = {
     const exs: any[] = after?.exercises ?? [];
     const cls = exs.map((e) => ({ name: e.name, c: patternsOf(e) }));
     const notRecovery = cls.filter((x) => x.c.source === "none" || x.c.patterns.length === 0 || x.c.patterns.some((p) => !recovery.has(p)));
-    const loadsKnee = cls.filter((x) => regionMatches(KNEE_LIMIT("").region, x.c.regions, tax));
+    const loadsKnee = cls.filter((x) => regionMatches("left-knee", x.c.regions, tax));
     return [
       check("today is a recovery day (only recovery patterns)", exs.length > 0 && notRecovery.length === 0, JSON.stringify(cls.map((x) => [x.name, x.c.patterns]))),
       check("no exercise loads the limited region (left knee)", loadsKnee.length === 0, loadsKnee.map((x) => x.name).join(", ")),

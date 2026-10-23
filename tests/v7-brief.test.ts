@@ -67,7 +67,7 @@ const post = (dir: string, extra: string[] = [], env = ENV) => cli(["today-brief
 test("pre: a run, the facts the skill read from files, and every Tally read in one list", () => {
   const dir = instance();
   writeFileSync(join(dir, "athlete/brief.md"), "# Brief\n\n## Preferences\n- likes front squats\n- rep range 8-12 on rows\n\n## History\nnone\n");
-  writeFileSync(join(dir, "athlete/limits.yaml"), "version: 1\npain_threshold: 4\nlimits:\n  - id: L-001\n    region: low-back\n    rule: cap\n    patterns: [hinge]\n    exercises: []\n    allow: []\n    max_load: { value: 135, unit: lbs }\n    max_sets_per_week: 6\n    source: athlete\n    since: 2026-10-01\n");
+  writeFileSync(join(dir, "athlete/limits.md"), "# Injuries and limits\n\nThe coach plans around each line below in every plan. Say \"change my limits\" to change one.\n\n- Low back: hinges at most 6 sets a week and 135 lb. (since 2026-10-01)\n");
   writeJson(dir, `athlete/signals/${TODAY}.json`, { version: 1, date: TODAY, source: "chat", submitted_at: "2026-10-14T06:41:00-07:00", checkin: { overall: 3, pain: [{ region: "left-knee", score: 5 }, { region: "elbow", score: 2 }] } });
   mkdirSync(join(dir, "athlete/log"), { recursive: true });
   writeFileSync(join(dir, "athlete/log/2026-10.md"), "# Operation log 2026-10\n\n## 2026-10-13 07:00 · no-change\n- proposal for the next live session: swap split squats for step-ups\n- proposal for the next live session: ask about left knee\n\n## 2026-10-13 18:00 · today\n- proposal handled: no: ask about left knee\n");
@@ -78,8 +78,10 @@ test("pre: a run, the facts the skill read from files, and every Tally read in o
   assert.deepEqual(j.local, { date: TODAY, time: "08:00", weekday: "wed", timezone: "America/Los_Angeles", now: NOW });
   assert.equal(j.mode, "interactive");
   assert.equal(j.capabilities.opId, true);
-  assert.equal(j.limits.pain_threshold, 4);
-  assert.match(j.limits.text[0], /L-001 low-back: cap; patterns hinge; at most 6 sets a week; at most 135 lbs/);
+  assert.deepEqual(j.pain_threshold, { value: 4, source: "coach.yaml" });
+  assert.equal(j.limits_text, "- Low back: hinges at most 6 sets a week and 135 lb. (since 2026-10-01)");
+  assert.equal(j.limits_text_truncated, false);
+  assert.equal(j.limits, undefined, "0.3.0: no structured limits");
   assert.deepEqual(j.preferences, ["- likes front squats", "- rep range 8-12 on rows"]);
   assert.deepEqual(j.checkin_pain.map((p: any) => [p.region, p.score, p.handled]), [["left-knee", 5, false]]);
   assert.deepEqual(j.proposals.map((p: any) => p.text), ["swap split squats for step-ups"]);
@@ -142,7 +144,7 @@ test("post, a calm day: complete coverage, today's day, readiness with report fa
   assert.equal(j.today_day.version, `v-${TODAY}-1`);
   assert.equal(j.today_day.protected, false);
   assert.equal(j.already_adjusted.done, false);
-  assert.equal(j.limits_check.ok, true);
+  assert.equal(j.limits_check, undefined, "0.3.0: no limits check in post");
   assert.equal(j.readiness.decision, "none", JSON.stringify(j.readiness.decision_reasons) + JSON.stringify(j.readiness.report_facts));
   assert.equal(j.readiness.states.performance, "green");
   assert.match(j.readiness.report_facts.hrv, /^HRV \(rmssd\) 56 ms, z [0-9.]+ \(baseline/);
@@ -198,7 +200,6 @@ test("post: the urgent stop with a missing day; an ordinary rest day; a failed r
   j = post(b).json;
   assert.equal(j.today_day.status, "none");
   assert.match(j.loads.reason, /rest day/);
-  assert.equal(j.limits_check.status, "not_applicable");
   // A failed read: post asks for it once, then gives up (safety unknown means no write).
   const c = instance();
   pre(c);
@@ -256,7 +257,7 @@ test("write-prep: a trim on a coach-written day; update operations keep rep rang
   const j = r.json;
   assert.equal(j.protected, false);
   assert.equal(j.classify.big, false);
-  assert.equal(j.limits.ok, true);
+  assert.equal(j.limits, undefined, "0.3.0: no limits check in write-prep");
   assert.equal(j.write.approved, undefined);
   const args = j.write.plain.args;
   assert.equal(args.expectedVersion, `v-${TODAY}-1`);
@@ -284,7 +285,7 @@ test("write-prep: a protected day gives plain and approved, each with its own op
   assert.notEqual(j.write.plain.args.opId, j.write.approved.args.opId);
 });
 
-test("write-prep: an annotation changes notes only; a swap a limit bans fails the limits", () => {
+test("write-prep: an annotation changes notes only; a swap is written as the coach chose it (0.3.0: the coach checks the limits)", () => {
   const dir = instance();
   readAll(dir);
   const note = prep(dir, { after: { ...day(TODAY), notes: "[coach] Readiness note (NA-REC-008)" }, tool: "update_planned_workout", kind: "annotate" }).json;
@@ -292,28 +293,10 @@ test("write-prep: an annotation changes notes only; a swap a limit bans fails th
   assert.equal(note.write.plain.args.notes, "[coach] Readiness note (NA-REC-008)");
   const badNote = prep(dir, { after: trimmed(), tool: "update_planned_workout", kind: "annotate" });
   assert.match(badNote.json.error.message, /annotate write changes notes only/);
-  writeFileSync(join(dir, "athlete/limits.yaml"), "version: 1\npain_threshold: 4\nlimits:\n  - id: L-001\n    region: knee\n    rule: ban\n    patterns: [leg_press]\n    exercises: []\n    allow: []\n    source: athlete\n    since: 2026-10-01\n");
+  writeFileSync(join(dir, "athlete/limits.md"), "# Injuries and limits\n\n- Knee: no leg press for now. (since 2026-10-01)\n");
   const swap = prep(dir, { after: trimmed({ exercises: [{ exerciseId: "Leg_Press", name: "Leg Press", suggestedSets: 3, suggestedReps: 10 }, { ...SPLIT, suggestedSets: 2 }, ROW] }), tool: "update_planned_workout", kind: "trim_session" }).json;
-  assert.equal(swap.limits.ok, false);
-  assert.equal(swap.limits.final_day.findings[0].kind, "banned");
+  assert.equal(swap.limits, undefined);
   assert.deepEqual(swap.write.plain.args.operations.find((o: any) => o.op === "replace"), { op: "replace", target: { index: 0 }, exercise: { exerciseId: "Leg_Press", name: "Leg Press", suggestedSets: 3, suggestedReps: 10 } });
-});
-
-test("write-prep: a weekly cap that today alone passes but the week fails; a day it cannot see is unknown", () => {
-  const dir = instance();
-  writeFileSync(join(dir, "athlete/limits.yaml"), "version: 1\npain_threshold: 4\nlimits:\n  - id: L-002\n    region: knee\n    rule: cap\n    patterns: [squat]\n    exercises: []\n    allow: []\n    max_sets_per_week: 6\n    source: athlete\n    since: 2026-10-01\n");
-  readAll(dir);
-  const j = prep(dir, { after: trimmed(), tool: "update_planned_workout", kind: "trim_session" }).json;
-  assert.equal(j.limits.final_day.ok, true, "today alone: 3 squat sets");
-  assert.equal(j.limits.week.status, "over", "Monday's 4 squat sets join today's 3");
-  assert.equal(j.limits.ok, false);
-  // Without Monday's read, the week is unknown (not a pass), and the read is named.
-  const s = JSON.parse(readFileSync(join(dir, "athlete/.cache/snapshot.json"), "utf8"));
-  delete s.days["2026-10-12"];
-  writeJson(dir, "athlete/.cache/snapshot.json", s);
-  const u = prep(dir, { after: trimmed(), tool: "update_planned_workout", kind: "trim_session" }).json;
-  assert.equal(u.limits.week.status, "unknown");
-  assert.deepEqual(u.limits.week.need_reads, [{ tool: "get_planned_workout", args: { date: "2026-10-12" } }]);
 });
 
 test("write-prep: a missing snapshot, a stale read and a malformed input fail with the fix", () => {
@@ -400,7 +383,7 @@ test("logger files end to end: no Tally reads, post reads plans/, write-prep giv
   assert.equal(v.json.mention.mention, false);
 });
 
-test("logger other end to end: post takes that tool's evidence; write-prep gives classify and limits only; save", () => {
+test("logger other end to end: post takes that tool's evidence; write-prep gives classify only; save", () => {
   const dir = athleteRepo(remote(), "other");
   const p = cliIn(dir, ["today-brief", "--stage", "pre"], GIT);
   assert.deepEqual(p.json.reads, []);
@@ -418,7 +401,7 @@ test("logger other end to end: post takes that tool's evidence; write-prep gives
   const w = cliIn(dir, ["today-write-prep", "--input", writeJson(dir, ".tmp/coach/wp.json", { before, after: { ...before, exercises: [{ ...SQUAT, suggestedSets: 3 }] }, tool: "plan_workout_day", kind: "trim_session" })], GIT).json;
   assert.equal(w.write, null);
   assert.equal(w.classify.big, false, JSON.stringify(w.classify));
-  assert.equal(w.limits.ok, true);
+  assert.equal(w.limits, undefined);
   const v = cliIn(dir, ["save", "--run", p.json.run_id, "--message", "today: none", "--no-change", "fine", "--sessions", "1"], GIT);
   assert.equal(v.json.outcome, "published", JSON.stringify(v.json));
 });

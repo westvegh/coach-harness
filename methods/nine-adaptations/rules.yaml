@@ -314,7 +314,7 @@ rules:
     text: "Pain is not soreness. A painful region is loaded only as the athlete chose: not at all (avoid it for now), or light and building back slowly. The coach offers that choice kindly, with the caution in the option text, and never refuses to plan."
     kind: policy
     severity: hard
-    note: "Policy. The athlete's choice becomes a limit in athlete/limits.yaml (a ban, or a cap with build_back); the coach follows it in every plan, and the audit reports a conflict (contracts §2). New pain, pain that gets worse, or pain that does not settle: see a clinician. Urgent warning signs stop all training changes (contracts §10)."
+    note: "Policy. The athlete's choice becomes one line in athlete/limits.md, in the athlete's words (avoid it for now, or light and building back); the coach follows it in every plan, and the audit reports a conflict (contracts §2). New pain, pain that gets worse, or pain that does not settle: see a clinician. Urgent warning signs stop all training changes (contracts §10)."
 
   - id: NA-REC-008
     text: "One morning is not a pattern. A flag on a single day, in any category (a low HRV, a high resting heart rate, a short night, a low check-in, or one hard session), earns a note and no session change. A dip the morning after a hard session is often the training stress at work. Watch the trend, not the daily score."

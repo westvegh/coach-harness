@@ -103,7 +103,7 @@ export type SetupVariant = {
 };
 
 /** What the brief forbids in the final message (V3b fix 4). */
-export const PLAIN_LEAKS = [/athlete\//, /\.yaml\b/, /\bB-0/, /\bL-0/];
+export const PLAIN_LEAKS = [/athlete\//, /\.yaml\b/, /\blimits\.md\b/, /\bB-0/, /\bL-0/];
 
 /** The text the athlete reads last: the assistant text after the last tool call. */
 export function finalMessage(a: RunArtifacts): string {

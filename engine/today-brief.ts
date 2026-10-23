@@ -1,14 +1,16 @@
 // V7: `today-brief --stage pre|post` (contracts §22b): the today skill's data pass in one command.
 // Each field calls the same code as its old command (window-check, mode, urgent status, signals,
-// signals refresh, safety scan-notes, oplog done, limits check, readiness --date, loads, adjust);
-// nothing is decided here. The model still decides; the engine computes and reports.
+// signals refresh, safety scan-notes, oplog done, readiness --date, loads, adjust); nothing is
+// decided here. The model still decides; the engine computes and reports.
 //
 // - pre: the window (out of it: exit 4, nothing else), a new run, the facts the skill read from
-//   files (coach.yaml, limits, the Preferences of athlete/brief.md, the log's proposals, check-in pain), the
-//   wearable refresh (not under a known urgent stop), and the Tally reads to make in one message.
+//   files (coach.yaml, the limits text of athlete/limits.md, the pain threshold, the Preferences of
+//   athlete/brief.md, the log's proposals, check-in pain), the wearable refresh (not under a known
+//   urgent stop), and the Tally reads to make in one message. The limits text is carried as
+//   written (engine/limits-text.ts): the coach judges the day against it.
 // - post (after the reads): coverage, the note scan (its side effect unchanged), the urgent stop,
-//   today's day, already adjusted, limits on today, readiness with report facts, loads and adjust
-//   when their prerequisites hold, and `need_reads`.
+//   today's day, already adjusted, readiness with report facts, loads and adjust when their
+//   prerequisites hold, and `need_reads`.
 // - Field prerequisites: a field that cannot run is {status: "not_applicable", reason}; a field
 //   that throws is {status: "failed", reason}. `urgent` and `coverage` are always returned.
 // - Safety is never faster by skipping work: incomplete safety data is `unknown`, and then no
@@ -25,7 +27,7 @@ import { mode as runMode } from "./mode.ts";
 import { DEFAULT_THRESHOLDS } from "./readiness.ts";
 import { SNAPSHOT_MAX_AGE_MIN } from "./snapshot.ts";
 import { diagnosticsRelative, localTime, readRun, stageRelative, startRun, writeJsonAtomic, type PostLog, type RunInfo } from "./today-run.ts";
-import type { CalendarDate, CoachConfig, Instant, Limit, Snapshot, SnapshotDay, SnapshotSession, Units } from "./types.ts";
+import type { CalendarDate, CoachConfig, Instant, Snapshot, SnapshotDay, SnapshotSession, Units } from "./types.ts";
 
 export const SAFETY_NOTE_DAYS = 3;
 /** The coach's own load looks back this far (CLAUDE.md rule 3). */
@@ -118,18 +120,6 @@ export function openProposals(root: string): { text: string; entry: string }[] {
   return out;
 }
 
-/** One line per limit, with its full meaning (the session-context summary, extended). */
-export function describeLimit(l: Limit): string {
-  const parts = [`${l.id} ${l.region}: ${l.rule}`];
-  if (l.patterns.length) parts.push(`patterns ${l.patterns.join(", ")}`);
-  if (l.exercises.length) parts.push(`exercises ${l.exercises.join(", ")}`);
-  if (l.allow.length) parts.push(`allowed ${l.allow.join(", ")}`);
-  if (typeof l.max_sets_per_week === "number") parts.push(`at most ${l.max_sets_per_week} sets a week`);
-  if (l.max_load) parts.push(`at most ${l.max_load.value} ${l.max_load.unit}`);
-  if (l.build_back) parts.push("build back");
-  return parts.join("; ");
-}
-
 // ---------- pre ----------
 
 export type PreResult = { exit: number; compact: Record<string, unknown>; full?: Record<string, unknown>; run?: RunInfo };
@@ -151,12 +141,12 @@ export async function briefPre(o: BriefOptions): Promise<PreResult> {
   const stop = readStop(root);
   const urgent = { stopped: stop !== null, stop, clearances: readClearances(root).slice(-3) };
 
-  const limits = await field(async () => {
-    const p = join(root, "athlete/limits.yaml");
-    const l = existsSync(p) ? (await import("./limits.ts")).loadLimits(p) : { version: 1 as const, pain_threshold: 4, limits: [] };
-    return { pain_threshold: l.pain_threshold, limits: l.limits, text: l.limits.map(describeLimit) };
-  });
-  const threshold = isFailed(limits) ? 4 : limits.pain_threshold;
+  // The limits as the athlete's words (never interpreted here), and the pain threshold: coach.yaml,
+  // else the old limits.yaml until the migration runs, else 4.
+  const { limitsCarry, painThreshold, DEFAULT_PAIN_THRESHOLD } = await import("./limits-text.ts");
+  const limits = await field(() => limitsCarry(root));
+  const pain = await field(() => painThreshold(root, cfg));
+  const threshold = isFailed(pain) ? DEFAULT_PAIN_THRESHOLD : pain.value;
   const checkin_pain = await field(async () => {
     const { loadSignals } = await import("./signals.ts");
     const sig = loadSignals({ root, from: today, to: today, now });
@@ -204,7 +194,10 @@ export async function briefPre(o: BriefOptions): Promise<PreResult> {
     units: cfg.athlete.units,
     clusters: await field(() => loadClusters(root)),
     urgent,
-    limits,
+    ...(isFailed(limits)
+      ? { limits_text: null, limits_text_truncated: null, limits_file: limits }
+      : { limits_text: limits.text, limits_text_truncated: limits.truncated, limits_sources: limits.sources, limits_fingerprint: limits.fingerprint, limits_file: { path: limits.file, exists: limits.exists, chars: limits.chars }, ...(limits.legacy ? { limits_legacy: limits.legacy } : {}) }),
+    pain_threshold: pain,
     preferences: preferencesOf(root),
     checkin_pain,
     proposals: await field(() => openProposals(root)),
@@ -317,17 +310,18 @@ function readinessLine(r: Record<string, any>): string {
   return `${c("wearable")}, ${c("subjective")}, ${c("performance")} → ${r.decision}`;
 }
 
-/** The coach's own load bounds (CLAUDE.md rule 3) for each exercise of today's day with a load. */
+/**
+ * The coach's own load bounds (CLAUDE.md rule 3) for each exercise of today's day with a load. A
+ * load in the athlete's limits is not here (0.3.0): the coach may always go lower to respect a
+ * limit, with the weight `node engine/cli.ts load-under` prints.
+ */
 function ownLoadBounds(o: {
   day: { exercises: Record<string, unknown>[] };
   unit: Units;
   history: SnapshotSession[];
   today: CalendarDate;
   suggestions: { exerciseId: string; suggestedWeight?: number }[];
-  limits: Limit[];
-  tax: import("./types.ts").Taxonomy;
   deload: boolean;
-  limitMatch: typeof import("./limits-check.ts").limitMatch;
   normalizeName: (s: string) => string;
 }) {
   const out: Record<string, unknown>[] = [];
@@ -357,15 +351,6 @@ function ownLoadBounds(o: {
     }
     let cap = Math.max(engine ?? planned ?? 0, lastTop ?? 0);
     const why: string[] = [`the higher of the engine's ${engine ?? "none"} and the last top set ${lastTop ?? "none"}`];
-    const entry = { name, exerciseId: id, sets: [] };
-    for (const l of o.limits) {
-      if (!l.max_load || !o.limitMatch(l, entry, o.tax).matches) continue;
-      const max = l.max_load.unit === o.unit ? l.max_load.value : convertWeight(l.max_load.value, l.max_load.unit, o.unit);
-      if (max < cap) {
-        cap = max;
-        why.push(`${l.id} max_load ${l.max_load.value} ${l.max_load.unit}`);
-      }
-    }
     if (o.deload && planned !== null && planned < cap) {
       cap = planned;
       why.push("a deload week: no raise");
@@ -504,16 +489,22 @@ export async function briefPost(o: BriefOptions & { evidence?: OtherEvidence }):
     return { done: line !== undefined, kinds: {}, done_changes: line ? [{ kind: "coach note", entries: [line.trim()] }] : [], uncertain: [] };
   });
 
-  // ---- limits on today's day ----
-  const limits_check = await field(async () => {
-    if (today_day.status !== "found") return na(`today's day is ${today_day.status}`);
-    if (logger === "other") return na("logger other: check the day from that tool with limits check --input");
-    const [{ snapshotDayToPlan }, { checkLimits }, { loadLimits }, { loadTaxonomy }, { loadClusters }] = await Promise.all([import("./tally-shape.ts"), import("./limits-check.ts"), import("./limits.ts"), import("./taxonomy.ts"), import("./clusters.ts")]);
-    const tax = loadTaxonomy({ root });
-    const p = join(root, "athlete/limits.yaml");
-    const lim = existsSync(p) ? loadLimits(p, tax) : { version: 1 as const, pain_threshold: 4, limits: [] };
-    const findings = checkLimits([snapshotDayToPlan(today, snap!.days[today], cfg.athlete.units)], lim, tax, loadClusters(root));
-    return { ok: findings.every((f) => f.kind === "unclassified"), findings };
+  // ---- the limits since pre (W3b): pre carried the text; a change after it means a full reread ----
+  const limits_freshness = await field(async () => {
+    const { limitsFingerprint, limitsCarry } = await import("./limits-text.ts");
+    const fingerprint = limitsFingerprint(root);
+    let carried: unknown = null;
+    try {
+      carried = (JSON.parse(readFileSync(join(root, stageRelative(run.run_id, "pre")), "utf8")) as { limits_fingerprint?: unknown }).limits_fingerprint ?? null;
+    } catch {
+      carried = null;
+    }
+    const changed = carried !== fingerprint;
+    return {
+      fingerprint,
+      changed_since_pre: changed,
+      ...(changed ? { reread: (await limitsCarry(root)).sources, reason: carried === null ? "pre's limits fingerprint is missing" : "the limits changed after pre: Read every listed file in full before planning or writing" } : {}),
+    };
   });
 
   // ---- readiness ----
@@ -551,10 +542,8 @@ export async function briefPost(o: BriefOptions & { evidence?: OtherEvidence }):
       : history.status !== "complete"
         ? na(`the history is ${history.status}: ${history.reason ?? ""}`.trim())
         : await field(async () => {
-            const [{ loadsFor }, { limitMatch }, { normalizeName, loadTaxonomy }, { loadLimits }, { readBlock }] = await Promise.all([import("./cli-helpers.ts"), import("./limits-check.ts"), import("./taxonomy.ts"), import("./limits.ts"), import("./block.ts")]);
+            const [{ loadsFor }, { normalizeName }, { readBlock }] = await Promise.all([import("./cli-helpers.ts"), import("./taxonomy.ts"), import("./block.ts")]);
             const res = await loadsFor(["--from-snapshot", today, ...sessionArgs]);
-            const tax = loadTaxonomy({ root });
-            const p = join(root, "athlete/limits.yaml");
             const block = readBlock(root);
             const week = block?.start ? Math.floor(diffDays(block.start, today) / 7) + 1 : null;
             const deload = !!block && week !== null && block.weeks.find((w) => w.week === week)?.kind === "deload";
@@ -568,10 +557,7 @@ export async function briefPost(o: BriefOptions & { evidence?: OtherEvidence }):
                 history: snap!.history,
                 today,
                 suggestions: res.suggestions as { exerciseId: string; suggestedWeight?: number }[],
-                limits: existsSync(p) ? loadLimits(p, tax).limits : [],
-                tax,
                 deload,
-                limitMatch,
                 normalizeName,
               }),
             };
@@ -595,7 +581,7 @@ export async function briefPost(o: BriefOptions & { evidence?: OtherEvidence }):
     safety_notes: isFailed(safety_notes) ? safety_notes : { matches: safety_notes.matches, urgent_terms: safety_notes.urgent_terms, urgent_stop: safety_notes.urgent_stop !== null, coverage: safety_notes.coverage, sessions: safety_notes.sessions, server: safety_notes.server },
     today_day,
     already_adjusted,
-    limits_check,
+    limits_freshness,
     readiness,
     loads,
     adjust,

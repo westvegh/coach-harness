@@ -45,12 +45,12 @@ export function athleteRepo(r: Remote, logger = "tally"): string {
   writeFileSync(join(dir, "coach.yaml"), COACH_YAML(logger));
   mkdirSync(join(dir, "athlete/log"), { recursive: true });
   writeFileSync(join(dir, "athlete/brief.md"), "# Brief\n\n## Preferences\n- likes front squats\n");
-  writeFileSync(join(dir, "athlete/limits.yaml"), "version: 1\npain_threshold: 4\nlimits: []\n");
+  writeFileSync(join(dir, "athlete/limits.md"), "# Injuries and limits\n\nNone yet.\n");
   writeFileSync(join(dir, "README.md"), "athlete repo\n");
   linkEngine(dir);
   // The athlete files are older than any run in a test.
   const hourAgo = new Date(Date.now() - 3_600_000);
-  for (const f of ["athlete/brief.md", "athlete/limits.yaml", "coach.yaml"]) utimesSync(join(dir, f), hourAgo, hourAgo);
+  for (const f of ["athlete/brief.md", "athlete/limits.md", "coach.yaml"]) utimesSync(join(dir, f), hourAgo, hourAgo);
   git(dir, "add", ".");
   git(dir, "commit", "-q", "-m", "start");
   git(dir, "remote", "add", "origin", r.url);

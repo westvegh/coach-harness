@@ -23,7 +23,7 @@ Read `coach.yaml logger` and follow CLAUDE.md "Where plans live". With `logger: 
    - Volume: `node engine/cli.ts weeks --from <block start> --to <date>`, then `node engine/cli.ts targets --input .tmp/coach/targets.json` with those `logs`. Show the reference week, the planned sets and the capped sets.
    - A cluster: it counts its total reps ÷ its rep max as sets [NA-DES-010]; `volume` shows each count.
    - A change's size (small or big): `node engine/cli.ts classify --input .tmp/coach/call.json`.
-   - A plan against the limits: `node engine/cli.ts limits check --input .tmp/coach/week.json`.
+   - A plan against the limits: quote the line of `athlete/limits.md` that shaped it, and say how the plan follows it. A weight in another unit: `node engine/cli.ts load-under`.
 7. **Answer.** Short sentences. First the change, then the cause, then the numbers with the command that made them, then the rule `[ID]` and its source. Run the engine command for any number you do not have yet. The analyst agent is optional, for a long read (many dates or weeks); run it in the foreground (`run_in_background: false`).
 
 ## Writes

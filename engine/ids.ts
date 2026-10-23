@@ -1,12 +1,12 @@
 // The next free ID from the athlete's files (contracts §0 IDs).
 //   block:    B-NNN from athlete/block.yaml and athlete/blocks/*.yaml
-//   limit:    L-NNN from athlete/limits.yaml
+// (0.3.0: limits are plain words in athlete/limits.md, with no ids.)
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { CoachError } from "./errors.ts";
 import { isPlainObject, readYamlFile } from "./yaml-file.ts";
 
-export type IdKind = "block" | "limit";
+export type IdKind = "block";
 export type NextId = { kind: IdKind; id: string; taken: string[] };
 
 const pad3 = (n: number) => String(n).padStart(3, "0");
@@ -35,11 +35,5 @@ export function nextId(root: string, kind: IdKind): NextId {
     const ids = [...new Set(taken.filter((t) => /^B-\d+$/.test(t)))].sort();
     return { kind, id: nextNumbered("B", ids), taken: ids };
   }
-  if (kind === "limit") {
-    const ids = idsIn(join(root, "athlete/limits.yaml"), (r) => (isPlainObject(r) && Array.isArray(r.limits) ? r.limits.map((l) => (isPlainObject(l) ? l.id : null)) : []))
-      .filter((t) => /^L-\d+$/.test(t))
-      .sort();
-    return { kind, id: nextNumbered("L", ids), taken: ids };
-  }
-  throw new CoachError("USAGE", "ids next --kind must be block | limit");
+  throw new CoachError("USAGE", "ids next --kind must be block");
 }

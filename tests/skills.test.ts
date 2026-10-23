@@ -60,13 +60,12 @@ for (const cmd of ["urgent", "safety", "snapshot", "block", "ids", "oplog", "lim
 const OPTIONAL_SUB: Record<string, Set<string>> = { signals: new Set(["refresh"]) };
 
 test("the engine command surface was found; the removed commands are gone", () => {
-  for (const c of ["readiness", "volume", "urgent", "signals", "checkin", "classify", "mode", "opid", "adjust", "loads", "targets", "window-check", "weeks", "block", "ids", "lint-methods", "oplog", "limits", "push"]) {
+  for (const c of ["readiness", "volume", "urgent", "signals", "checkin", "classify", "mode", "opid", "adjust", "loads", "targets", "window-check", "weeks", "block", "ids", "lint-methods", "oplog", "regions", "load-under", "migrate-limits", "push"]) {
     assert.ok(COMMANDS.has(c), `engine/cli.ts has ${c}`);
   }
   for (const c of ["hold", "validate", "proposals"]) assert.ok(!COMMANDS.has(c), `${c} is removed in v0.2`);
+  for (const c of ["limits", "limits-hash"]) assert.ok(!COMMANDS.has(c), `${c} is removed in 0.3.0`);
   assert.deepEqual([...SUBCOMMANDS.urgent].sort(), ["clear", "set", "status"]);
-  for (const sub of ["schema", "regions", "check"]) assert.ok(SUBCOMMANDS.limits.has(sub), `limits ${sub}`);
-  assert.ok(!SUBCOMMANDS.limits.has("sync-ops") && !SUBCOMMANDS.limits.has("server-rules"));
   assert.ok(SUBCOMMANDS.block.has("draft") && SUBCOMMANDS.ids.has("next") && SUBCOMMANDS.oplog.has("done"));
 });
 
@@ -177,7 +176,7 @@ test("setup writes the athlete files, coach.yaml and block.yaml before week 1", 
 
 test("no skill syncs limits to Tally; limits says once that old Tally limits stay until the athlete removes them", () => {
   for (const s of skills) assert.doesNotMatch(s.text, /Server-side limits|update_training_limits/, s.name);
-  assert.match(skill("limits").body, /v0\.2 never writes limits to Tally[^\n]*say once[^\n]*Settings → Training limits/);
+  assert.match(skill("limits").body, /The coach never writes limits to Tally[^\n]*say once[^\n]*Settings → Training limits/);
 });
 
 test("unattended big changes become one log line for the next live session; no PR, no proposal file", () => {
@@ -224,7 +223,8 @@ test("method-expert has read-only tools and checks the limits under NA-REC-007",
   const tools = String(agents.find((a) => a.name === "method-expert")!.front.tools).split(",").map((t) => t.trim());
   assert.deepEqual(tools.sort(), ["Glob", "Grep", "Read"]);
   const body = agents.find((a) => a.name === "method-expert")!.body;
-  for (const s of ["[ID]", "source", "Never estimate", "athlete/limits.yaml", "[NA-REC-007]", "limits check"]) assert.ok(body.includes(s), s);
+  for (const s of ["[ID]", "source", "Never estimate", "athlete/limits.md", "[NA-REC-007]", "quotes the line"]) assert.ok(body.includes(s), s);
+  assert.ok(!body.includes("limits check"), "0.3.0: no limits check");
 });
 
 test("analyst reports numbers with inputs and never estimates", () => {
@@ -310,18 +310,29 @@ test("week classifies each change in code and routes big changes to step 11", ()
   assert.match(classify, /`big: true`: a big change\. Go to step 11\./);
 });
 
-test("the plan follows the limits: week checks the drafted week with limits check; today checks today", () => {
-  // V4: the week file from block draft --out.
-  assert.match(steps("week").get(8)!, /node engine\/cli\.ts limits check --input <the week file>/);
-  assert.match(steps("today").get(2)!, /node engine\/cli\.ts limits check --input \.tmp\/coach\/today\.json/);
-  assert.match(steps("audit").get(3)!, /\*\*Limits review\*\* \(advisory\)[^\n]*node engine\/cli\.ts limits check/);
-  assert.match(claudeMd, /4\. \*\*Follow the limits\.\*\*/);
+test("the plan follows the limits by judgment (0.3.0): week checks the drafted week against every line; today before every exit and write; the audit quotes the line", () => {
+  assert.match(steps("week").get(8)!, /\*\*Follow every line of `athlete\/limits\.md`\*\* \(by judgment; no command checks it\)/);
+  assert.match(steps("week").get(8)!, /node engine\/cli\.ts load-under --weight <n> --unit <the line's unit> --to <the day's unit>/);
+  const today = steps("today").get(2)!;
+  assert.match(today, /\*\*Limits\*\* \(by judgment; no command checks them\)/);
+  assert.match(today, /\*\*before every exit that leaves today's day as it is\*\* \(a `none` or `note` decision, the already-adjusted branch, a declined proposal, safety unknown\) and \*\*before any write\*\*/);
+  assert.match(today, /\*\*A conflict is a change\*\*, and it goes through the normal rules/);
+  assert.match(today, /\*\*Adjust's draft\*\*[^\n]*does not know the limits: check it against every line before you offer or write it/);
+  assert.match(today, /name a limit only when it shaped today's change/);
+  assert.match(steps("audit").get(3)!, /\*\*Limits review\*\* \(by judgment\): Read `athlete\/limits\.md` in full/);
+  assert.match(claudeMd, /4\. \*\*Follow the limits\.\*\* Read `athlete\/limits\.md` before every plan, and plan around every line by judgment: no code checks a plan against it\./);
+  for (const s of skills) assert.doesNotMatch(s.text, /limits check|limits schema|limits regions|limits-hash|max_sets_per_week|max_load|build_back|--kind limit/, s.name);
 });
 
-test("week builds back a capped region once a week, interactive only", () => {
+test("week builds back a region once a week, interactive only; the answer is its only change to limits.md", () => {
   const safety = steps("week").get(2)!;
-  assert.match(safety, /\*\*Build back\*\* \(interactive\): for each limit with `build_back: true`, ask once "<Region>: how did it feel this week\? A\) Fine: build back one step, B\) The same: keep the cap, C\) Worse: avoid loading it for now"/);
-  assert.match(safety, /Unattended: keep the caps as they are\./);
+  assert.match(safety, /\*\*Build back\*\* \(interactive only\): for each line of `athlete\/limits\.md` that says the athlete is building back, ask once "<Region>: how did it feel this week\? A\) Fine: build back a little more, B\) The same: keep it as is, C\) Worse: avoid it for now"/);
+  assert.match(safety, /This answer is the only change this skill makes to `athlete\/limits\.md`/);
+  assert.match(safety, /A: add "a little more from <today>" to the line/);
+  assert.match(safety, /B: change nothing\./);
+  assert.match(safety, /C: rewrite the line as "avoid for now", in the athlete's words/);
+  assert.match(safety, /Unattended: ask nothing and change nothing\./);
+  assert.match(section(skill("week").body, "Unattended")!, /Never change `athlete\/limits\.md`\./);
 });
 
 test("finding 10: setup commits and pushes at its end; automation pushes first and sets mode and verified only after a confirmed run", () => {
@@ -356,17 +367,17 @@ test("safety skill: one clickable screen (at most 4 questions), the three handli
   assert.match(ask, /"Any of these now\?" \(`multiSelect: true`\) with "New numbness or weakness", "Swelling with heat or redness", "Cannot bear weight", "None of these"/);
   assert.match(ask, /More than two regions: one screen per two regions/);
   assert.match(ask, /node engine\/cli\.ts urgent set/);
-  assert.match(steps("safety").get(3)!, /By default, the limit covers the patterns that load the region: run `node engine\/cli\.ts limits regions`/);
+  assert.match(steps("safety").get(3)!, /By default, the line covers every movement that loads the region\. `node engine\/cli\.ts regions` lists/);
 });
 
-test("safety skill: writes the limit the athlete chose (note, cap with build_back, ban), and the it's-better and old-notes flows", () => {
+test("safety skill: writes the athlete's choice as one plain line (fine, building back, avoid), and the it's-better and old-notes flows", () => {
   const write = steps("safety").get(4)!;
-  assert.match(write, /node engine\/cli\.ts limits schema/);
-  assert.match(write, /"It's fine now": no limit/);
-  assert.match(write, /"Go light and build back slowly": `rule: cap`[^\n]*`build_back: true`/);
-  assert.match(write, /"Avoid loading it for now": `rule: ban`/);
+  assert.match(write, /as one bullet in `athlete\/limits\.md`/);
+  assert.match(write, /"It's fine now": no line/);
+  assert.match(write, /"Go light and build back slowly": for example `- Left knee: light only, building back slowly/);
+  assert.match(write, /"Avoid loading it for now": for example `- Left knee: avoid for now:/);
   assert.match(steps("safety").get(6)!, /"A clinician has seen me about it", "It was a false alarm", "Not yet"[^\n]*--reason clinician[^\n]*--reason false-alarm[^\n]*Never clear it on your own reading/);
-  assert.match(steps("safety").get(7)!, /"Remove the <region> limit\? A\) Yes, B\) Loosen it, C\) Keep it"/);
+  assert.match(steps("safety").get(7)!, /"<Region>: what should the coach do now\? A\) Train normally again, B\) Go light and build back slowly, C\) Keep it as it is"/);
   assert.match(steps("safety").get(8)!, /one multi-select: "Which of these still bother you\?"/);
   assert.match(steps("safety").get(10)!, /See a clinician for new pain, pain that gets worse, or pain that does not settle\.[^\n]*once per conversation/);
   assert.match(skill("safety").body, /Without AskUserQuestion \(print mode\)[^\n]*ask the same questions as text with lettered options/);
@@ -883,18 +894,19 @@ test("V3b fix 3: the safety skill changes the conflicting days without a second 
   const step5 = steps("safety").get(5)!;
   assert.doesNotMatch(t, /Change those days now\?/);
   assert.match(step5, /Plan around it, without asking/);
-  assert.match(step5, /ask no second question/);
+  assert.match(step5, /ask no second question about them/);
   assert.match(step5, /Under the urgent stop, change nothing/);
   assert.match(step5, /`source` is `mcp` and `userModified` is false/);
-  assert.match(step5, /A day the athlete built or edited in the app: leave it, and say so in one line/);
+  assert.match(step5, /is protected: never change it without a yes\. When protected days go against the new line, ask one question for all of them/);
+  assert.match(step5, /This is the only second question, and only when a protected day goes against the line\./);
   assert.match(step5, /Say what changed in one line/);
-  assert.match(step5, /node engine\/cli\.ts limits check --input \.tmp\/coach\/week\.json/);
+  assert.match(step5, /Check each day against the new line yourself/);
 });
 
 test("V3b fix 4: final messages are plain: no file paths, block, limit or rule ids", () => {
   const style = readFileSync(join(REPO, "CLAUDE.md"), "utf8");
   assert.match(style, /\*\*Final messages are plain\.\*\* What the athlete reads at the end of a skill has no file paths, no block, limit or rule ids, and no command names/);
-  assert.match(style, /"No limits yet\." instead of "`athlete\/limits\.yaml` has no limits"/);
+  assert.match(style, /"No limits yet\." instead of "`athlete\/limits\.md` has no limits"/);
   assert.doesNotMatch(style, /Give the number, the reason and the rule ID\./);
   const setup = skill("setup").text;
   assert.match(setup, /\*\*The final message is plain\*\*[^\n]*no file paths, no block, limit or rule ids/);

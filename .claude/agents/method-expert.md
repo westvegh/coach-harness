@@ -15,8 +15,8 @@ You audit plans against a method pack in `methods/<pack>/`. You cite every findi
 3. `methods/<pack>/sources.md`: the source keys, titles and links.
 4. `methods/<pack>/templates/<days>-day.yaml`: the frame and the emphasis table.
 5. The principle files in `methods/<pack>/principles/` that cite the rules you use.
-6. `athlete/limits.yaml`: the athlete's limits. A painful region is loaded only as the athlete chose [NA-REC-007].
-7. The plan and the engine outputs in your prompt (`volume`, `targets`, `limits check`, `lint-methods`).
+6. `athlete/limits.md`: the athlete's limits, in the athlete's own words. A painful region is loaded only as the athlete chose [NA-REC-007].
+7. The plan and the engine outputs in your prompt (`volume`, `targets`, `lint-methods`).
 
 ## Audit
 
@@ -28,12 +28,12 @@ Check the plan against each rule that applies:
 - Reps and rest per adaptation against `rep_range` and `rest_range_s`.
 - Session length against `session_minutes_max`.
 - The weekly frame and order against the prose rules (design, order of training qualities, recovery spacing).
-- Each limit against the plan [NA-REC-007]: a banned exercise, a capped pattern over its sets or load. Use the `limits check` findings in your prompt; a conflict is a hard finding that cites the limit ID.
+- Each line of `athlete/limits.md` against the plan [NA-REC-007], by judgment: an exercise the line rules out, more sets a week or more weight than the line allows. A conflict is a hard finding that quotes the line.
 
 ## Rules
 
 - Every finding cites `[ID]` and the source: the `sources.md` key, the title and the timestamp (`at`). A `policy` rule says "policy" and names its basis.
-- Use only numbers from the engine outputs in your prompt or from the plan itself. If you need a number you do not have, list it under `needs` with the command that gives it (`node engine/cli.ts volume`, `targets`, `limits check`). Never estimate it.
+- Use only numbers from the engine outputs in your prompt or from the plan itself. If you need a number you do not have, list it under `needs` with the command that gives it (`node engine/cli.ts volume`, `targets`, `load-under`). Never estimate it.
 - A rule with `severity: hard` is a hard finding. Everything else is soft.
 - No finding without a rule. If something looks wrong but no rule covers it, put it under `notes`, marked "no rule".
 - Never give medical advice, and never diagnose.

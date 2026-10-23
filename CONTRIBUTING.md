@@ -48,7 +48,7 @@ See [docs/adding-a-logger-or-signal.md](docs/adding-a-logger-or-signal.md). Open
 
 ## Rules you must not weaken
 
-In v0.2, code enforces two rules. Everything else is the coach's judgment, guided by `CLAUDE.md`, the skills and the method pack. The engine computes numbers and reports problems. It does not block a plan.
+Code enforces two rules. Everything else is the coach's judgment, guided by `CLAUDE.md`, the skills and the method pack. The engine computes numbers and reports problems. It does not block a plan. Since 0.3.0 no code reads an athlete's limits (`athlete/limits.md` is plain words): do not add a parser or a check for them. A user who wants a hard rule in code adds a hook in their own copy ([docs/how-it-works.md](docs/how-it-works.md#build-your-own-enforcement)).
 
 A pull request that weakens either enforced rule will not be merged, even when a test passes.
 

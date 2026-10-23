@@ -30,7 +30,7 @@ function inst(t: TestContext, opts: { list?: ClusterEntry[]; config?: boolean; l
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   mkdirSync(join(dir, "athlete"), { recursive: true });
   symlinkSync(join(REPO, "methods"), join(dir, "methods"));
-  writeFileSync(join(dir, "athlete/limits.yaml"), readFileSync(join(REPO, "templates/athlete/limits.yaml"), "utf8"));
+  writeFileSync(join(dir, "athlete/limits.md"), readFileSync(join(REPO, "templates/athlete/limits.md"), "utf8"));
   if (opts.config === false) return dir;
   let y = readFileSync(join(REPO, "coach.example.yaml"), "utf8").replace("logger: tally", `logger: ${opts.logger ?? "files"}`);
   if (opts.list) y += stringify({ clusters: opts.list });

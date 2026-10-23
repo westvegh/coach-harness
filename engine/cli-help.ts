@@ -29,9 +29,11 @@ export const HELP: Record<string, string> = {
   block:
     "block draft [--template <id>] --weeks <n> [--input <file.json>] [--out <dir>]  — template × targets → the block and week-by-week days; --out writes <dir>/block.json and <dir>/week-<n>.json and prints a summary; a logged value it cannot read in the history is INPUT_ERROR (§13a)\n" +
     "block write --input <dir>/block.json  — writes athlete/block.yaml (archives a block with another id; refused under the urgent stop)  (§22.6)",
-  ids: "ids next --kind block|limit  — the next free ID (§22.7)",
+  ids: "ids next --kind block  — the next free block ID (§22.7)",
   urgent: "urgent set --term <name> --source chat|checkin|note|answer | urgent clear --reason clinician|false-alarm | urgent status  — the urgent stop (§10)",
-  limits: "limits schema | limits regions | limits check --input <week file>|<{days}.json>  — the limits.yaml shape, the regions each pattern loads, and a planned week against the limits (report only; §2); each day in the engine's shape or Tally's (§13a)",
+  regions: "regions  — the region ids, and for each movement pattern the regions it loads (a side region also matches its parent); the safety skill reads it (§3)",
+  "load-under": "load-under --weight <n> --unit lbs|kg --to lbs|kg  — the heaviest weight in --to that is not above a load in a limit: converted without rounding, then rounded down to the plate step (lbs 5, kg 2.5); prints {weight, unit, step} (§2)",
+  "migrate-limits": "migrate-limits  — 0.3.0: convert an old athlete/limits.yaml to athlete/limits.md in plain words (every field kept), move pain_threshold to coach.yaml, one commit; safe to run twice; live sessions only (§2a)",
   signals: "signals refresh  — Oura fetch for the last 3 days on a Mac, else a one-line note (§22.8) | signals --from <date> --to <date>  (§11)",
   "lint-methods": "lint-methods [--pack <name>] [--volume]  — lint a method pack; exit 1 on errors (§22.9)",
   plans: "plans write --input <week file>|<{days}|{day}|{tally_day}.json> | plans read --week <YYYY-MM-DD|YYYY-Www> | plans done --date <YYYY-MM-DD> (--as-planned | --exercise <name>) [--sets n] [--reps r] [--load x] [--felt <text>]  — the week files under plans/ (logger: files; §12a)",
@@ -46,17 +48,16 @@ export const HELP: Record<string, string> = {
   volume:
     "volume --input <week file>  — counted sets per muscle of the week (a cluster counts total reps ÷ its rep max), each cluster's count (`clusters`) and straight exercises above the pack's session maximum (`session_max`, advisory) | volume --input <{block, logs, today, target_week}.json>  — next week's targets (§7, §8a, §22.3)\n" +
     "week.days: each day in the engine's shape or Tally's, never both in one day; logs: logged sets only (a prescription is refused); a value it cannot read is INPUT_ERROR with its path (§13a)",
-  "limits-hash": "limits-hash [--file <limits.yaml>]  — the limits file's hash (§2)",
   snapshot: "snapshot show | snapshot reset  — print the Tally snapshot cache; empty it (it is a cache; setup resets it after the account question) (§9)",
   safety: "safety detect --text <text> | safety scan-notes --since <YYYY-MM-DD> [--input <history.json>] [--dry-run]  — urgent and pain terms in text; in logged notes, an exercise's as one string or a list (an urgent term writes the urgent stop; a note it cannot read makes coverage incomplete) (§10, §9a)",
   classify:
     "classify --exercise \"<name>\" [--id <exerciseId>] [--muscle <m>] | classify --input <{before, after, tool, today?}.json> | classify --before-snapshot <date> --input <{after, tool}.json>  — an exercise's patterns, or a change's kind (small or big); --before-snapshot takes before and snapshotDay from one snapshot read (§6)\n" +
     "before and after: a day in the engine's shape or Tally's (null: an empty date), never both in one day; a value it cannot read is INPUT_ERROR with its path (§13a)",
   "today-brief":
-    "today-brief --stage pre  — the window (exit 4 outside it), a new run_id, the mode, local time, logger, limits, Preferences, check-in pain, open proposals, the wearable refresh and the reads to make in one message\n" +
-    "today-brief --stage post [--input <evidence.json>]  — after the reads: coverage, the note scan (an urgent term writes the stop), urgent, today's day, already adjusted, limits, readiness with report facts, loads and adjust when they apply, need_reads; --input: logger other's {history, history_complete, today: {read, found, day}}; an exercise's notes: a string or a list (each scanned; one it cannot read, or notesTruncated, makes safety unknown)  (§22b)",
+    "today-brief --stage pre  — the window (exit 4 outside it), a new run_id, the mode, local time, logger, the limits text (athlete/limits.md, cut at 2,000 characters), the pain threshold, Preferences, check-in pain, open proposals, the wearable refresh and the reads to make in one message\n" +
+    "today-brief --stage post [--input <evidence.json>]  — after the reads: coverage, the note scan (an urgent term writes the stop), urgent, today's day, already adjusted, readiness with report facts, loads and adjust when they apply, need_reads; --input: logger other's {history, history_complete, today: {read, found, day}}; an exercise's notes: a string or a list (each scanned; one it cannot read, or notesTruncated, makes safety unknown)  (§22b)",
   "today-write-prep":
-    'today-write-prep --input <{after|edit, tool, kind}.json>  — classify, the limits on the final day (and the week with today replaced when a weekly cap applies), and the write arguments (plain; approved on a protected day), each with its opId\n' +
+    'today-write-prep --input <{after|edit, tool, kind}.json>  — classify and the write arguments (plain; approved on a protected day), each with its opId\n' +
     'input: {"edit": {"notes": "...", "exercises": [{"index": 0, "set": {"suggestedWeight": 195}}]}} (applied to today as read; annotate: notes only) or {"after": <adjust\'s tally_day, or post\'s write_base day, changed>}, with "tool": "update_planned_workout"|"plan_workout_day", "kind": "trim_session" — after: {"date","dayType","dayName","notes","exercises":[{"exerciseId","name","suggestedSets","suggestedReps","repsMax","suggestedWeight","perSide","notes"}],"weightUnit"}; a weightUnit that is not lbs or kg is INPUT_ERROR (absent: the stored unit)  (§22b)',
   checkin: "checkin --date <YYYY-MM-DD> [--overall 1-5 | --sleep-quality 1-5 --energy 1-5 --soreness 1-5 --stress 1-5] [--want-to-train 1-5|none] [--pain region:score,...|none] [--urgent <term>,...]  — record today's check-in (live only; §11): at least one answer or --urgent; merges into today's check-in by group, none clears an answer, --urgent alone writes only the stop",
   oplog: "oplog done --date <YYYY-MM-DD> --kind <kind>  — whether a Tally write of that kind is done on that date, from the write log (§15)",
@@ -87,18 +88,11 @@ export const SUBHELP: Record<string, Record<string, string>> = {
       'before coach.yaml exists, add: "method":"nine-adaptations","days":4,"units":"lbs","timezone":"America/Los_Angeles","logger":"files" (tally | files | none); optional: targets, step, deload_weeks, weekdays, clusters ([{name, mini_sets, reps, rm, rest_s?}], as in coach.yaml; then copied into each week file)',
     write: "block write --input <dir>/block.json  — validate the block, archive a block with another id to athlete/blocks/<id>.yaml, write athlete/block.yaml atomically; refused under the urgent stop  (§22.6a)",
   },
-  ids: { next: "ids next --kind block|limit  — the next free ID (§22.7)" },
+  ids: { next: "ids next --kind block  — the next free block ID (§22.7)" },
   urgent: {
     set: "urgent set --term <name> --source chat|checkin|note|answer  — write, commit and push the urgent stop",
     clear: "urgent clear --reason clinician|false-alarm  — only on the athlete's answer in a live session (refused unattended)",
     status: "urgent status  — whether the urgent stop is on, with its terms",
-  },
-  limits: {
-    schema: "limits schema  — the limits.yaml shape (ban, cap with max_sets_per_week or max_load, build_back)",
-    regions: "limits regions  — the regions each movement pattern loads",
-    check:
-      "limits check --input <week file>  — the week's days against athlete/limits.yaml (report only); also {days}, {week: {days}} or a list of days\n" +
-      "each day in the engine's shape ({date, exercises: [{name, sets: [{weight, reps}]}]}) or Tally's, as read ({date, exercises: [{name, suggestedSets, suggestedReps, suggestedWeight}]}), never both in one day; a value it cannot read is INPUT_ERROR with its path",
   },
   plans: {
     write: "plans write --input <week file>  — write whole days to plans/<YYYY>-W<ww>.csv; also {days}, {day}, {tally_day} or one {date, exercises}; each exercise with sets or Tally's suggestedSets; a logged row is never lost; a value it cannot read is INPUT_ERROR with its path",

@@ -11,13 +11,12 @@ import { adjustDay } from "../engine/adjust.ts";
 import { validateBlock } from "../engine/block.ts";
 import { draftBlock } from "../engine/block-draft.ts";
 import { clusterCount, clusterOf, countedSets, stripClusterNotes, type ClusterEntry } from "../engine/clusters.ts";
-import { checkLimits } from "../engine/limits-check.ts";
 import { suggestLoads } from "../engine/loads.ts";
 import { loadTemplates } from "../engine/methods.ts";
 import { nextWeekTargets } from "../engine/progression.ts";
 import { mergeResponse } from "../engine/snapshot.ts";
 import { parseHistoryFile, tallyDays, TALLY_NOTES_MAX } from "../engine/week-file.ts";
-import type { Block, DayPlan, ExerciseEntry, Limits, SetEntry, SnapshotDay } from "../engine/types.ts";
+import type { Block, DayPlan, ExerciseEntry, SetEntry, SnapshotDay } from "../engine/types.ts";
 import { rules, tax } from "./guard/fixtures.ts";
 import { cli, REPO, writeJson } from "./e3/helpers.ts";
 
@@ -38,7 +37,7 @@ function inst(t: TestContext, mode: Mode | "bare" = "none", list: ClusterEntry[]
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   mkdirSync(join(dir, "athlete"), { recursive: true });
   symlinkSync(join(REPO, "methods"), join(dir, "methods"));
-  writeFileSync(join(dir, "athlete/limits.yaml"), readFileSync(join(REPO, "templates/athlete/limits.yaml"), "utf8"));
+  writeFileSync(join(dir, "athlete/limits.md"), readFileSync(join(REPO, "templates/athlete/limits.md"), "utf8"));
   if (mode === "bare") return dir;
   let y = readFileSync(join(REPO, "coach.example.yaml"), "utf8").replace("logger: tally", "logger: files");
   if (mode === "yaml") y += stringify({ clusters: list });
@@ -148,15 +147,8 @@ test("V5 B.5: targets (progression.ts): the clusters' counted sets, the straight
 });
 
 // ---------- B.4 limits ----------
-
-test("V5 B.4: a 6 × 6 cluster under a region cap of 2, 3 and 4 (over, at, under)", () => {
-  const day: DayPlan = { date: "2026-10-20", exercises: [curl(at(35, 6, 6, 6, 6, 6, 6))] };
-  const cap = (n: number): Limits => ({ version: 1, pain_threshold: 4, limits: [{ id: "L-001", region: "elbow", rule: "cap", patterns: ["elbow_flexion"], exercises: [], allow: [], max_sets_per_week: n, source: "athlete", since: "2026-10-01" }] });
-  assert.deepEqual(checkLimits([day], cap(2), TAX, LIST).map((f) => f.detail), ["3 hard sets match L-001 this week; the cap is 2"]);
-  assert.deepEqual(checkLimits([day], cap(3), TAX, LIST), []);
-  assert.deepEqual(checkLimits([day], cap(4), TAX, LIST), []);
-  assert.deepEqual(checkLimits([day], cap(4), TAX, []).map((f) => f.detail), ["6 hard sets match L-001 this week; the cap is 4"], "straight sets without the list");
-});
+// 0.3.0: limits are plain words (athlete/limits.md) and no code counts them; the counted sets of a
+// cluster stay in `volume` (above) and `weeks`.
 
 // ---------- B.6 loads ----------
 
@@ -240,7 +232,7 @@ test("V5 B.7 Tally: one Cluster line per cluster exercise in the day notes; a re
   assert.equal(stripClusterNotes(`a | Cluster: x\nCluster: y\nb`), "a\nb");
 });
 
-test("V5 B.7 readback: tally-days output → toDayPlan → loads, adjust and limits give the cluster answers", () => {
+test("V5 B.7 readback: tally-days output → toDayPlan → loads and adjust give the cluster answers", () => {
   const out = tallyDays({ week: { days: [{ date: "2026-10-20", dayName: "Arms", exercises: [curl(at(35, 6, 6, 6, 6, 6, 6), { exerciseId: "custom-123" })] }] } }, "lbs", undefined, LIST);
   const tday = out.days[0];
   assert.equal(tday.exercises[0].suggestedSets, 6, "physical sets: Tally logs each mini-set");
@@ -251,10 +243,8 @@ test("V5 B.7 readback: tally-days output → toDayPlan → loads, adjust and lim
   const s = suggestLoads([ex], hist([{ date: "2026-10-13", sets: at(35, 6, 6, 6, 6, 6, 5) }]), RULES, "lbs", { tax: TAX, clusters: LIST, date: plan.date })[0];
   assert.equal(s.suggestedWeight, 35);
   assert.match(s.reason, /^cluster: 35 of 36 reps/);
-  const trimmed = adjustDay(plan, "trim", { tax: TAX, thresholds: {}, limits: { version: 1, pain_threshold: 4, limits: [] }, clusters: LIST });
+  const trimmed = adjustDay(plan, "trim", { tax: TAX, thresholds: {}, clusters: LIST });
   assert.deepEqual(trimmed.changes, ["EZ Bar Curl: 6 → 5 mini-sets"]);
-  const cap: Limits = { version: 1, pain_threshold: 4, limits: [{ id: "L-001", region: "elbow", rule: "cap", patterns: ["elbow_flexion"], exercises: [], allow: [], max_sets_per_week: 2, source: "athlete", since: "2026-10-01" }] };
-  assert.deepEqual(checkLimits([plan], cap, TAX, LIST).map((f) => f.detail), ["3 hard sets match L-001 this week; the cap is 2"]);
 });
 
 test("V5 B.7 plans CSV: the cluster note, the day note kept in a fixed order, write → read → write with no duplicate, and unequal logged reps read back exactly", (t) => {
@@ -296,7 +286,7 @@ test("V5 B.7 plans CSV: the cluster note, the day note kept in a fixed order, wr
 const WEEK = { week_start: "2026-10-19", days: [{ date: "2026-10-20", dayName: "Arms", dayType: "training", exercises: [curl(at(35, 6, 6, 6, 6, 6, 6))] }] };
 
 for (const mode of MODES) {
-  test(`V5 B.2 commands with the list ${mode === "yaml" ? "in coach.yaml" : mode === "input" ? "in the input" : "nowhere"}: volume, limits check, loads, loads --fill, tally-days, plans write, targets, adjust, classify, block draft`, (t) => {
+  test(`V5 B.2 commands with the list ${mode === "yaml" ? "in coach.yaml" : mode === "input" ? "in the input" : "nowhere"}: volume, loads, loads --fill, tally-days, plans write, targets, adjust, classify, block draft`, (t) => {
     const dir = inst(t, mode);
     const c = isCluster(mode);
     // volume
@@ -305,11 +295,6 @@ for (const mode of MODES) {
     assert.equal(vol.json.sets_by_muscle.biceps, c ? 3 : 6);
     assert.deepEqual(vol.json.clusters?.map((x: any) => x.text), c ? ["6 × 6 cluster, counts as 3 sets"] : undefined);
     assert.equal(vol.json.session_max?.[0]?.exercise, c ? undefined : "EZ Bar Curl", "the audit: a straight 6-set exercise is advisory");
-    // limits check
-    writeFileSync(join(dir, "athlete/limits.yaml"), stringify({ version: 1, pain_threshold: 4, limits: [{ id: "L-001", region: "elbow", rule: "cap", patterns: ["elbow_flexion"], exercises: [], allow: [], max_sets_per_week: 4, source: "athlete", since: "2026-10-01" }] }));
-    const lim = cli(["limits", "check", "--input", writeJson(dir, "l.json", withList(mode, { week: WEEK })), "--root", dir]);
-    assert.equal(lim.code, 0, lim.stderr);
-    assert.deepEqual(lim.json.findings.map((f: any) => f.kind), c ? [] : ["over_sets"]);
     // loads (the legacy input: exercises and history, with a date)
     const history = hist([{ date: "2026-10-06", sets: at(35, 6, 6, 6, 6, 6, 5) }, { date: "2026-10-13", sets: at(35, 6, 6, 6, 6, 6, 5) }]);
     const ld = cli(["loads", "--input", writeJson(dir, "ld.json", withList(mode, { exercises: [PLAN], history, units: "lbs", date: "2026-10-20" })), "--root", dir]);
@@ -365,7 +350,7 @@ test("V5 B.2 weeks: the logged weeks count clusters from coach.yaml", (t) => {
   }
 });
 
-test("V5 B.2 setup: the week files block draft --out saves before coach.yaml exists carry the input's list, so volume, limits check, loads --fill and tally-days count the cluster", (t) => {
+test("V5 B.2 setup: the week files block draft --out saves before coach.yaml exists carry the input's list, so volume, loads --fill and tally-days count the cluster", (t) => {
   const dir = inst(t, "bare");
   const input = { method: "nine-adaptations", days: 3, emphasis: "hypertrophy", units: "lbs", timezone: "America/Los_Angeles", logger: "none", id: "B-001", start: "2026-10-19", exercises: { elbow_flexion: { name: "EZ Bar Curl" }, vertical_pull: { name: "Pull-Up" } }, clusters: LIST };
   const r = cli(["block", "draft", "--weeks", "6", "--input", writeJson(dir, ".tmp/coach/draft.json", input), "--root", dir, "--out", join(dir, ".tmp/coach/b1")]);
@@ -375,8 +360,6 @@ test("V5 B.2 setup: the week files block draft --out saves before coach.yaml exi
   const vol = cli(["volume", "--input", w1, "--root", dir]);
   assert.deepEqual(vol.json.sets_by_muscle, r.json.weeks[0].sets_by_muscle);
   assert.deepEqual(vol.json.clusters.map((x: any) => x.text), ["6 × 6 cluster, counts as 3 sets"]);
-  const lim = cli(["limits", "check", "--input", w1, "--root", dir]);
-  assert.equal(lim.code, 0, lim.stderr);
   const hf = writeJson(dir, "h.json", { units: "lbs", sessions: [{ date: "2026-10-13", exercises: [{ name: "EZ Bar Curl", sets: at(35, 6, 6, 6, 6, 6, 5) }] }] });
   const fill = cli(["loads", "--input", w1, "--fill", "--history", hf, "--root", dir]);
   assert.equal(fill.code, 0, fill.stderr);

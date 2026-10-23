@@ -82,7 +82,7 @@ recovery signals ─► readiness ─► method rules ─► change ─► your 
 1. Recovery data comes in each morning: sleep, HRV and resting heart rate. Say "check in" for today's report. The coach reads the data first, and asks one question ("How do you feel today?") only on a day when the answer can change the workout.
 2. The engine scores three categories: wearable, subjective and performance.
 3. The method's rules decide: keep the session, add a note, trim it, or swap to a recovery day. An isolated low reading usually gives a note only. Two exceptions: when you do not want to train at all, the coach makes it a recovery day (you can keep the session instead), and an urgent warning sign stops all training changes.
-4. The coach reads your limits before every plan, and checks the planned week against them with the engine.
+4. The coach reads your limits before every plan and plans around each one. Your limits are in your own words.
 5. The plan goes where your plans live. You log your sets. Your log feeds the next day.
 
 The engine makes every number. The coach recommends: it gives its pick and the reason, and you change it if you want. Small changes apply on their own. Big changes need your yes; a scheduled run saves each big change for the next time you talk to the coach.
@@ -98,12 +98,12 @@ Code enforces two rules:
 
 The rest of the stop is the coach's instruction, not code: it gives the urgent-care text, writes nothing to another tool you connected, makes no plan change through the shell, and asks you before it runs `urgent clear`. Only your answer in a live session should clear the stop: "A clinician has seen me about it" or "It was a false alarm".
 
-Code does **not** check your plans. The coach follows your limits and the method's rules because its instructions tell it to, not because a hook blocks it. It can misread a limit. The `audit` skill checks a planned week against your limits on request, git records every change, and the evals in `evals/` measure how often the coach follows your limits.
+Code does **not** check your plans. The coach follows your limits and the method's rules because its instructions tell it to, not because a hook blocks it. It can misread a limit. The `audit` skill checks a planned week against your limits on request, git records every change, and the evals in `evals/` measure how often the coach follows your limits. To make a rule hard in code, add your own Claude Code hook ([how it works](docs/how-it-works.md#build-your-own-enforcement)).
 
 ## Safety and privacy
 
-- **Pain and injuries:** the coach asks one screen of clickable questions: train normally, go light and build back, or avoid loading the region for now. It writes the limit you chose. When you say "it's better", one question removes or loosens the limit.
-- **Your limits** live in `athlete/limits.yaml`: a ban, or a cap on weekly sets or load, for a body region. The coach changes them only when you ask, and commits each change.
+- **Pain and injuries:** the coach asks one screen of clickable questions: train normally, go light and build back, or avoid loading the region for now. It writes the limit you chose, in plain words. When you say "it's better", one question removes the limit or changes it to "go light and build back".
+- **Your limits** live in `athlete/limits.md`, one line each, in your own words: for example "Left shoulder: no bench press or dips for now. Light pressing is fine." The coach changes a line only when you ask, and commits each change. Say "change my limits" to change one.
 - **Your data** goes to Anthropic (your conversations with Claude, and the files the coach reads), your private GitHub repository, your Mac, and Tally or the tool you chose. The harness has no server.
 - **Tally notes:** with Tally, the short note on a changed day can include readiness values, body regions and pain scores. That is the default. Choose "Show details" on setup's data question, then "Yes, but keep Tally notes generic", to keep them out.
 - **The pre-push hook** cannot stop you from making the repository public later in GitHub's settings, so keep it private.
@@ -132,7 +132,7 @@ The scheduled runs need Tally for now. A scheduled run asks no questions and mak
 
 ## Updating
 
-Say "update the coach" in Claude Code. The coach shows what changes, asks before it writes, and never touches `coach.yaml` or `athlete/`. It needs `template-manifest.json`, which ships with each release; a copy made before updates existed cannot be updated this way.
+Say "update the coach" in Claude Code. The coach shows what changes and asks before it writes. The update itself never touches `coach.yaml` or `athlete/`. It needs `template-manifest.json`, which ships with each release; a copy made before updates existed cannot be updated this way.
 
 **From v0.1.x to v0.2:** the first upgrade runs the v0.1 update skill that your session already has.
 
@@ -142,6 +142,8 @@ Say "update the coach" in Claude Code. The coach shows what changes, asks before
 4. If your copy has an old hold or safety check, the coach asks one question: remove them (v0.2 uses limits instead), or show them first. An old urgent hold becomes the urgent stop, and removing the old files never clears it.
 
 Your plans stay in Tally. v0.2 no longer copies your limits to Tally; limits already in Tally stay until you remove them in the Tally app.
+
+**From 0.2.x to 0.3.0:** update as usual, restart, and say "finish the update". The new coach converts your old limits file (`athlete/limits.yaml`) to `athlete/limits.md` in plain words, line by line, and keeps every rule and number. It moves your pain threshold to `coach.yaml`. It shows you the new file and offers plainer wording, which you can take or leave. Until you do this, a scheduled run still follows your old limits.
 
 ## Docs
 

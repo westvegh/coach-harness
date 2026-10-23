@@ -15,10 +15,10 @@ import { mergeResponse, saveSnapshot } from "../engine/snapshot.ts";
 import type { Snapshot } from "../engine/types.ts";
 import { cli, instance as e3Instance, REPO, writeJson } from "./e3/helpers.ts";
 
-/** The e3 instance, plus the starting limits file (limits check reads it). */
+/** The e3 instance, plus the starting limits file (athlete/limits.md, plain words). */
 function instance(edit?: (yaml: string) => string): string {
   const dir = e3Instance(edit);
-  writeFileSync(join(dir, "athlete/limits.yaml"), readFileSync(join(REPO, "templates/athlete/limits.yaml"), "utf8"));
+  writeFileSync(join(dir, "athlete/limits.md"), readFileSync(join(REPO, "templates/athlete/limits.md"), "utf8"));
   return dir;
 }
 
@@ -111,7 +111,7 @@ function history(units: "lbs" | "kg") {
   };
 }
 
-test("A2: the same week file passes through loads --fill, limits check, volume and plans write", () => {
+test("A2: the same week file passes through loads --fill, volume and plans write", () => {
   const dir = instance((y) => y.replace("logger: tally", "logger: files"));
   const r = draftOut(dir, { id: "B-001", start: "2026-10-19", exercises: EXERCISES });
   assert.equal(r.code, 0, r.stderr);
@@ -125,8 +125,6 @@ test("A2: the same week file passes through loads --fill, limits check, volume a
   assert.equal(filled.week.kind, "build");
   const rdl = filled.week.days.flatMap((d: any) => d.exercises).find((e: any) => e.name === "Romanian Deadlift");
   assert.ok(rdl.sets.every((s: any) => typeof s.weight === "number" && s.weight > 0), JSON.stringify(rdl));
-  const lim = cli(["limits", "check", "--input", w1, "--root", dir]);
-  assert.equal(lim.code, 0, lim.stderr);
   const vol = cli(["volume", "--input", w1, "--root", dir]);
   assert.equal(vol.code, 0, vol.stderr);
   assert.deepEqual(vol.json.sets_by_muscle, r.json.weeks[0].sets_by_muscle);
@@ -367,7 +365,7 @@ test("A6: every command in the CLI dispatch list and every subcommand its handle
     assert.ok(HELP[c] && lines(r.json.usage) <= 3, `help ${c}`);
   }
   // Subcommands: every literal a handler compares its first word with.
-  const handlers = ["engine/cli-core.ts", "engine/cli-oplog.ts", "engine/cli-limits.ts", "engine/cli-helpers2.ts", "engine/cli-setup.ts", "engine/cli-plans.ts", "engine/urgent.ts"];
+  const handlers = ["engine/cli-core.ts", "engine/cli-oplog.ts", "engine/cli-helpers2.ts", "engine/cli-setup.ts", "engine/cli-plans.ts", "engine/urgent.ts"];
   const subs = new Set<string>();
   for (const f of handlers) for (const m of src(f).matchAll(/(?:sub|positionals\[0\])\s*[!=]==\s*"([a-z-]+)"/g)) subs.add(m[1]);
   assert.ok(subs.has("scan-notes") && subs.has("reset") && subs.has("write"));

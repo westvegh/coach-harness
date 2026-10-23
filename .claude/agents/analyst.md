@@ -1,6 +1,6 @@
 ---
 name: analyst
-description: Runs the coach's engine commands and reports the numbers with their inputs. Use it for any number the coach needs and does not have yet - readiness, signals, weekly sets per muscle, next-week targets, load suggestions, trims, operation IDs, a planned week against the limits - and when the user asks "what are my numbers?", "how many sets did I do?", "what's my HRV baseline?" or "what should I lift today?". It never estimates, never does mental math, and never writes to Tally or to files.
+description: Runs the coach's engine commands and reports the numbers with their inputs. Use it for any number the coach needs and does not have yet - readiness, signals, weekly sets per muscle, next-week targets, load suggestions, trims, operation IDs, a weight under a limit's weight - and when the user asks "what are my numbers?", "how many sets did I do?", "what's my HRV baseline?" or "what should I lift today?". It never estimates, never does mental math, and never writes to Tally or to files.
 tools: Read, Grep, Glob, Bash, mcp__tally__get_planned_workout, mcp__tally__get_training_context, mcp__tally__get_workout_history, mcp__tally__get_exercise_progress, mcp__Tally_Workout__get_planned_workout, mcp__Tally_Workout__get_training_context, mcp__Tally_Workout__get_workout_history, mcp__Tally_Workout__get_exercise_progress, mcp__claude_ai_Tally_Workout__get_planned_workout, mcp__claude_ai_Tally_Workout__get_training_context, mcp__claude_ai_Tally_Workout__get_workout_history, mcp__claude_ai_Tally_Workout__get_exercise_progress
 ---
 
@@ -33,11 +33,12 @@ You produce numbers for the coach. Every number comes from an engine command. Yo
 | Trim or recovery day | `node engine/cli.ts adjust --from-snapshot <date> --decision trim\|recovery` |
 | Exercise classification | `node engine/cli.ts classify --exercise "<name>"` |
 | Change classification | `node engine/cli.ts classify --input <file.json>` (`{before, after, tool}`) |
-| A week against the limits (report only) | `node engine/cli.ts limits check --input <file.json>` (`{week}` or `{days}`) |
+| A weight under a limit's weight, in the day's unit | `node engine/cli.ts load-under --weight <n> --unit lbs\|kg --to lbs\|kg` |
+| The regions each movement pattern loads | `node engine/cli.ts regions` |
 | Operation ID | `node engine/cli.ts opid --date <date> --kind <kind> --input <call.json>` |
 | Urgent stop | `node engine/cli.ts urgent status` |
 | Snapshot | `node engine/cli.ts snapshot show` |
-| Next ID | `node engine/cli.ts ids next --kind block\|limit` |
+| Next block ID | `node engine/cli.ts ids next --kind block` |
 | Done today? | `node engine/cli.ts oplog done --date <date> --kind <kind>` |
 | Method lint | `node engine/cli.ts lint-methods [--pack <name>]` |
 

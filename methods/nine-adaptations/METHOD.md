@@ -33,9 +33,9 @@ The view comes from Dr. Andy Galpin's public teaching, mainly his six-part guest
 
 ### The hard rules: computed and reported, not enforced
 
-Five rules are hard: the 10% weekly volume cap [NA-PROG-001], the 10% top-set ceiling [NA-PROG-003], the return after a deload [NA-PROG-008], the small-base allowance [NA-PROG-009], and a painful region loaded only as the athlete chose [NA-REC-007]. The engine builds the first four into its targets and load suggestions. For [NA-REC-007], the athlete's choice becomes a limit, and `limits check` reports a plan that breaks it. The audit reports a break of any of the five. The coach follows them in every plan.
+Five rules are hard: the 10% weekly volume cap [NA-PROG-001], the 10% top-set ceiling [NA-PROG-003], the return after a deload [NA-PROG-008], the small-base allowance [NA-PROG-009], and a painful region loaded only as the athlete chose [NA-REC-007]. The engine builds the first four into its targets and load suggestions. For [NA-REC-007], the athlete's choice becomes a line in `athlete/limits.md`, in the athlete's words, and the coach plans around it by judgment. The audit reports a break of any of the five. The coach follows them in every plan.
 
-No code blocks a plan that breaks a hard rule. In v0.2, code enforces only the urgent stop and privacy. Everything else is soft: the audit warns, and the coach explains.
+No code blocks a plan that breaks a hard rule. Code enforces only the urgent stop and privacy. Everything else is soft: the audit warns, and the coach explains.
 
 ## Credit
 

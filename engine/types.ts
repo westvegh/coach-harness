@@ -71,25 +71,9 @@ export type CoachConfig = {
   clusters?: ClusterEntry[];
 };
 
-// ---------- §2 limits.yaml ----------
-
-export type Limit = {
-  id: string;
-  region: string;
-  rule: "ban" | "cap";
-  patterns: string[];
-  exercises: string[];
-  allow: string[];
-  max_load?: { value: number; unit: Units };
-  max_sets_per_week?: number;
-  /** A cap that rises: the `week` skill asks once a week how the region felt and raises the cap when it felt fine. */
-  build_back?: boolean;
-  note?: string;
-  source: "athlete" | "clinician-reported";
-  since: CalendarDate;
-};
-
-export type Limits = { version: 1; pain_threshold: number; limits: Limit[] };
+// ---------- §2 limits ----------
+// athlete/limits.md holds the athlete's limits in plain words. Code carries the text and never
+// reads its meaning (engine/limits-text.ts); the 0.2.x yaml shape lives in engine/migrate-limits.ts.
 
 // ---------- §3 movement taxonomy ----------
 
@@ -188,6 +172,8 @@ export type Thresholds = {
   rpe_drift_amber: number;
   perf_expiry_days: number;
   trim_fraction: number;
+  /** Check-in pain at or above it goes to the safety skill (0 to 10; default 4). */
+  pain_threshold: number;
 };
 
 export type ReadinessInput = {

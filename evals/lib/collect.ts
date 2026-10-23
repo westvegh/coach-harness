@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { readState } from "../mock-tally/client.ts";
 import { git, type Instance } from "./instance.ts";
 
-export const DEFAULT_WATCH = ["coach.yaml", "athlete/limits.yaml", "athlete/.urgent-stop", "athlete/block.yaml", "athlete/brief.md", "athlete/movements.local.yaml"];
+export const DEFAULT_WATCH = ["coach.yaml", "athlete/limits.md", "athlete/limits.yaml", "athlete/.urgent-stop", "athlete/block.yaml", "athlete/brief.md", "athlete/movements.local.yaml"];
 const WATCH_DIRS = ["athlete/log", "athlete/signals", "plans"];
 
 function listFiles(root: string, rel: string): string[] {

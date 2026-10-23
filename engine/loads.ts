@@ -14,6 +14,28 @@ export type SessionHistory = Snapshot["history"];
 export type LoadSuggestion = { exerciseId: string; suggestedWeight?: number; reason: string; rule_ids: string[] };
 
 export const PLATE_STEP: Record<Units, number> = { lbs: 5, kg: 2.5 };
+/** Exact (no rounding): 1 lb in kg. */
+const KG_PER_LB_EXACT = 0.45359237;
+
+/**
+ * The heaviest weight in `to` that is not above `weight` in `unit` (0.3.0, `load-under`): a load in a
+ * limit the athlete stated in words. Converted without rounding, then rounded down to a multiple of
+ * the unit's plate step (the step `loads` uses), so the result is never above the limit's load. A
+ * limit below one step gives 0 (body weight only).
+ */
+export function loadUnder(weight: unknown, unit: unknown, to: unknown): { weight: number; unit: Units; step: number } {
+  const usage = "usage: load-under --weight <n> --unit lbs|kg --to lbs|kg";
+  const w = typeof weight === "string" && weight.trim() !== "" ? Number(weight) : typeof weight === "number" ? weight : NaN;
+  if (!Number.isFinite(w) || w < 0) throw new CoachError("USAGE", `${usage} (--weight must be a number of 0 or more, got ${JSON.stringify(weight ?? null)})`);
+  if (unit !== "lbs" && unit !== "kg") throw new CoachError("USAGE", `${usage} (--unit must be lbs or kg, got ${JSON.stringify(unit ?? null)})`);
+  if (to !== "lbs" && to !== "kg") throw new CoachError("USAGE", `${usage} (--to must be lbs or kg, got ${JSON.stringify(to ?? null)})`);
+  const exact = unit === to ? w : to === "kg" ? w * KG_PER_LB_EXACT : w / KG_PER_LB_EXACT;
+  const step = PLATE_STEP[to];
+  // A tiny tolerance keeps a value already on a step (135 → 135) from falling one step below it.
+  const n = Math.floor(exact / step + 1e-9);
+  return { weight: Math.round(n * step * 1000) / 1000, unit: to, step };
+}
+
 export const STEP_UPPER = 0.025;
 export const STEP_LOWER = 0.05;
 export const MISSED_TWICE_DROP = 0.05;

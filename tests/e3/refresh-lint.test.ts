@@ -134,17 +134,18 @@ test("CLI lint-methods: the coach.yaml pack passes; a broken pack exits 1 with t
   rmSync(bad, { recursive: true });
 });
 
-test("every E3 command has a --help line; urgent and limits have one too", () => {
+test("every E3 command has a --help line; urgent, regions, load-under and migrate-limits have one too", () => {
   for (const cmd of [["adjust"], ["loads"], ["readiness"], ["weeks"], ["block", "draft"], ["ids", "next"], ["signals", "refresh"], ["lint-methods"]]) {
     const r = cli([...cmd, "--help"]);
     assert.equal(r.code, 0, `${cmd.join(" ")}: ${r.stderr}`);
     assert.match(r.json.usage, /§22/, cmd.join(" "));
   }
-  for (const cmd of [["urgent"], ["limits"]]) {
+  for (const cmd of [["urgent"], ["regions"], ["load-under"], ["migrate-limits"]]) {
     const r = cli([...cmd, "--help"]);
     assert.equal(r.code, 0, `${cmd.join(" ")}: ${r.stderr}`);
-    assert.match(r.json.usage, /report only|urgent clear --reason clinician\|false-alarm/, cmd.join(" "));
+    assert.match(r.json.usage, /urgent clear --reason clinician\|false-alarm|movement pattern|plate step|athlete\/limits\.md/, cmd.join(" "));
   }
+  assert.equal(cli(["limits", "--help"]).code, 2, "0.3.0: the limits command is gone");
 });
 
 test("the CLI dispatch files import only node builtins and tiny modules at startup", async () => {

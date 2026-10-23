@@ -39,7 +39,7 @@ function copy(opts: { git?: boolean; edit?: (y: string) => string } = {}): strin
   const yaml = readFileSync(join(REPO, "coach.example.yaml"), "utf8");
   writeFileSync(join(dir, "coach.yaml"), opts.edit ? opts.edit(yaml) : yaml);
   mkdirSync(join(dir, "athlete/.cache"), { recursive: true });
-  cpSync(join(REPO, "templates/athlete/limits.yaml"), join(dir, "athlete/limits.yaml"));
+  cpSync(join(REPO, "templates/athlete/limits.md"), join(dir, "athlete/limits.md"));
   symlinkSync(join(REPO, "methods"), join(dir, "methods"));
   if (opts.git) {
     const git = (...a: string[]) => execFileSync("git", a, { cwd: dir, env: { ...process.env, ...GIT_ENV } });
@@ -608,7 +608,9 @@ const QUESTIONS: [string, string, string][] = [
   ["week", "A) make next week a deload week, B) plan a new block, C) keep the plan", "prescription choice (week, program level; unchanged)"],
   ["week", "A) yes, write it, B) change it, C) skip it", "consent (week; unchanged)"],
   ["block", "A) yes, write the block and week 1, B) change something, C) not now", "consent (block; unchanged)"],
-  ["limits", "Write this change? A) yes, B) change it, C) no", "consent"],
+  ["limits", "Change those days now? A) Yes, B) At the next weekly run", "consent (0.3.0: the line is written as the athlete said it; no question about it)"],
+  ["week", "how did it feel this week? A) Fine: build back a little more, B) The same: keep it as is, C) Worse: avoid it for now", "athlete fact (0.3.0 build back)"],
+  ["update", "Apply these? A) Yes, B) Change something, C) Keep as is", "consent (0.3.0: a plainer wording of converted limits)"],
   ["update", "A) keep my version, B) take the template's version", "update conflict"],
   ["recovery-data", "Which recovery data do you have?", "athlete fact"],
   ["automation", "How should the daily and weekly runs start?", "optional action"],

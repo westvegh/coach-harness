@@ -7,7 +7,7 @@ import { validateConfig } from "../../engine/config.ts";
 import { dayFromPlannedWorkout } from "../../engine/snapshot.ts";
 import { loadTaxonomy } from "../../engine/taxonomy.ts";
 import { readYamlFile } from "../../engine/yaml-file.ts";
-import type { Block, CoachConfig, Limits, Rules, Snapshot, SnapshotDay, SnapshotSession, Taxonomy } from "../../engine/types.ts";
+import type { Block, CoachConfig, Rules, Snapshot, SnapshotDay, SnapshotSession, Taxonomy } from "../../engine/types.ts";
 
 export const REPO = new URL("../..", import.meta.url).pathname;
 
@@ -70,10 +70,6 @@ export function snapshot(days: Record<string, SnapshotDay>, over: Partial<Snapsh
 export function config(over: Record<string, unknown> = {}): CoachConfig {
   const raw = readYamlFile(join(REPO, "coach.example.yaml")) as Record<string, unknown>;
   return validateConfig({ ...raw, ...over });
-}
-
-export function limits(list: unknown[] = [], pain_threshold = 4): Limits {
-  return { version: 1, pain_threshold, limits: list as Limits["limits"] };
 }
 
 let taxCache: Taxonomy | null = null;

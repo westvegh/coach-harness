@@ -20,7 +20,7 @@ function instance(): string {
   const dir = mkdtempSync(join(tmpdir(), "coach-urgent-"));
   cpSync(join(REPO, "coach.example.yaml"), join(dir, "coach.yaml"));
   mkdirSync(join(dir, "athlete"), { recursive: true });
-  cpSync(join(REPO, "templates/athlete/limits.yaml"), join(dir, "athlete/limits.yaml"));
+  cpSync(join(REPO, "templates/athlete/limits.md"), join(dir, "athlete/limits.md"));
   git(dir, "init", "-q", "-b", "main");
   git(dir, "config", "user.name", "t");
   git(dir, "config", "user.email", "t@t");
