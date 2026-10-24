@@ -2,7 +2,7 @@
 
 coach-harness turns Claude Code into your strength and conditioning coach. It plans your training from a cited method, follows your limits, stops on urgent warning signs, and records every change in git.
 
-**Status:** v0.2, an early release. Expect rough edges and breaking changes.
+**Status:** v0.3, an early release. Expect rough edges and breaking changes.
 
 > **Not medical advice.** The coach plans and adjusts training only. It does not diagnose or treat, and it gives no advice about medication or supplements. See [Safety and privacy](#safety-and-privacy).
 
